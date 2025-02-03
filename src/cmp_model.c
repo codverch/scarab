@@ -182,6 +182,7 @@ void cmp_cycle() {
   update_memory();
 
   cmp_cores();
+  cmp_debug();
 
   if(DVFS_ON)
     dvfs_cycle();
@@ -259,7 +260,7 @@ void cmp_debug() {
 
   for(proc_id = 0; proc_id < NUM_CORES; proc_id++) {
     cycle_count = freq_cycle_count(FREQ_DOMAIN_CORES[proc_id]);
-
+    DPRINTF("Cycle %llu\n", cycle_count);
     // cmp FIXME print out per core information
     FPRINT_LINE(proc_id, GLOBAL_DEBUG_STREAM);
     cmp_set_all_stages(proc_id);
@@ -274,7 +275,7 @@ void cmp_debug() {
     FPRINT_LINE(proc_id, GLOBAL_DEBUG_STREAM);
   }
 
-  debug_memory();
+  // debug_memory();
 }
 
 /**************************************************************************************/
