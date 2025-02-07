@@ -1507,6 +1507,8 @@ void delete_ld_uop(Op* op)
   if(op->table_info->mem_type == MEM_LD)
     {
       // printf("Deleting %ld\n", op->unique_op_number);
+      // op->table_info->op_type == OP_NOP; // probably don't do this, it doesn't, in fact, turn into a noop
+      // You can even lost performance
       op->table_info->num_dest_regs = 0;
       // op->table_info->num_src_regs = 0; // This can break scarab sometimes
       op->table_info->mem_size = 0;
