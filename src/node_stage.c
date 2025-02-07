@@ -57,6 +57,8 @@
 #include "decoupled_frontend.h"
 
 /* Macros */
+#define DEBUG_RETIRED_UOPS TRUE
+#define DEBUG_NODE_STAGE FALSE
 
 #define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_NODE_STAGE, ##args)
 #define PRINT_RETIRED_UOP(proc_id, args...) \
@@ -843,6 +845,7 @@ void node_retire() {
     ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n",
             op->op_num);
     ret_count++;
+    // DPRINTF("here %d\n", DEBUG_RANGE_COND(node->proc_id));
     DEBUG(node->proc_id, "Retiring op:%llu\n", op->op_num);
 
     // Debug prints mainly used for testing the uop generation of PIN frontend
@@ -1133,6 +1136,7 @@ Flag is_node_stage_stalled() {
 }
 
 void debug_print_retired_uop(Op* op) {
+  if (op->table_info->mem_type != MEM_LD) return;
   PRINT_RETIRED_UOP(node->proc_id, "============================\n");
   PRINT_RETIRED_UOP(node->proc_id, "EIP: 0x%llx\n", op->inst_info->addr);
   PRINT_RETIRED_UOP(node->proc_id, "Op Type: %s\n",
@@ -1152,6 +1156,23 @@ void debug_print_retired_uop(Op* op) {
   for(uns i = 0; i < op->table_info->num_dest_regs; ++i) {
     PRINT_RETIRED_UOP(node->proc_id, "%s ",
                       disasm_reg(op->inst_info->dests[i].id));
+  }
+  PRINT_RETIRED_UOP(node->proc_id, "\n");
+  if(!op || op->table_info->mem_type == NOT_MEM)
+    PRINT_RETIRED_UOP(node->proc_id, "xxxxxxxxxxxxxxxxxxxx|");
+  else {
+    Counter addr_dep = 0;
+    Counter data_dep = 0;
+    uns     ii;
+    for(ii = 0; ii < op->oracle_info.num_srcs; ii++) {
+      Src_Info* src = &op->oracle_info.src_info[ii];
+      if(src->type == MEM_ADDR_DEP)
+        addr_dep = src->op_num;
+      if(src->type == MEM_DATA_DEP)
+        data_dep = src->op_num;
+    }
+    PRINT_RETIRED_UOP(node->proc_id, "va:%-9s %3d %3d|", hexstr64s(op->oracle_info.va),
+            (uns)(addr_dep % 1000), (uns)(data_dep % 1000));
   }
   PRINT_RETIRED_UOP(node->proc_id, "\n");
 }

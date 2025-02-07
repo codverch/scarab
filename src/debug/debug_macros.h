@@ -52,15 +52,17 @@ output when
 
 /**************************************************************************************/
 /* Returns whether simulation progress is within the debugging range */
-#define DEBUG_RANGE_COND(proc_id)                                    \
-  (((DEBUG_INST_START && inst_count[proc_id] >= DEBUG_INST_START) && \
-    (!DEBUG_INST_STOP || inst_count[proc_id] <= DEBUG_INST_STOP)) || \
-   ((DEBUG_CYCLE_START && cycle_count >= DEBUG_CYCLE_START) &&       \
-    (!DEBUG_CYCLE_STOP || cycle_count <= DEBUG_CYCLE_STOP)) ||       \
-   ((DEBUG_TIME_START && freq_time() >= DEBUG_TIME_START) &&         \
-    (!DEBUG_TIME_STOP || freq_time() <= DEBUG_TIME_STOP)) ||         \
-   ((DEBUG_OP_START && op_count[proc_id] >= DEBUG_OP_START) &&       \
-    (!DEBUG_OP_STOP || op_count[proc_id] <= DEBUG_OP_STOP)))
+// #define DEBUG_RANGE_COND(proc_id)                                    
+//   (((DEBUG_INST_START && inst_count[proc_id] >= DEBUG_INST_START) && 
+//     (!DEBUG_INST_STOP || inst_count[proc_id] <= DEBUG_INST_STOP)) || 
+//    ((DEBUG_CYCLE_START && cycle_count >= DEBUG_CYCLE_START) &&       
+//     (!DEBUG_CYCLE_STOP || cycle_count <= DEBUG_CYCLE_STOP)) ||       
+//    ((DEBUG_TIME_START && freq_time() >= DEBUG_TIME_START) &&         
+//     (!DEBUG_TIME_STOP || freq_time() <= DEBUG_TIME_STOP)) ||         
+//    ((DEBUG_OP_START && op_count[proc_id] >= DEBUG_OP_START) &&       
+//     (!DEBUG_OP_STOP || op_count[proc_id] <= DEBUG_OP_STOP)))
+
+#define DEBUG_RANGE_COND(proc_id) TRUE                                   
 
 
 #ifdef NO_DEBUG
@@ -68,8 +70,10 @@ output when
 #else
 #define ENABLE_GLOBAL_DEBUG_PRINT TRUE /* default TRUE */
 #endif
+#define ENABLE_GLOBAL_DEBUG_PRINT TRUE /* default TRUE */
 
 #define GLOBAL_DEBUG_STREAM mystdout /* default mystdout */
+
 
 
 /**************************************************************************************/
