@@ -76,6 +76,8 @@ extern Uop_Queue_Fill_Time uop_queue_fill_time;
 
 extern Flag roi_dump_began;
 extern Counter roi_dump_ID;
+
+extern void* sbird_ht_ptr;
 /**************************************************************************************/
 
 #endif /* #ifndef __GLOBAL_VARS_H__ */

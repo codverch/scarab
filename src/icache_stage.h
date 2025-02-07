@@ -159,6 +159,9 @@ Flag instr_fill_line(Mem_Req* req);
 // For branch stat collection
 Flag in_icache(Addr addr);
 
+
+void delete_ld_uop(Op* op);
+
 /**************************************************************************************/
 
 #endif /* #ifndef __ICACHE_STAGE_H__ */

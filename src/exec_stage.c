@@ -370,6 +370,9 @@ void update_exec_stage(Stage_Data* src_sd) {
                                  // mem req buffer
     }
     op->exec_cycle = cycle_count + MAX2(latency, -latency);
+    // if(op->exec_cycle > 4777327l)
+    // printf("EXECUTED: %llx [%ld] at %lld\n", op->inst_info->addr, op->unique_op_number, op->exec_cycle);
+
     op->exec_count++;
 
     if(op->table_info->mem_type == NOT_MEM)

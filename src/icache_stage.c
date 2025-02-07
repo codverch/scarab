@@ -779,6 +779,75 @@ void update_icache_stage() {
   }
 }
 
+static short is_same_cacheline(long addrA, long addrB)
+{
+  static const long CACHELINE_SIZE = 64;
+
+  if ((addrA / CACHELINE_SIZE) == (addrB / CACHELINE_SIZE)) {
+      return 1;  // Same cacheline
+  } else {
+      return 0;  // Different cachelines
+  }
+}
+
+#define MAX_HISTORY_LENGTH_FUSION 256
+
+static void register_op_for_fusion(Op* op)
+{
+  
+  static long cursor = 0;
+  // static long histories[MAX_HISTORY_LENGTH_FUSION] = {0};
+  static long address_accessed[MAX_HISTORY_LENGTH_FUSION] = {0};
+  static long valid[MAX_HISTORY_LENGTH_FUSION] = {0};
+  static long op_numbers[MAX_HISTORY_LENGTH_FUSION] = {-1};
+
+  // use the variables somehow
+  
+  if(op->table_info->mem_type != MEM_LD)
+  {
+    address_accessed[cursor] = 0;
+    valid[cursor] = 0;
+    op_numbers[cursor] = op->unique_op_number;
+    cursor++;
+    if(cursor == MAX_HISTORY_LENGTH_FUSION)
+      cursor = 0;
+    return;
+  }
+  else
+  {
+    address_accessed[cursor] = op->oracle_info.va;
+    valid[cursor] = 1;
+    op_numbers[cursor] = op->unique_op_number;
+  }
+
+  // do I match anyone else in the history?
+  for(long i = 0; i < MAX_HISTORY_LENGTH_FUSION; i++)
+  {
+    if (i == cursor || !valid[i])
+      continue;
+    
+    long this_addr = op->oracle_info.va;
+    long prev_addr = address_accessed[i];
+    
+    if(is_same_cacheline(this_addr, prev_addr) && this_addr != prev_addr) // this_addr != prev_addr because I am not sure if you can fuse those.
+    // I don't expect to make a super big difference, a compiler should be very good at aliasing 
+    {
+      // printf("Adding op number %ld because it accesses %lx which is close to %lx/%ld\n", op->unique_op_number, this_addr, prev_addr, op_numbers[i]);
+      valid[cursor] = 0;
+      valid[i] = 0;
+
+
+      lset_insert(sbird_ht_ptr, op->unique_op_number);
+      break;
+    }
+  }
+
+  cursor++;
+  if(cursor == MAX_HISTORY_LENGTH_FUSION)
+    cursor = 0;
+  return;
+
+}
 
 /**************************************************************************************/
 /* update_bf_uoc_stats: */
@@ -862,6 +931,21 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     thread_map_mem_dep(op);
     op->fetch_cycle = cycle_count;
+    static long unique_op_number_counter = 0;
+    op->unique_op_number = unique_op_number_counter++;
+    // if(op->table_info->mem_type == MEM_LD && unique_op_number_counter > 3000000)
+    //   printf("FETCHED: %llx [%ld] at %lld which has extra l1d latency %d and was reading %llx\n", op->inst_info->addr, op->unique_op_number, op->fetch_cycle, op->inst_info->extra_ld_latency, op->oracle_info.va);
+
+      register_op_for_fusion(op);
+      if(DO_FUSION && lset_contains(sbird_ht_ptr, op->unique_op_number) )
+      {
+        delete_ld_uop(op);
+        lset_remove(sbird_ht_ptr, op->unique_op_number);
+      }
+    
+
+    
+
 
     op_count[ic->proc_id]++;          /* increment instruction counters */
     unique_count_per_core[ic->proc_id]++;
@@ -1405,4 +1489,33 @@ Flag instr_fill_line(Mem_Req* req) {
   }
 
   return TRUE;
+}
+
+/**
+ * WARNING, this rearranges the operations.. so running through the traces twice is not a great idea
+ * Also, don't set to OP_NOP.. it can actually decrease performance
+ * Also, every op that has MEM_LD isn't necessarily OP_MOV...
+ * Also, of course, doesn't actually delete it. It is closer to converting it to a no-op
+ * 
+ * bit of a misnomer since it actually converts it to a no-op but whatever
+ * For the complete fusion implementation, you would probably need to modify this to accept a parent
+ * uop. Then you set this one's source and dest to zero and add dependencies to that one.
+ */
+void delete_ld_uop(Op* op)
+{
+  
+  if(op->table_info->mem_type == MEM_LD)
+    {
+      // printf("Deleting %ld\n", op->unique_op_number);
+      op->table_info->num_dest_regs = 0;
+      // op->table_info->num_src_regs = 0; // This can break scarab sometimes
+      op->table_info->mem_size = 0;
+      op->inst_info->latency = 1;
+      op->inst_info->extra_ld_latency = 0;
+      op->oracle_info.mem_size = 0;
+    }
+    else
+    {
+      printf("WARNING, %ld is not a mem_ld\n", op->unique_op_number);
+    }
 }

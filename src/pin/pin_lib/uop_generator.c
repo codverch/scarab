@@ -522,7 +522,7 @@ void convert_t_uop_to_info(uns8 proc_id, Trace_Uop* t_uop, Inst_Info* info) {
 
   info->latency = op_type_delays[t_uop->op_type];
   if(info->latency == 0)
-    info->latency = 1; /* insure latency is not 0 */
+    info->latency = 1; /* ensure latency is not 0 */
 
 
   info->trace_info.load_seq_num  = t_uop->load_seq_num;

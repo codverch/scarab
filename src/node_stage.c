@@ -73,6 +73,8 @@ Rob_Stall_Reason       rob_stall_reason       = ROB_STALL_NONE;
 Rob_Block_Issue_Reason rob_block_issue_reason = ROB_BLOCK_ISSUE_NONE;
 
 
+
+
 /**************************************************************************************/
 /* Prototypes */
 
@@ -971,6 +973,11 @@ void node_retire() {
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
     op->retire_cycle = cycle_count;
+    // if(op->retire_cycle > 4777327l)
+    // printf("RETIRED: %llx [%ld] at %lld\n", op->inst_info->addr, op->unique_op_number, op->retire_cycle);
+    
+
+
 
     // free the previous register entries with same architectural destination
     rename_table_commit(op);

@@ -382,6 +382,29 @@ int   parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 /* for use in qsort */
 int compare_uns64(const void*, const void*);
 
+#define LSET_INITIAL_CAPACITY 16
+#define LSET_LOAD_FACTOR 0.75
+
+typedef struct LSetNode {
+    long key;
+    struct LSetNode* next;
+} LSetNode;
+
+typedef struct {
+    LSetNode** buckets;
+    size_t capacity;
+    size_t size;
+} LSet;
+
+LSet* lset_create(void);
+void lset_insert(LSet* set, long key);
+int lset_contains(LSet* set, long key);
+void lset_remove(LSet* set, long key);
+void lset_free(LSet* set);
+void lset_print_to_file(LSet* set, const char* filename);
+void lset_load_from_file(LSet *set, const char *filename);
+
+
 #ifdef __cplusplus
 }
 

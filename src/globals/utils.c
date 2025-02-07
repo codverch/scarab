@@ -27,6 +27,7 @@
  ***************************************************************************************/
 
 #include <stdlib.h>
+#include <stdio.h>
 #include "globals/global_defs.h"
 #include "globals/global_types.h"
 #include "globals/global_vars.h"
@@ -861,4 +862,162 @@ static void parse_string_token(void* dest, uns idx, const char* token) {
 int parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
                        int max_num) {
   return parse_array(dest, str, max_num, parse_string_token);
+}
+
+static size_t lset_hash(long key, size_t capacity) {
+    key ^= key >> 33;
+    key *= 0xff51afd7ed558ccdL;
+    key ^= key >> 33;
+    key *= 0xc4ceb9fe1a85ec53L;
+    key ^= key >> 33;
+    return (size_t)(key & (capacity - 1));  // Faster than % when capacity is a power of 2
+}
+
+LSet* lset_create() {
+    size_t capacity = 1l << 22l; // any power of 2 will do
+    LSet* set = malloc(sizeof(LSet));
+    set->capacity = capacity;
+    set->size = 0;
+    set->buckets = calloc(capacity, sizeof(LSetNode*));
+    return set;
+}
+
+static void lset_resize(LSet* set) {
+    // printf("Resizing from %ld to %ld\n", set->capacity, set->capacity * 2);
+    size_t new_capacity = set->capacity * 2;
+    LSetNode** new_buckets = calloc(new_capacity, sizeof(LSetNode*));
+
+    for (size_t i = 0; i < set->capacity; i++) {
+        LSetNode* node = set->buckets[i];
+        while (node) {
+            LSetNode* next = node->next;
+            unsigned long new_index = lset_hash(node->key, new_capacity);
+            node->next = new_buckets[new_index];
+            new_buckets[new_index] = node;
+            node = next;
+        }
+    }
+
+    free(set->buckets);
+    set->buckets = new_buckets;
+    set->capacity = new_capacity;
+}
+
+void lset_insert(LSet* set, long key) {
+    if ((double)set->size / set->capacity > LSET_LOAD_FACTOR) {
+        lset_resize(set);
+    }
+
+    unsigned long index = lset_hash(key, set->capacity);
+    LSetNode* node = set->buckets[index];
+
+    while (node) {
+        if (node->key == key) return; // Key already exists
+        node = node->next;
+    }
+
+    node = malloc(sizeof(LSetNode));
+    node->key = key;
+    node->next = set->buckets[index];
+    set->buckets[index] = node;
+    set->size++;
+}
+
+int lset_contains(LSet* set, long key) {
+    unsigned long index = lset_hash(key, set->capacity);
+    LSetNode* node = set->buckets[index];
+
+    while (node) {
+        if (node->key == key) return 1;
+        node = node->next;
+    }
+    return 0;
+}
+
+void lset_remove(LSet* set, long key) {
+    unsigned long index = lset_hash(key, set->capacity);
+    LSetNode* node = set->buckets[index];
+    LSetNode* prev = NULL;
+
+    while (node) {
+        if (node->key == key) {
+            if (prev) {
+                prev->next = node->next;
+            } else {
+                set->buckets[index] = node->next;
+            }
+            free(node);
+            set->size--;
+            return;
+        }
+        prev = node;
+        node = node->next;
+    }
+}
+
+void lset_free(LSet* set) {
+    for (size_t i = 0; i < set->capacity; i++) {
+        LSetNode* node = set->buckets[i];
+        while (node) {
+            LSetNode* temp = node;
+            node = node->next;
+            free(temp);
+        }
+    }
+    free(set->buckets);
+    free(set);
+}
+
+
+// Comparison function for qsort
+static int compare_longs(const long *a, const long *b) {
+    return (*a > *b) - (*a < *b);
+}
+
+void lset_print_to_file(LSet *set, const char *filename) {
+    FILE *file = fopen(filename, "w");
+    if (!file) return;
+
+    size_t count = 0;
+    long *keys = malloc(set->size * sizeof(long));
+    if (!keys) {
+        fclose(file);
+        return;
+    }
+
+    // Collect keys
+    for (size_t i = 0; i < set->capacity; i++) {
+        LSetNode *node = set->buckets[i];
+        while (node) {
+            keys[count++] = node->key;
+            node = node->next;
+        }
+    }
+
+    // Sort keys
+    qsort(keys, count, sizeof(long), (int (*)(const void *, const void *)) compare_longs);
+
+    // Print keys
+    for (size_t i = 0; i < count; i++) {
+        fprintf(file, "%ld\n", keys[i]);
+    }
+
+    free(keys);
+    fclose(file);
+}
+
+
+void lset_load_from_file(LSet *set, const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    long key;
+    while (fscanf(file, "%ld", &key) == 1) {
+        lset_insert(set, key);  // Assuming you have an insert function
+    }
+
+    fclose(file);
 }

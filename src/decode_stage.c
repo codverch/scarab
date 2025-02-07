@@ -241,6 +241,8 @@ void update_decode_stage(Stage_Data* src_sd) {
 void decode_stage_process_op(Op* op) {
   Cf_Type cf = op->table_info->cf_type;
   op->decode_cycle = cycle_count;
+  // if(op->decode_cycle > 4777327l)
+  // printf("DECODED: %llx [%ld] at %lld\n", op->inst_info->addr, op->unique_op_number, op->decode_cycle);
 
   if(cf) {
     DEBUG(dec->proc_id, "Decode CF instruction bar:%i fetch_addr:%llx op_num:%llu recover:%i\n",

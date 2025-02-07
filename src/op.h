@@ -156,6 +156,8 @@ struct Op_struct {
   uns  op_pool_id;     // unique identifier for op (doesn't change)
   // }}}
 
+  long unique_op_number;
+
   // {{{ op numbers and info pointers
   uns     proc_id;     // processor id for cmp model
   uns     thread_id;   // id number for the thread to which this op belongs
