@@ -1,35 +1,63 @@
 #ifndef PREDICTOR_H
 #define PREDICTOR_H
 
-#include <stdint.h>
-#include <stdbool.h>
-
+// Include C-compatible headers for uint64_t
 #ifdef __cplusplus
-extern "C" {
-#endif 
+#include <vector>
+#include <cstdint>
+#else
+#include <stdint.h>  // For C compatibility
+#endif
 
-// the predictor will have a PC value, a distance to the head nucleus to fuse with, and a saturating counter 
-typedef struct {
+// Struct visible to both C and C++
+struct PredictorEntry {
     uint64_t pc;
     uint64_t distance;
     uint64_t counter;
-} PredictorEntry;
+};
 
+// Forward declaration for C compatibility
 #ifdef __cplusplus
-/* Forward declaration for C++ */
-class PredictorImpl; 
+class PredictorImpl;
 #else
 typedef struct PredictorImpl PredictorImpl;
 #endif
 
-/* C interface functions */
-PredictorImpl* predictor_create();
-void predictor_insert(PredictorImpl* ctx, uint64_t pc, uint64_t distance);
-void predictor_print(PredictorImpl* ctx);
+// C interface declarations (wrapped properly)
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+    // Constructor/Destructor
+    PredictorImpl* predictor_create();
+    void predictor_destroy(PredictorImpl* ctx);
+    
+    // Core functions
+    void predictor_insert(PredictorImpl* ctx, uint64_t prog_ctr, uint64_t head_nucl_distance);
+    bool predictor_pc_is_in(PredictorImpl* ctx, uint64_t prog_ctr);
+    void predictor_print(PredictorImpl* ctx);
 
 #ifdef __cplusplus
 }
-#endif 
+#endif
 
-#endif /* PREDICTOR_H */
+// C++ class definition (hidden from C)
+#ifdef __cplusplus
+class PredictorImpl {
+private:
+    std::vector<PredictorEntry> entries;
+    uint64_t global_commit = 0;
+    size_t current_index = 0;
+    uint64_t max_distance = 0;
+
+public:
+    PredictorImpl() = default;
+    ~PredictorImpl() = default;
+    
+    void insert_predictor(uint64_t prog_ctr, uint64_t head_nucl_distance);
+    bool pc_is_in_predictor(uint64_t prog_ctr);
+    void print_predictor();
+};
+#endif  // __cplusplus
+
+#endif  // PREDICTOR_H

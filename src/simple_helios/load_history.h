@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "predictor.h"
 
 #define CACHE_LINE_SIZE 64
 #define HISTORY_SIZE 6  /* Matches paper's 6-entry UCH */
@@ -31,7 +32,8 @@ typedef struct LoadHistoryImpl LoadHistoryImpl;
 #endif
 
 /* C interface functions */
-LoadHistoryImpl* load_history_create();
+LoadHistoryImpl* load_history_create(PredictorImpl* predictor_table);
+void load_history_destroy(LoadHistoryImpl* ctx);
 void load_history_insert(LoadHistoryImpl* ctx, uint64_t pc, uint64_t eff_addr, bool is_mem_load);
 void print_load_history(LoadHistoryImpl* ctx);
 
@@ -40,5 +42,4 @@ void print_load_history(LoadHistoryImpl* ctx);
 #endif
 
 #endif /* LOAD_HISTORY_H */
-
 /**************************************************************************************/
