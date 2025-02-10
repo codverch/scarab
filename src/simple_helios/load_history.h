@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 /* C-compatible struct */
-typedef struct {
+typedef struct LoadEntry {
     uint64_t pc;
     uint64_t effective_addr;  
     uint64_t commit_num;
@@ -35,7 +35,7 @@ typedef struct LoadHistoryImpl LoadHistoryImpl;
 LoadHistoryImpl* load_history_create(PredictorImpl* predictor_table);
 void load_history_destroy(LoadHistoryImpl* ctx);
 void load_history_insert(LoadHistoryImpl* ctx, uint64_t pc, uint64_t eff_addr, bool is_mem_load);
-void print_load_history(LoadHistoryImpl* ctx);
+void print_load_history_c(LoadHistoryImpl* ctx);
 
 #ifdef __cplusplus
 }

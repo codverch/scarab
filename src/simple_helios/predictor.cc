@@ -1,6 +1,19 @@
 #include "predictor.h"
 #include <cstdio>
 
+// #ifdef __cplusplus
+class PredictorImpl {
+private:
+    std::vector<PredictorEntry> entries;
+    uint64_t global_commit = 0;
+    size_t current_index = 0;
+    uint64_t max_distance = 0;
+
+public:
+   PredictorImpl::PredictorImpl() {}
+
+
+
 void PredictorImpl::insert_predictor(uint64_t prog_ctr, uint64_t head_nucl_distance) {
     printf("[insert_predictor] PC: %lx, Distance: %lx\n", prog_ctr, head_nucl_distance);
 
@@ -55,4 +68,8 @@ extern "C" {
     void predictor_print(PredictorImpl* ctx) {
         if (ctx) ctx->print_predictor();
     }
+    
+};
+// #endif 
+
 }

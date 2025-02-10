@@ -1,5 +1,5 @@
-#include "load_history.h"
 #include "predictor.h"
+#include "load_history.h"
 #include <algorithm>
 #include <unordered_map>
 #include <cstdio>
@@ -19,7 +19,7 @@ public:
          for (auto& entry : entries) {
             if ((entry.effective_addr == eff_addr) && (entry.is_mem_load == is_mem_load) && (!entry.is_fused)) {
                 // Use the external predictor table
-                if (predictor && predictor->pc_is_in_predictor(entry.pc)) {
+                if (predictor && predictor->pc_is_in_predictor((uint64_t) entry.pc)) {
                     printf("[insert_load] Found fusion pair: PC: %lx, Effective Address: %lx\n", entry.pc, eff_addr);
                     return;
                 }
