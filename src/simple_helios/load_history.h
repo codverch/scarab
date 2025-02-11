@@ -3,43 +3,30 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "predictor.h"
 
-#define CACHE_LINE_SIZE 64
-#define HISTORY_SIZE 6  /* Matches paper's 6-entry UCH */
-#define MAX_FUSION_DISTANCE 64
+#define LOAD_HISTORY_SIZE 6
 
-#ifdef __cplusplus
-#include <vector>
-extern "C" {
-#endif
-
-/* C-compatible struct */
 typedef struct LoadEntry {
-    uint64_t pc;
-    uint64_t effective_addr;  
-    uint64_t commit_num;
-    bool is_fused;
+    uint64_t prog_ctr;
+    uint64_t effective_addr;
+    uint64_t micro_op_commit_num;
     bool is_mem_load;
+    bool is_fused;
 } LoadEntry;
 
-#ifdef __cplusplus
-/* Forward declaration for C++ */
-class LoadHistoryImpl;
-#else
-/* Opaque type for C */
-typedef struct LoadHistoryImpl LoadHistoryImpl;
-#endif
+typedef struct LoadHistory{
+    LoadEntry entries[LOAD_HISTORY_SIZE];
+    uint8_t head;
+    uint8_t tail;
+    uint8_t size;  // Tracks the number of valid entries in the circular buffer
+} LoadHistory;
 
-/* C interface functions */
-LoadHistoryImpl* load_history_create(PredictorImpl* predictor_table);
-void load_history_destroy(LoadHistoryImpl* ctx);
-void load_history_insert(LoadHistoryImpl* ctx, uint64_t pc, uint64_t eff_addr, bool is_mem_load);
-void print_load_history_c(LoadHistoryImpl* ctx);
+// Inserts a new load micro-op into the load history.
+void insert_into_load_history(uint64_t prog_ctr, uint64_t effective_addr, 
+                              bool is_mem_load, bool is_fused, 
+                              uint64_t micro_op_commit_num, LoadHistory* load_history);
 
-#ifdef __cplusplus
-}
-#endif
+// Checks if a load with the same cacheline access as the committed micro-op exists in history.
+bool is_load_cacheline_in_history(uint64_t effective_addr, const LoadHistory* load_history);
 
-#endif /* LOAD_HISTORY_H */
-/**************************************************************************************/
+#endif // LOAD_HISTORY_H
