@@ -15,11 +15,11 @@ INST_LIMIT=100000000
 WARMUP_INSTS=45000000
 
 # Set this equal to the maximum threads on your device
-max_simul_proc=19
+max_simul_proc=11
 
 currdir=$(pwd)
 
-prefix="yes_fusion"
+prefix="yes_fusion_30prob"
 
 # Loop through all files in the directory and add them to the array
 for file in "$directory"/*; do

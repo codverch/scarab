@@ -137,6 +137,8 @@ extern Icache_Stage* ic;
 /**************************************************************************************/
 /* Prototypes */
 
+
+
 /* vanilla hps model */
 void set_icache_stage(Icache_Stage*);
 void init_icache_stage(uns8, const char*);
@@ -160,7 +162,9 @@ Flag instr_fill_line(Mem_Req* req);
 Flag in_icache(Addr addr);
 
 
+void donate_operands(Op* rcvr, Op* donor);
 void delete_ld_uop(Op* op);
+// void delete_ld_uop(Op* op);
 
 /**************************************************************************************/
 

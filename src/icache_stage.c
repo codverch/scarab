@@ -74,6 +74,8 @@
 
 /**************************************************************************************/
 
+predictor_entry predictor_table[PREDICTOR_SIZE];
+
 Icache_Stage* ic = NULL;
 
 extern Cmp_Model              cmp_model;
@@ -779,6 +781,9 @@ void update_icache_stage() {
   }
 }
 
+
+
+
 static short is_same_cacheline(long addrA, long addrB)
 {
   static const long CACHELINE_SIZE = 64;
@@ -790,63 +795,127 @@ static short is_same_cacheline(long addrA, long addrB)
   }
 }
 
-#define MAX_HISTORY_LENGTH_FUSION 256
-
-static void register_op_for_fusion(Op* op)
+static void update_LRU(void)
 {
-  
-  static long cursor = 0;
-  // static long histories[MAX_HISTORY_LENGTH_FUSION] = {0};
-  static long address_accessed[MAX_HISTORY_LENGTH_FUSION] = {0};
-  static long valid[MAX_HISTORY_LENGTH_FUSION] = {0};
-  static long op_numbers[MAX_HISTORY_LENGTH_FUSION] = {-1};
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+    predictor_table[i].LRUcounter++;
+}
 
-  // use the variables somehow
-  
-  if(op->table_info->mem_type != MEM_LD)
+static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int donor_op_num, bool success)
+{
+  if(success)
   {
-    address_accessed[cursor] = 0;
-    valid[cursor] = 0;
-    op_numbers[cursor] = op->unique_op_number;
-    cursor++;
-    if(cursor == MAX_HISTORY_LENGTH_FUSION)
-      cursor = 0;
+    long minLRU = 0x999999999999l;
+    // is it already present?
+    for(short i = 0; i < PREDICTOR_SIZE; i++)
+    {
+      if(predictor_table[i].PCrcvr == rcvr_pc && predictor_table[i].PCdonor == donor_pc && predictor_table[i].rcvr_opnum == rcvr_op_num && predictor_table[i].donor_opnum == donor_op_num)
+      {
+        predictor_table[i].confidence++;
+        if(predictor_table[i].confidence > 3)
+          predictor_table[i].confidence = 3;
+        predictor_table[i].LRUcounter++;
+        update_LRU();
+        return;
+      }   
+    }
+    long eviction_index = 0;
+
+    // we need to allocate a new entry
+    for(short i = 0; i < PREDICTOR_SIZE; i++)
+    {
+      if(predictor_table[i].LRUcounter < minLRU)
+      {
+        minLRU = predictor_table[i].LRUcounter;
+        eviction_index = i;
+      }
+    }
+    predictor_table[eviction_index].confidence = 1;
+    predictor_table[eviction_index].LRUcounter = 0;
+    predictor_table[eviction_index].PCrcvr = rcvr_pc;
+    predictor_table[eviction_index].PCdonor = donor_pc;
+    predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
+    predictor_table[eviction_index].donor_opnum = donor_op_num;
+    update_LRU();
     return;
   }
-  else
+
+  // not a success
+  long minLRU = 0;
+  long eviction_index = 0;
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
   {
-    address_accessed[cursor] = op->oracle_info.va;
-    valid[cursor] = 1;
-    op_numbers[cursor] = op->unique_op_number;
+    if(predictor_table[i].LRUcounter < minLRU)
+    {
+      minLRU = predictor_table[i].LRUcounter;
+      eviction_index = i;
+    }
+  }
+  predictor_table[eviction_index].confidence = 0;
+  predictor_table[eviction_index].LRUcounter = 0;
+  predictor_table[eviction_index].PCrcvr = rcvr_pc;
+  predictor_table[eviction_index].PCdonor = donor_pc;
+  predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
+  predictor_table[eviction_index].donor_opnum = donor_op_num;
+  update_LRU();
+
+  return;
+}
+
+static short predict_fusable(Op* op)
+{
+  // check predictor_table
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    if(predictor_table[i].PCdonor == op->inst_info->addr && predictor_table[i].confidence == 3 && op->op_number_per_inst == predictor_table[i].donor_opnum)
+      return i;
+  }
+  return -1; // sentinel value
+}
+
+#define MAX_HISTORY_LENGTH 64
+
+static void update_history(Op* op)
+{
+  static long cursor = 0;
+  static long PCs[MAX_HISTORY_LENGTH] = {0};
+  static long MemAddr[MAX_HISTORY_LENGTH] = {0};
+  static int op_num_in_inst[MAX_HISTORY_LENGTH] = {0};
+  static short valid[MAX_HISTORY_LENGTH] = {0}; // a candidate load instruction
+
+  if(op->table_info->mem_type != MEM_LD)
+  {
+    valid[cursor] = 0;
+    cursor = (cursor + 1) % MAX_HISTORY_LENGTH;
+    return;
   }
 
-  // do I match anyone else in the history?
-  for(long i = 0; i < MAX_HISTORY_LENGTH_FUSION; i++)
+  valid[cursor] = 1;
+  PCs[cursor] = op->inst_info->addr;
+  MemAddr[cursor] = op->oracle_info.va;
+  op_num_in_inst[cursor] = op->op_number_per_inst;
+
+  
+  for(short i = 0; i < MAX_HISTORY_LENGTH; i++)
   {
-    if (i == cursor || !valid[i])
+    if(i == cursor || !valid[i])
       continue;
     
-    long this_addr = op->oracle_info.va;
-    long prev_addr = address_accessed[i];
-    
-    if(is_same_cacheline(this_addr, prev_addr) && this_addr != prev_addr) // this_addr != prev_addr because I am not sure if you can fuse those.
-    // I don't expect to make a super big difference, a compiler should be very good at aliasing 
+    long donor_addr = op->oracle_info.va;
+    long rcvr_addr = MemAddr[i];
+    long donor_op_num = op_num_in_inst[cursor];
+    long rcvr_op_num = op_num_in_inst[i];
+
+    if(is_same_cacheline(donor_addr, rcvr_addr))
     {
-      // printf("Adding op number %ld because it accesses %lx which is close to %lx/%ld\n", op->unique_op_number, this_addr, prev_addr, op_numbers[i]);
+      train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true);
       valid[cursor] = 0;
       valid[i] = 0;
-
-
-      lset_insert(sbird_ht_ptr, op->unique_op_number);
       break;
     }
   }
-
-  cursor++;
-  if(cursor == MAX_HISTORY_LENGTH_FUSION)
-    cursor = 0;
+  cursor = (cursor + 1) % MAX_HISTORY_LENGTH;
   return;
-
 }
 
 /**************************************************************************************/
@@ -930,22 +999,32 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
                2 * op->off_path);
 
     thread_map_mem_dep(op);
+    
+    static long long int prev_addr = 0;
+    static long inst_op_counter = 0;
+
     op->fetch_cycle = cycle_count;
     static long unique_op_number_counter = 0;
     op->unique_op_number = unique_op_number_counter++;
-    // if(op->table_info->mem_type == MEM_LD && unique_op_number_counter > 3000000)
-    //   printf("FETCHED: %llx [%ld] at %lld which has extra l1d latency %d and was reading %llx\n", op->inst_info->addr, op->unique_op_number, op->fetch_cycle, op->inst_info->extra_ld_latency, op->oracle_info.va);
+    if(prev_addr == op->inst_info->addr)
+    {
+      inst_op_counter++;
+    }
+    else
+    {
+      inst_op_counter = 0;
+    }
+    op->op_number_per_inst = inst_op_counter;
 
-      register_op_for_fusion(op);
-      if(DO_FUSION && lset_contains(sbird_ht_ptr, op->unique_op_number) )
-      {
-        delete_ld_uop(op);
-        lset_remove(sbird_ht_ptr, op->unique_op_number);
-      }
-    
+    prev_addr = op->inst_info->addr;
 
-    
+    printf("unique_op_number %ld with addr %lld has op_num %ld\n", unique_op_number_counter, op->inst_info->addr, op->op_number_per_inst);
 
+    if(DO_FUSION)
+    {
+      update_history(op);
+      predict_fusable(op);
+    }
 
     op_count[ic->proc_id]++;          /* increment instruction counters */
     unique_count_per_core[ic->proc_id]++;
@@ -1501,16 +1580,61 @@ Flag instr_fill_line(Mem_Req* req) {
  * For the complete fusion implementation, you would probably need to modify this to accept a parent
  * uop. Then you set this one's source and dest to zero and add dependencies to that one.
  */
+
+
+
+// static int biased_random() {
+//     // static const float PROBABILITY = 0.6823;
+//     // static const float PROBABILITY = 0.1;
+//     // return ((float)rand() / RAND_MAX) < PROBABILITY ? 1 : 0;
+//     if ((rand() % 100 ) < 30)
+//       return 1;
+//     return 0;
+// }
+
+void donate_operands(Op* rcvr, Op* donor)
+{
+  if(rcvr->table_info->mem_type != MEM_LD || donor->table_info->mem_type != MEM_LD)
+  {
+    printf("Warning, one of the operands is not a memory load\n");
+  }
+
+  for(short i = 0; i < donor->table_info->num_dest_regs; i++)
+  {
+    bool already_present = false;
+
+
+    for(short j = 0; j < rcvr->table_info->num_dest_regs; j++)
+    {
+      if(rcvr->inst_info->dests[j].reg == donor->inst_info->dests[i].reg)
+      {
+        already_present = true;
+      }
+    }
+    if(!already_present)
+    {
+      rcvr->inst_info->dests[rcvr->table_info->num_dest_regs] = donor->inst_info->dests[i];
+      rcvr->table_info->num_dest_regs++;
+      if(rcvr->table_info->num_dest_regs >= MAX_DESTS)
+        printf("SOMETHING IS NOT OKAY\n");
+    } 
+
+  }
+
+  return;
+}
+
+
 void delete_ld_uop(Op* op)
 {
   
   if(op->table_info->mem_type == MEM_LD)
     {
       // printf("Deleting %ld\n", op->unique_op_number);
-      // op->table_info->op_type == OP_NOP; // probably don't do this, it doesn't, in fact, turn into a noop
       // You can even lost performance
+      op->table_info->op_type = OP_NOP; // probably don't do this, it doesn't, in fact, turn into a noop
       op->table_info->num_dest_regs = 0;
-      // op->table_info->num_src_regs = 0; // This can break scarab sometimes
+      op->table_info->num_src_regs = 0; // This can break scarab sometimes
       op->table_info->mem_size = 0;
       op->inst_info->latency = 1;
       op->inst_info->extra_ld_latency = 0;

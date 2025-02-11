@@ -39,6 +39,17 @@
 
 /**************************************************************************************/
 
+#define PREDICTOR_SIZE 6
+
+typedef struct {
+  long PCrcvr;
+  long PCdonor;
+  long LRUcounter;
+  int confidence;
+  int rcvr_opnum;
+  int donor_opnum;
+} predictor_entry;
+
 extern Counter  unique_count;
 extern Counter* unique_count_per_core;
 extern Counter* op_count;
@@ -78,6 +89,7 @@ extern Flag roi_dump_began;
 extern Counter roi_dump_ID;
 
 extern void* sbird_ht_ptr;
+
 /**************************************************************************************/
 
 #endif /* #ifndef __GLOBAL_VARS_H__ */

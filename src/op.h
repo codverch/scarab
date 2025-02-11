@@ -157,6 +157,7 @@ struct Op_struct {
   // }}}
 
   long unique_op_number;
+  long op_number_per_inst;
 
   // {{{ op numbers and info pointers
   uns     proc_id;     // processor id for cmp model

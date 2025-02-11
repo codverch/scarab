@@ -218,7 +218,10 @@ Scarab's source code is organized as follows:
 #include "general.param.h"
 
 
+
 void* sbird_ht_ptr;
+
+// predictor_entry* predictor_table;
 
 
 /**************************************************************************************/
@@ -248,13 +251,9 @@ int main(int argc, char* argv[], char* envp[]) {
   /* read parameters from PARAMS.in and the command line */
   simulated_argv = get_params(argc, argv);
 
-  sbird_ht_ptr = lset_create();
+  sbird_ht_ptr = lhash_create(16);
 
-  // if(READ_LSET)
-  // {
-  //   printf("Reading set of delete ops from sbird_output.txt\n");
-  //   lset_load_from_file(sbird_ht_ptr, "sbird_output.txt");
-  // }
+
 
   /* perform global initialization */
   init_global(simulated_argv, envp);
@@ -306,7 +305,7 @@ int main(int argc, char* argv[], char* envp[]) {
 
   // lset_print_to_file(sbird_ht_ptr, "sbird_output.txt");
 
-  lset_free(sbird_ht_ptr);
+  lhash_free(sbird_ht_ptr);
 
   return 0;
 }

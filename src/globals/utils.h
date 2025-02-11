@@ -382,27 +382,36 @@ int   parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 /* for use in qsort */
 int compare_uns64(const void*, const void*);
 
-#define LSET_INITIAL_CAPACITY 16
-#define LSET_LOAD_FACTOR 0.75
+#define LHASH_LOAD_FACTOR 0.75
 
-typedef struct LSetNode {
-    long key;
-    struct LSetNode* next;
-} LSetNode;
 
 typedef struct {
-    LSetNode** buckets;
+    long unique_op_num;
+    void* ptr_to_op;
+} LHashValue;
+
+typedef struct LHashNode {
+    long key;
+    LHashValue value;
+    struct LHashNode* next;
+} LHashNode;
+
+typedef struct {
     size_t capacity;
     size_t size;
-} LSet;
+    LHashNode** buckets;
+} LHash;
 
-LSet* lset_create(void);
-void lset_insert(LSet* set, long key);
-int lset_contains(LSet* set, long key);
-void lset_remove(LSet* set, long key);
-void lset_free(LSet* set);
-void lset_print_to_file(LSet* set, const char* filename);
-void lset_load_from_file(LSet *set, const char *filename);
+
+
+
+  // predictor_table = &predictor_table_on_stack;
+
+LHash* lhash_create(size_t capacity);
+void lhash_insert(LHash* table, long key, LHashValue value);
+int lhash_contains(LHash* table, long key, LHashValue* out_value);
+void lhash_remove(LHash* table, long key);
+void lhash_free(LHash* table);
 
 
 #ifdef __cplusplus
