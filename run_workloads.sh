@@ -17,7 +17,7 @@ max_simul_proc=23
 
 currdir=$(pwd)
 
-prefix="no_fusion"
+prefix="always_cache"
 
 # Loop through all files in the directory and add them to the array
 for file in "$directory"/*; do

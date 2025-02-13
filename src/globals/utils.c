@@ -864,8 +864,18 @@ int parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
   return parse_array(dest, str, max_num, parse_string_token);
 }
 
-static unsigned long lhash_hash(long key, size_t capacity) {
-    return (unsigned long)key % capacity;
+// static unsigned long lhash_hash(long key, size_t capacity) {
+//     return (unsigned long)key % capacity;
+// }
+
+
+static unsigned long lhash_hash(const char* key, size_t capacity) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *key++)) {
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    }
+    return hash % capacity;
 }
 
 LHash* lhash_create(size_t capacity) {
@@ -896,7 +906,7 @@ static void lhash_resize(LHash* table) {
     table->capacity = new_capacity;
 }
 
-void lhash_insert(LHash* table, long key, LHashValue value) {
+void lhash_insert(LHash* table, const char* key, LHashValue value) {
     if ((double)table->size / table->capacity > LHASH_LOAD_FACTOR) {
         lhash_resize(table);
     }
@@ -905,7 +915,7 @@ void lhash_insert(LHash* table, long key, LHashValue value) {
     LHashNode* node = table->buckets[index];
 
     while (node) {
-        if (node->key == key) {
+        if (strcmp(node->key, key) == 0) {
             node->value = value;  // Update existing value
             return;
         }
@@ -913,19 +923,19 @@ void lhash_insert(LHash* table, long key, LHashValue value) {
     }
 
     node = malloc(sizeof(LHashNode));
-    node->key = key;
+    node->key = strdup(key); // Allocate and copy key
     node->value = value;
     node->next = table->buckets[index];
     table->buckets[index] = node;
     table->size++;
 }
 
-int lhash_contains(LHash* table, long key, LHashValue* out_value) {
+int lhash_contains(LHash* table, const char* key, LHashValue* out_value) {
     unsigned long index = lhash_hash(key, table->capacity);
     LHashNode* node = table->buckets[index];
 
     while (node) {
-        if (node->key == key) {
+        if (strcmp(node->key, key) == 0) {
             if (out_value) {
                 *out_value = node->value;
             }
@@ -936,18 +946,19 @@ int lhash_contains(LHash* table, long key, LHashValue* out_value) {
     return 0;
 }
 
-void lhash_remove(LHash* table, long key) {
+void lhash_remove(LHash* table, const char* key) {
     unsigned long index = lhash_hash(key, table->capacity);
     LHashNode* node = table->buckets[index];
     LHashNode* prev = NULL;
 
     while (node) {
-        if (node->key == key) {
+        if (strcmp(node->key, key) == 0) {
             if (prev) {
                 prev->next = node->next;
             } else {
                 table->buckets[index] = node->next;
             }
+            free(node->key); // Free allocated key
             free(node);
             table->size--;
             return;
@@ -963,13 +974,10 @@ void lhash_free(LHash* table) {
         while (node) {
             LHashNode* temp = node;
             node = node->next;
+            free(temp->key); // Free allocated key
             free(temp);
         }
     }
     free(table->buckets);
     free(table);
 }
-
-
-
-

@@ -75,6 +75,8 @@
 /**************************************************************************************/
 
 predictor_entry predictor_table[PREDICTOR_SIZE];
+Reg_Info reg_infos[PREDICTOR_SIZE][6]; // MAX_DESTS
+int donor_num_dests_global[PREDICTOR_SIZE];
 
 Icache_Stage* ic = NULL;
 
@@ -786,7 +788,8 @@ void update_icache_stage() {
 
 static short is_same_cacheline(long addrA, long addrB)
 {
-  static const long CACHELINE_SIZE = 64;
+  // return 1;
+  static const long CACHELINE_SIZE = 4096;
 
   if ((addrA / CACHELINE_SIZE) == (addrB / CACHELINE_SIZE)) {
       return 1;  // Same cacheline
@@ -798,11 +801,25 @@ static short is_same_cacheline(long addrA, long addrB)
 static void update_LRU(void)
 {
   for(short i = 0; i < PREDICTOR_SIZE; i++)
-    predictor_table[i].LRUcounter++;
+  {
+    predictor_table[i].LRUcounter--;
+    if(predictor_table[i].LRUcounter < 0)
+      predictor_table[i].LRUcounter = 0;
+  }
 }
 
-static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int donor_op_num, bool success)
+static void copy_reg_info(Reg_Info* dest, Reg_Info* src)
 {
+  static const int NUM_DEST = 6;
+  for(short i = 0; i < NUM_DEST; i++)
+  {
+    dest[i] = src[i];
+  }
+}
+
+static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int donor_op_num, bool success, Reg_Info RI[], int num_dests, long donor_unique_num)
+{
+  static const long maxLRU = 0x0eadbeefdeadbeefl;
   if(success)
   {
     long minLRU = 0x999999999999l;
@@ -814,7 +831,15 @@ static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int do
         predictor_table[i].confidence++;
         if(predictor_table[i].confidence > 3)
           predictor_table[i].confidence = 3;
-        predictor_table[i].LRUcounter++;
+        // if(predictor_table[i].confidence == 3)
+        // {
+        //   predictor_table[i].just_fused = !predictor_table[i].just_fused;
+        // }
+        predictor_table[i].donor_unique_op_number = donor_unique_num;
+        // reg_infos[i] = RI;
+        copy_reg_info(reg_infos[i], RI);
+        donor_num_dests_global[i] = num_dests;
+        predictor_table[i].LRUcounter = maxLRU;
         update_LRU();
         return;
       }   
@@ -831,12 +856,17 @@ static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int do
       }
     }
     predictor_table[eviction_index].confidence = 1;
-    predictor_table[eviction_index].LRUcounter = 0;
     predictor_table[eviction_index].PCrcvr = rcvr_pc;
     predictor_table[eviction_index].PCdonor = donor_pc;
     predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
     predictor_table[eviction_index].donor_opnum = donor_op_num;
+    predictor_table[eviction_index].donor_unique_op_number = donor_unique_num;
+    predictor_table[eviction_index].just_fused = 0;
+    predictor_table[eviction_index].just_modified = 0;
+    copy_reg_info(reg_infos[eviction_index], RI);
+    donor_num_dests_global[eviction_index] = num_dests;
     update_LRU();
+    predictor_table[eviction_index].LRUcounter = maxLRU;
     return;
   }
 
@@ -852,12 +882,19 @@ static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int do
     }
   }
   predictor_table[eviction_index].confidence = 0;
-  predictor_table[eviction_index].LRUcounter = 0;
+
   predictor_table[eviction_index].PCrcvr = rcvr_pc;
   predictor_table[eviction_index].PCdonor = donor_pc;
   predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
   predictor_table[eviction_index].donor_opnum = donor_op_num;
+  predictor_table[eviction_index].donor_unique_op_number = donor_unique_num;
+  // reg_infos[eviction_index] = RI;
+  copy_reg_info(reg_infos[eviction_index], RI);
+  predictor_table[eviction_index].just_fused = 0;
+  predictor_table[eviction_index].just_modified= 0;
+  donor_num_dests_global[eviction_index] = num_dests;
   update_LRU();
+  predictor_table[eviction_index].LRUcounter = maxLRU;
 
   return;
 }
@@ -873,15 +910,41 @@ static short predict_fusable(Op* op)
   return -1; // sentinel value
 }
 
+static short predict_rcvr(Op* op) // one reason I stick to using "receiver" is because rcvr
+{
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    if(predictor_table[i].PCrcvr== op->inst_info->addr && predictor_table[i].confidence == 3 && op->op_number_per_inst == predictor_table[i].rcvr_opnum)
+      return i;
+  }
+  return -1; // sentinel value
+}
+
+static void print_predictor_table(void)
+{
+  printf("i\trcvrPC   \trcvropnum\tdonorPC   \tdonoropnum\tconfidence\tLRU\tfused?\n");
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    printf("%d\t%lx   \t%ld        \t%lx   \t%ld       \t%d\t        %ld\t%d\n", i, predictor_table[i].PCrcvr,  predictor_table[i].rcvr_opnum,
+      predictor_table[i].PCdonor,  predictor_table[i].donor_opnum,  predictor_table[i].confidence,  predictor_table[i].LRUcounter, predictor_table[i].just_fused);
+  }
+  printf("\n");
+
+}
+
 #define MAX_HISTORY_LENGTH 64
+
+
 
 static void update_history(Op* op)
 {
   static long cursor = 0;
   static long PCs[MAX_HISTORY_LENGTH] = {0};
   static long MemAddr[MAX_HISTORY_LENGTH] = {0};
+  static Reg_Info donor_regs[MAX_HISTORY_LENGTH][6];
   static int op_num_in_inst[MAX_HISTORY_LENGTH] = {0};
   static short valid[MAX_HISTORY_LENGTH] = {0}; // a candidate load instruction
+  static short donor_num_dests[MAX_HISTORY_LENGTH];
 
   if(op->table_info->mem_type != MEM_LD)
   {
@@ -894,6 +957,10 @@ static void update_history(Op* op)
   PCs[cursor] = op->inst_info->addr;
   MemAddr[cursor] = op->oracle_info.va;
   op_num_in_inst[cursor] = op->op_number_per_inst;
+  // donor_regs[cursor] = op->inst_info->dests; // probably seg faults
+  copy_reg_info(donor_regs[cursor], op->inst_info->dests);
+  donor_num_dests[cursor] = op->table_info->num_dest_regs;
+  long donor_unique_num = op->unique_op_number;
 
   
   for(short i = 0; i < MAX_HISTORY_LENGTH; i++)
@@ -905,10 +972,19 @@ static void update_history(Op* op)
     long rcvr_addr = MemAddr[i];
     long donor_op_num = op_num_in_inst[cursor];
     long rcvr_op_num = op_num_in_inst[i];
+    // Reg_Info donor_RI[] = donor_regs[cursor];
+    int donot_num_dest = donor_num_dests[cursor];
 
     if(is_same_cacheline(donor_addr, rcvr_addr))
     {
-      train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true);
+      train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true, donor_regs[cursor], donot_num_dest, donor_unique_num);
+      valid[cursor] = 0;
+      valid[i] = 0;
+      break;
+    }
+    else
+    {
+      train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, false, donor_regs[cursor], donot_num_dest, donor_unique_num);
       valid[cursor] = 0;
       valid[i] = 0;
       break;
@@ -1005,6 +1081,7 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     op->fetch_cycle = cycle_count;
     static long unique_op_number_counter = 0;
+    static const long print_count_uop_number = 1000000000l;
     op->unique_op_number = unique_op_number_counter++;
     if(prev_addr == op->inst_info->addr)
     {
@@ -1018,12 +1095,66 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     prev_addr = op->inst_info->addr;
 
-    printf("unique_op_number %ld with addr %lld has op_num %ld\n", unique_op_number_counter, op->inst_info->addr, op->op_number_per_inst);
+      // if(unique_op_number_counter > 1000000)
+      // {
+      //   if(op->table_info->mem_type == MEM_LD)
+      //   {
+      //     print_predictor_table();
+      //   }
+      // }
 
     if(DO_FUSION)
     {
-      update_history(op);
-      predict_fusable(op);
+      if(unique_op_number_counter > print_count_uop_number && op->table_info->mem_type == MEM_LD)
+      {
+        printf("unique_op_number %ld with addr %llx has op_num %ld and reads %llx\n", unique_op_number_counter, op->inst_info->addr, op->op_number_per_inst, op->oracle_info.va);
+      }
+      
+
+      short prediction = predict_fusable(op);
+
+      update_history(op); // you could just move this to the node stage but that stupid not retiring business is confusing
+      
+      if(prediction >= 0)
+      {
+        if(unique_op_number_counter > print_count_uop_number)
+          print_predictor_table();
+        long donorPC = predictor_table[prediction].PCdonor;
+        long donor_op_inst_num = predictor_table[prediction].donor_opnum;
+        short already_fused = predictor_table[prediction].just_fused;
+        if(donorPC == op->inst_info->addr && donor_op_inst_num == op->op_number_per_inst)
+        {
+          if(!already_fused)
+          {
+            if(unique_op_number_counter > print_count_uop_number)
+              printf("Deleting %ld\n", op->unique_op_number + 1); // weird hack but okay
+            delete_ld_uop(op);
+            predictor_table[prediction].just_fused = 1;
+          }
+          else
+          {
+            predictor_table[prediction].just_fused = 0;
+          }
+        }
+      }
+
+      short prediction_rcvr = predict_rcvr(op);
+      if(prediction_rcvr >= 0)
+      {
+        if(!predictor_table[prediction_rcvr].just_modified)
+        {
+          if(unique_op_number_counter > print_count_uop_number)
+            printf("modifying %ld\n", op->unique_op_number + 1);
+          donate_operands(op, reg_infos[prediction_rcvr], donor_num_dests_global[prediction_rcvr]);
+          predictor_table[prediction_rcvr].just_modified = 1;
+        }
+        else
+        {
+          predictor_table[prediction_rcvr].just_modified = 0;
+        }
+      }
+
+
     }
 
     op_count[ic->proc_id]++;          /* increment instruction counters */
@@ -1592,28 +1723,28 @@ Flag instr_fill_line(Mem_Req* req) {
 //     return 0;
 // }
 
-void donate_operands(Op* rcvr, Op* donor)
+void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests)
 {
-  if(rcvr->table_info->mem_type != MEM_LD || donor->table_info->mem_type != MEM_LD)
+  if(rcvr->table_info->mem_type != MEM_LD)
   {
     printf("Warning, one of the operands is not a memory load\n");
   }
 
-  for(short i = 0; i < donor->table_info->num_dest_regs; i++)
+  for(short i = 0; i < num_dests; i++)
   {
     bool already_present = false;
 
 
     for(short j = 0; j < rcvr->table_info->num_dest_regs; j++)
     {
-      if(rcvr->inst_info->dests[j].reg == donor->inst_info->dests[i].reg)
+      if(rcvr->inst_info->dests[j].reg == dest_regs[i].reg)
       {
         already_present = true;
       }
     }
     if(!already_present)
     {
-      rcvr->inst_info->dests[rcvr->table_info->num_dest_regs] = donor->inst_info->dests[i];
+      rcvr->inst_info->dests[rcvr->table_info->num_dest_regs] = dest_regs[i];
       rcvr->table_info->num_dest_regs++;
       if(rcvr->table_info->num_dest_regs >= MAX_DESTS)
         printf("SOMETHING IS NOT OKAY\n");
@@ -1631,8 +1762,8 @@ void delete_ld_uop(Op* op)
   if(op->table_info->mem_type == MEM_LD)
     {
       // printf("Deleting %ld\n", op->unique_op_number);
-      // You can even lost performance
-      op->table_info->op_type = OP_NOP; // probably don't do this, it doesn't, in fact, turn into a noop
+      // op->table_info->op_type = OP_NOP; // probably don't do this, it doesn't, in fact, turn into a noop
+      // You can even lose performance
       op->table_info->num_dest_regs = 0;
       op->table_info->num_src_regs = 0; // This can break scarab sometimes
       op->table_info->mem_size = 0;

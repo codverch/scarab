@@ -38,16 +38,20 @@
 #include "libs/hash_lib.h"
 
 /**************************************************************************************/
+// it is 6 in helios, don't use a really large number 
+#define PREDICTOR_SIZE 6 
 
-#define PREDICTOR_SIZE 6
 
 typedef struct {
   long PCrcvr;
   long PCdonor;
   long LRUcounter;
+  long rcvr_opnum;
+  long donor_opnum;
+  long donor_unique_op_number;
   int confidence;
-  int rcvr_opnum;
-  int donor_opnum;
+  short just_fused;
+  short just_modified;
 } predictor_entry;
 
 extern Counter  unique_count;
@@ -88,7 +92,7 @@ extern Uop_Queue_Fill_Time uop_queue_fill_time;
 extern Flag roi_dump_began;
 extern Counter roi_dump_ID;
 
-extern void* sbird_ht_ptr;
+extern void* to_delete_hashtable;
 
 /**************************************************************************************/
 

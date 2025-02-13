@@ -162,7 +162,7 @@ Flag instr_fill_line(Mem_Req* req);
 Flag in_icache(Addr addr);
 
 
-void donate_operands(Op* rcvr, Op* donor);
+void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests);
 void delete_ld_uop(Op* op);
 // void delete_ld_uop(Op* op);
 

@@ -38,6 +38,8 @@
 #include "globals/global_defs.h"
 #include "globals/global_vars.h"
 #include "statistics.h"
+#include <string.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -382,16 +384,18 @@ int   parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 /* for use in qsort */
 int compare_uns64(const void*, const void*);
 
+
 #define LHASH_LOAD_FACTOR 0.75
+#define LHashValue int
 
 
-typedef struct {
-    long unique_op_num;
-    void* ptr_to_op;
-} LHashValue;
+// typedef struct {
+//     long unique_op_num;
+//     void* ptr_to_op;
+// } LHashValue;
 
 typedef struct LHashNode {
-    long key;
+    char* key;
     LHashValue value;
     struct LHashNode* next;
 } LHashNode;
@@ -402,16 +406,15 @@ typedef struct {
     LHashNode** buckets;
 } LHash;
 
-
-
-
-  // predictor_table = &predictor_table_on_stack;
-
+/* Function declarations */
 LHash* lhash_create(size_t capacity);
-void lhash_insert(LHash* table, long key, LHashValue value);
-int lhash_contains(LHash* table, long key, LHashValue* out_value);
-void lhash_remove(LHash* table, long key);
+void lhash_insert(LHash* table, const char* key, LHashValue value);
+int lhash_contains(LHash* table, const char* key, LHashValue* out_value);
+void lhash_remove(LHash* table, const char* key);
 void lhash_free(LHash* table);
+
+
+
 
 
 #ifdef __cplusplus
