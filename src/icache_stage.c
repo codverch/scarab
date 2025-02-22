@@ -81,6 +81,8 @@ extern Memory*                mem;
 extern Rob_Stall_Reason       rob_stall_reason;
 extern Rob_Block_Issue_Reason rob_block_issue_reason;
 
+TrackMicroOpHistoryEntry track_micro_op_history[MAX_TRACK_MICRO_OP_HIST];
+
 /**************************************************************************************/
 /* Local prototypes */
 
@@ -97,6 +99,9 @@ static inline void         log_stats_ic_miss(void);
 static inline void         log_stats_ic_hit(void);
 static inline void         log_stats_mshr_hit(Addr line_addr);
 static inline void         update_stats_bf_retired(void);
+
+static unsigned long micro_op_num_counter = 0;
+static unsigned long micro_op_history_entry_counter = 0;
 
 /**************************************************************************************/
 /* set_icache_stage: */
@@ -779,6 +784,61 @@ void update_icache_stage() {
   }
 }
 
+/**************************************************************************************/
+/* Are these two micro-ops accessing the same cacheblock? */
+
+static bool same_cacheblock_access(Addr addr1, Addr addr2) {
+  return ((addr1 >> LOG2(64)) == (addr2 >> LOG2(64)));
+}
+
+/**************************************************************************************/
+
+
+/**************************************************************************************/
+/* Track micro-op histories */
+
+static void insert_micro_op_history(Addr mem_addr, Addr pc_addr, Op* op) {
+  TrackMicroOpHistoryEntry entry;
+  entry.pc_addr = op->inst_info->addr; 
+  entry.mem_addr = op->oracle_info.va;
+  entry.micro_op_num = micro_op_num_counter;
+  entry.mem_type = op->table_info->mem_type; // 0: not mem, 1: load, 2: store
+
+  // insert this into the micro-op history table - basically when the micro-op history 
+  // table is full, we will overwrite the oldest entry
+  track_micro_op_history[micro_op_history_entry_counter % MAX_TRACK_MICRO_OP_HIST] = entry;
+
+  // increment the micro-op counter
+  micro_op_history_entry_counter = (micro_op_history_entry_counter + 1) % MAX_TRACK_MICRO_OP_HIST;
+  micro_op_num_counter++;
+}
+
+/**************************************************************************************/
+
+/**************************************************************************************/
+/* Check the distance (in micro-ops) between two memory references accessing same cacheblock */
+
+static unsigned int check_distance_between_mem_refs(Addr curr_mem_addr, int mem_type, unsigned long micro_op_num_counter) {
+  unsigned int distance = 0;
+  unsigned int min_distance = MAX_TRACK_MICRO_OP_HIST;
+
+  // iterate through the micro-op history table to find the distance between the two memory references
+  // accessing the same cache block
+
+  for(int i = 0; i < MAX_TRACK_MICRO_OP_HIST; i++) {
+    if(track_micro_op_history[i].mem_type == mem_type && same_cacheblock_access(curr_mem_addr, track_micro_op_history[i].mem_addr)) {
+      distance = micro_op_num_counter - track_micro_op_history[i].micro_op_num;
+      if(distance < min_distance) {
+        min_distance = distance;
+      }
+    }
+
+    }
+
+    return min_distance;
+}
+
+/**************************************************************************************/
 
 /**************************************************************************************/
 /* update_bf_uoc_stats: */
@@ -862,6 +922,300 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     thread_map_mem_dep(op);
     op->fetch_cycle = cycle_count;
+
+    // Insert into micro_op history table 
+    insert_micro_op_history(op->oracle_info.va, op->inst_info->addr, op);
+
+    // Check the distance between two memory references accessing the same cache block
+    if(check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 0) {
+      // If the distance is 0, then the two memory references are in the same cache block
+      // and the same cache block is being accessed in a short time interval
+      // This can be a potential cache thrashing scenario
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_0);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 1) {
+      // If the distance is 1, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 1 micro-op
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_1);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 2) {
+      // If the distance is 2, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 2 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_2);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 3) {
+      // If the distance is 3, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 3 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_3);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 4) {
+      // If the distance is 4, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 4 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_4);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 5) {
+      // If the distance is 5, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 5 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_5);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 6) {
+      // If the distance is 6, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 6 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_6);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 7) {
+      // If the distance is 7, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 7 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_7);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 8) {
+      // If the distance is 8, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 8 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_8);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 9) {
+      // If the distance is 9, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 9 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_9);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 10) {
+      // If the distance is 10, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 10 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_10);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 11) {
+      // If the distance is 11, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 11 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_11);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 12) {
+      // If the distance is 12, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 12 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_12);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 13) {
+      // If the distance is 13, then the two memory references are in the same cache block
+      // and the same cache block is being accessed with a distance of 13 micro-ops
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_13);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 14) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_14);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 15) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_15);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 16) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_16);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 17) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_17);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 18) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_18);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 19) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_19);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 20) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_20);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 21) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_21);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 22) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_22);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 23) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_23);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 24) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_24);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 25) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_25);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 26) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_26);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 27) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_27);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 28) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_28);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 29) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_29);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 30) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_30);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 31) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_31);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 32) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_32);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 33) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_33);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 34) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_34);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 35) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_35);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 36) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_36);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 37) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_37);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 38) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_38);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 39) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_39);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 40) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_40);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 41) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_41);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 42) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_42);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 43) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_43);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 44) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_44);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 45) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_45);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 46) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_46);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 47) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_47);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 48) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_48);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 49) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_49);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 50) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_50);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 51) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_51);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 52) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_52);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 53) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_53);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 54) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_54);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 55) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_55);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 56) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_56);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 57) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_57);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 58) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_58);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 59) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_59);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 60) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_60);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 61) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_61);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 62) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_62);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 63) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_63);
+    }
+
+    else if (check_distance_between_mem_refs(op->oracle_info.va, op->table_info->mem_type, micro_op_num_counter) == 64) {
+      STAT_EVENT(ic->proc_id, SAME_CACHELINE_DISTANCE_64);
+    }
+
 
     op_count[ic->proc_id]++;          /* increment instruction counters */
     unique_count_per_core[ic->proc_id]++;

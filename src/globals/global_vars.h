@@ -76,6 +76,20 @@ extern Uop_Queue_Fill_Time uop_queue_fill_time;
 
 extern Flag roi_dump_began;
 extern Counter roi_dump_ID;
+
+extern void* cacheline_addr_accessed_hashtable; // Stores all the micro-ops along with metadata
+
+#define MAX_TRACK_MICRO_OP_HIST 64 
+
+typedef struct TrackMicroOpHistoryEntry {
+    Addr mem_addr;
+    Addr pc_addr; 
+    // enum value of Mem_Type
+    int mem_type;
+    unsigned long micro_op_num;
+    struct track_micro_op_history_entry* next;
+} TrackMicroOpHistoryEntry;
+
 /**************************************************************************************/
 
 #endif /* #ifndef __GLOBAL_VARS_H__ */
