@@ -834,8 +834,8 @@ static unsigned int check_distance_between_mem_refs(Addr curr_mem_addr, Addr cur
   printf("Micro-op number counter: %lu\n", micro_op_num_counter);
   for(int i = 0; i < MAX_TRACK_MICRO_OP_HIST; i++) {
     if(track_micro_op_history[i].mem_type != 0 && track_micro_op_history[i].mem_type == mem_type && same_cacheblock_access(curr_mem_addr, track_micro_op_history[i].mem_addr) && curr_mem_addr != track_micro_op_history[i].mem_addr) {
-      distance = micro_op_num_counter - track_micro_op_history[i].micro_op_num;
-      printf("Distance between current memory addr: 0x%llx (PC: 0x%llx) and previous memory access to the same cacheline at addr: 0x%llx (PC: 0x%llx) is: micro_op_num_counter %lu - track_micro_op_history[%d].micro_op_num %lu = %d\n", curr_mem_addr, curr_pc_addr, track_micro_op_history[i].mem_addr, track_micro_op_history[i].pc_addr, micro_op_num_counter, i, track_micro_op_history[i].micro_op_num, distance);
+      distance = micro_op_num_counter - track_micro_op_history[i].micro_op_num - 1;
+      printf("Distance between current memory addr: 0x%llx (PC: 0x%llx) and previous memory access to the same cacheline at addr: 0x%llx (PC: 0x%llx) is: micro_op_num_counter %lu - track_micro_op_history[%d].micro_op_num %lu - 1 = %d\n", curr_mem_addr, curr_pc_addr, track_micro_op_history[i].mem_addr, track_micro_op_history[i].pc_addr, micro_op_num_counter, i, track_micro_op_history[i].micro_op_num, distance);
 
       if(distance < min_distance) {
         min_distance = distance;
