@@ -789,7 +789,7 @@ void update_icache_stage() {
 static short is_same_cacheline(long addrA, long addrB)
 {
   // return 1;
-  static const long CACHELINE_SIZE = 4096;
+  static const long CACHELINE_SIZE = 64;
 
   if ((addrA / CACHELINE_SIZE) == (addrB / CACHELINE_SIZE)) {
       return 1;  // Same cacheline
