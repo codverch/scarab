@@ -72,7 +72,7 @@
 /**************************************************************************************/
 /* Fusion Macros */
 
-#define DO_FUSION TRUE
+#define DO_FUSION FALSE
 #define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
 #define FUSION_DEBUG 0
 FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
