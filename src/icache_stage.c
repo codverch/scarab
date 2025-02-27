@@ -163,6 +163,7 @@ void remove_load_from_fusion_tracking(Op* op) {
     FusionLoad* curr = fusion_hash[hash_idx];
     FusionLoad* prev = NULL;
     
+    // Look for loads to the same cache line that haven't been fused yet
     while (curr) {
         if (curr->op == op) {
             // Found the load, remove it
