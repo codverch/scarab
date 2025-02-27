@@ -123,6 +123,14 @@ static inline Addr get_cacheline_addr(Addr addr) {
     return addr & ~(cacheline_size - 1);
 }
 
+/**************************************************************************************/
+/* get_next_cacheline_addr*/
+
+static inline Addr get_next_cacheline_addr(Addr addr) {
+  static const Addr cacheline_size = 64; // Assuming a 64-byte cache line
+  return (addr & ~(cacheline_size - 1)) + cacheline_size;
+}
+
 
 /**************************************************************************************/
 /* Hash function for cacheline addr */
@@ -185,32 +193,11 @@ static void add_load_to_fusion_tracking(Op* op) {
     }
 }
 
-/**************************************************************************************/
-/* Remove a load from the fusion tracking system */
-
-void remove_load_from_fusion_tracking(Op* op) {
-    // Only remove if the fusion system is initialized and the op is a valid load
-    if (!fusion_table_initialized || op->table_info->mem_type != MEM_LD) {
-        return;
-    }
-    
-    // Since entries in the hash table are linked lists stored in buckets using cacheline addresses,
-    // we need to find the correct bucket and remove the load from it
-    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
-    unsigned int hash_idx = hash_cacheline(cacheline_addr);
-    
-    if (FUSION_DEBUG) {
-        printf("[FUSION_REMOVE] Trying to remove op (addr 0x%llx) from bucket %u\n", 
-               op->oracle_info.va, hash_idx);
-    }
-    
-    // Traverse the linked list in the hash bucket to find and remove the load
-    // fusion_hash is an array of pointers to FusionLoad structures
+// Helper function to remove a load from a specific hash bucket
+static bool remove_load_from_bucket(Op* op, unsigned int hash_idx) {
     FusionLoad* curr = fusion_hash[hash_idx];
-    // Keep track of the previous node to update the list correctly
     FusionLoad* prev = NULL;
     
-    // Look for loads to the same cacheline that haven't been fused yet
     while (curr) {
         if (curr->op == op) {
             // Found the load, remove it
@@ -219,21 +206,39 @@ void remove_load_from_fusion_tracking(Op* op) {
             } else {
                 fusion_hash[hash_idx] = curr->next;
             }
-            if (FUSION_DEBUG) {
-                printf("[FUSION_REMOVE] Successfully removed op  (fused=%s)\n", 
-                       curr->already_fused ? "yes" : "no");
-            }
             free(curr);
-            return;
+            return true;
         }
         prev = curr;
         curr = curr->next;
     }
     
-    if (FUSION_DEBUG) {
-        printf("[FUSION_REMOVE] WARNING: Op  not found in hash table\n");
-    }
+    return false; // Not found in this bucket
 }
+
+/**************************************************************************************/
+/* Remove a load from the fusion tracking system */
+
+void remove_load_from_fusion_tracking(Op* op) {
+    if (!fusion_table_initialized || op->table_info->mem_type != MEM_LD) {
+        return;
+    }
+    
+    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    Addr next_cacheline_addr = get_next_cacheline_addr(cacheline_addr);
+    unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
+    
+    // Try to remove from current cache line bucket
+    if (remove_load_from_bucket(op, hash_idx)) {
+        return;
+    }
+    
+    // If not found, try next cache line bucket
+    remove_load_from_bucket(op, next_hash_idx);
+}
+
+
 
 /**************************************************************************************/
 /* Find a fusion candidate for a load */
@@ -241,48 +246,43 @@ void remove_load_from_fusion_tracking(Op* op) {
 // This function looks for a load operation that can be fused with the current op
 static Op* find_fusion_candidate(Op* op) {
     Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    Addr next_cacheline_addr = get_next_cacheline_addr(cacheline_addr);
     unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
     
     if (FUSION_DEBUG) {
-        printf("[FUSION_FIND] Looking for fusion candidates for op (addr 0x%llx, cacheline 0x%llx)\n", 
-                op->oracle_info.va, cacheline_addr);
+        printf("[FUSION_FIND] Looking for fusion candidates for op (addr 0x%llx, cacheline 0x%llx, next cacheline 0x%llx)\n", 
+                op->oracle_info.va, cacheline_addr, next_cacheline_addr);
     }
     
-    // curr is the head of the linked list in the hash bucket: an existing load
+    // Check current cache line first
     FusionLoad* curr = fusion_hash[hash_idx];
-    int candidates_checked = 0;
-    
     while (curr) {
-        candidates_checked++;
-        
-        if (FUSION_DEBUG) { // More verbose debug level
-            printf("[FUSION_FIND] Checking op (same cacheline=%s, already_fused=%s, different_op=%s, has_dest_regs=%s)\n", 
-                   
-                   (curr->cacheline_addr == cacheline_addr) ? "yes" : "no",
-                   curr->already_fused ? "yes" : "no",
-                   (curr->op != op) ? "yes" : "no",
-                   (curr->op->table_info->num_dest_regs > 0) ? "yes" : "no");
-        }
-        
-        // Only consider loads accessing the same cache line
-        // that have not already participated in fusion
         if (curr->cacheline_addr == cacheline_addr && 
             !curr->already_fused && 
-            curr->op != op && // Ensure it's a different op
+            curr->op != op && 
+            curr->op->table_info->num_dest_regs > 0) {
+            return curr->op;
+        }
+        curr = curr->next;
+    }
+    
+    // If no candidate found in current cache line, check next cache line
+    curr = fusion_hash[next_hash_idx];
+    while (curr) {
+        if (curr->cacheline_addr == next_cacheline_addr && 
+            !curr->already_fused && 
+            curr->op != op && 
             curr->op->table_info->num_dest_regs > 0) {
             
             if (FUSION_DEBUG) {
-                printf("[FUSION_FIND] Found candidate: op  at addr 0x%llx\n", 
+                printf("[FUSION_FIND] Found candidate in next cacheline: op at addr 0x%llx\n", 
                        curr->op->oracle_info.va);
             }
             
             return curr->op;
         }
         curr = curr->next;
-    }
-    
-    if (FUSION_DEBUG) {
-        printf("[FUSION_FIND] No suitable candidate found after checking %d options\n", candidates_checked);
     }
     
     return NULL;  // No suitable candidate found
@@ -293,25 +293,29 @@ static Op* find_fusion_candidate(Op* op) {
 
 static void mark_load_as_fused(Op* op) {
     Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    Addr next_cacheline_addr = get_next_cacheline_addr(cacheline_addr);
     unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
     
-    // Look for the current load in the hash table
+    // Look for the current load in both hash tables
     FusionLoad* curr_load = fusion_hash[hash_idx];
-    
-    // If the current load is found, mark it as fused
     while (curr_load) {
         if (curr_load->op == op) {
             curr_load->already_fused = true;
-            
-            if (FUSION_DEBUG) {
-                printf("[FUSION_MARK] Marked op as fused\n");
-            }
-            
             return;
         }
         curr_load = curr_load->next;
     }
     
+    // Check next cache line bucket if not found in current
+    curr_load = fusion_hash[next_hash_idx];
+    while (curr_load) {
+        if (curr_load->op == op) {
+            curr_load->already_fused = true;
+            return;
+        }
+        curr_load = curr_load->next;
+    }
 }
 
 /**************************************************************************************/
