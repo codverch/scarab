@@ -72,8 +72,8 @@
 /**************************************************************************************/
 /* Fusion Macros */
 
-#define DO_FUSION FALSE
-#define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
+#define DO_FUSION TRUE
+#define IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS TRUE
 #define FUSION_DEBUG 0
 FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
 bool fusion_table_initialized = false;
@@ -106,7 +106,7 @@ static inline void         log_stats_ic_miss(void);
 static inline void         log_stats_ic_hit(void);
 static inline void         log_stats_mshr_hit(Addr line_addr);
 static inline void         update_stats_bf_retired(void);
-static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
+static inline void         fuse_cacheline_loads(Stage_Data* cur_data);
 
 /**************************************************************************************/
 /* set_icache_stage: */
@@ -225,7 +225,7 @@ void remove_load_from_fusion_tracking(Op* op) {
     }
     
     Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
-    Addr next_cacheline_addr = get_next_cacheline_addr(cacheline_addr);
+    Addr next_cacheline_addr = get_next_cacheline_addr(op->oracle_info.va);
     unsigned int hash_idx = hash_cacheline(cacheline_addr);
     unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
     
@@ -246,7 +246,7 @@ void remove_load_from_fusion_tracking(Op* op) {
 // This function looks for a load operation that can be fused with the current op
 static Op* find_fusion_candidate(Op* op) {
     Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
-    Addr next_cacheline_addr = get_next_cacheline_addr(cacheline_addr);
+    Addr next_cacheline_addr = get_next_cacheline_addr(op->oracle_info.va);
     unsigned int hash_idx = hash_cacheline(cacheline_addr);
     unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
     
@@ -262,6 +262,13 @@ static Op* find_fusion_candidate(Op* op) {
             !curr->already_fused && 
             curr->op != op && 
             curr->op->table_info->num_dest_regs > 0) {
+
+            if (FUSION_DEBUG) {
+                printf("[FUSION_FIND] Found candidate in current cacheline: op at addr 0x%llx\n", 
+                       curr->op->oracle_info.va);
+            }
+
+
             return curr->op;
         }
         curr = curr->next;
@@ -293,7 +300,7 @@ static Op* find_fusion_candidate(Op* op) {
 
 static void mark_load_as_fused(Op* op) {
     Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
-    Addr next_cacheline_addr = get_next_cacheline_addr(cacheline_addr);
+    Addr next_cacheline_addr = get_next_cacheline_addr(op->oracle_info.va);
     unsigned int hash_idx = hash_cacheline(cacheline_addr);
     unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
     
@@ -321,7 +328,7 @@ static void mark_load_as_fused(Op* op) {
 /**************************************************************************************/
 /* Fuse loads accessing the same cacheline */
 
-static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
+static inline void fuse_cacheline_loads(Stage_Data* cur_data) {
     
     if (!fusion_table_initialized) {
         init_fusion_system();
@@ -1181,12 +1188,15 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
   last_icache_issue_time = cycle_count;
 
  
-  if (DO_FUSION && IDEAL_FUSION_SAME_CACHELINE_LOADS) {
-    fuse_same_cacheline_loads(cur_data);
+  if (DO_FUSION && IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS) {
+    fuse_cacheline_loads(cur_data);
   }
 
   for (uns ii = 0; ii < cur_data->op_count; ii++) {
     Op* op = cur_data->ops[ii];
+
+    printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
+           unsstr64(op_count[ic->proc_id]), hexstr64s(op->oracle_info.va));
 
     ASSERTM(ic->proc_id, ic->off_path == op->off_path,
             "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
