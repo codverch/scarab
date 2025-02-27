@@ -1195,8 +1195,11 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
   for (uns ii = 0; ii < cur_data->op_count; ii++) {
     Op* op = cur_data->ops[ii];
 
-    printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
+    if(FUSION_DEBUG) {
+       printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
            unsstr64(op_count[ic->proc_id]), hexstr64s(op->oracle_info.va));
+    }
+   
 
     ASSERTM(ic->proc_id, ic->off_path == op->off_path,
             "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
