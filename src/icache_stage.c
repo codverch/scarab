@@ -73,7 +73,7 @@
 /* Fusion Macros */
 
 #define DO_FUSION TRUE
-#define IDEAL_FUSION_MODEL TRUE
+#define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
 #define FUSION_DEBUG 0
 FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
 bool fusion_table_initialized = false;
@@ -449,11 +449,6 @@ void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests) {
 
 void delete_ld_uop(Op* op) {
     if(op->table_info->mem_type == MEM_LD) {
-        if (FUSION_DEBUG) {
-            printf("[FUSION_DELETE] Before deletion: op has %d dest_regs, %d src_regs, mem_size=%d\n", 
-                    op->table_info->num_dest_regs, 
-                   op->table_info->num_src_regs, op->table_info->mem_size);
-        }
         
         op->table_info->num_dest_regs = 0;
         op->table_info->num_src_regs = 0;
@@ -463,7 +458,7 @@ void delete_ld_uop(Op* op) {
         op->oracle_info.mem_size = 0;
 
         if(FUSION_DEBUG) {
-           printf("[FUSION_DELETE] Converted op  to no-op (all registers cleared, memory access disabled)\n"
+           printf("[FUSION_DELETE] Converted op to no-op (all registers cleared, memory access disabled)\n"
                );}
         
      
@@ -1182,7 +1177,7 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
   last_icache_issue_time = cycle_count;
 
  
-  if (DO_FUSION && IDEAL_FUSION_MODEL) {
+  if (DO_FUSION && IDEAL_FUSION_SAME_CACHELINE_LOADS) {
     fuse_same_cacheline_loads(cur_data);
   }
 
