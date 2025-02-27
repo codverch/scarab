@@ -70,6 +70,13 @@
 #define DEBUG_FDIP(proc_id, args...) _DEBUG(proc_id, DEBUG_FDIP, ##args)
 
 /**************************************************************************************/
+/* Fusion Macros */
+
+#define IDEAL_FUSION_MODEL TRUE
+FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
+bool fusion_table_initialized = false;
+
+/**************************************************************************************/
 /* Global Variables */
 
 /**************************************************************************************/
@@ -97,12 +104,198 @@ static inline void         log_stats_ic_miss(void);
 static inline void         log_stats_ic_hit(void);
 static inline void         log_stats_mshr_hit(Addr line_addr);
 static inline void         update_stats_bf_retired(void);
+static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
 
 /**************************************************************************************/
 /* set_icache_stage: */
 
 void set_icache_stage(Icache_Stage* new_ic) {
   ic = new_ic;
+}
+
+/**************************************************************************************/
+/* get_cacheline_addr */
+
+static inline Addr get_cacheline_addr(Addr addr) {
+    static const Addr CACHELINE_MASK = ~0x3F;  // 64-byte cache line mask
+    return addr & CACHELINE_MASK;
+}
+
+static inline unsigned int hash_cacheline(Addr cacheline_addr) {
+    return (unsigned int)(cacheline_addr & (FUSION_HASH_SIZE - 1));
+}
+
+static void init_fusion_system() {
+    for (int i = 0; i < FUSION_HASH_SIZE; i++) {
+        fusion_hash[i] = NULL;
+    }
+    fusion_table_initialized = true;
+}
+
+static void add_load_to_fusion_tracking(Op* op) {
+    if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
+        return;  // Only track valid loads
+    }
+    
+    FusionLoad* new_load = (FusionLoad*)malloc(sizeof(FusionLoad));
+    if (!new_load) {
+        // Handle allocation failure
+        return;
+    }
+    
+    new_load->op = op;
+    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    new_load->already_fused = false;
+    
+    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
+    new_load->next = fusion_hash[hash_idx];
+    fusion_hash[hash_idx] = new_load;
+}
+
+void remove_load_from_fusion_tracking(Op* op) {
+    if (!fusion_table_initialized || op->table_info->mem_type != MEM_LD) {
+        return;
+    }
+    
+    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    
+    FusionLoad* curr = fusion_hash[hash_idx];
+    FusionLoad* prev = NULL;
+    
+    while (curr) {
+        if (curr->op == op) {
+            // Found the load, remove it
+            if (prev) {
+                prev->next = curr->next;
+            } else {
+                fusion_hash[hash_idx] = curr->next;
+            }
+            free(curr);
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+}
+
+// Find fusion candidate for a load
+static Op* find_fusion_candidate(Op* op) {
+    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    
+    FusionLoad* curr = fusion_hash[hash_idx];
+    
+    while (curr) {
+        // Only consider loads accessing the same cache line
+        // that have not already participated in fusion
+        if (curr->cacheline_addr == cacheline_addr && 
+            !curr->already_fused && 
+            curr->op != op && 
+            curr->op->table_info->num_dest_regs > 0) {
+            return curr->op;
+        }
+        curr = curr->next;
+    }
+    
+    return NULL;  // No suitable candidate found
+}
+
+// Mark a load as fused in the tracking system
+static void mark_load_as_fused(Op* op) {
+    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    
+    FusionLoad* curr = fusion_hash[hash_idx];
+    
+    while (curr) {
+        if (curr->op == op) {
+            curr->already_fused = true;
+            return;
+        }
+        curr = curr->next;
+    }
+}
+
+// Process aggressive fusion for loads accessing the same cache line
+static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
+    // Initialize the fusion system if needed
+    if (!fusion_table_initialized) {
+        init_fusion_system();
+    }
+    
+    // Process each load in the current fetch group
+    for (int i = 0; i < cur_data->op_count; i++) {
+        Op* op = cur_data->ops[i];
+        
+        // Skip non-load ops or loads that have already been neutralized
+        if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
+            continue;
+        }
+        
+        // Try to find a candidate for fusion
+        Op* receiver = find_fusion_candidate(op);
+        
+        if (receiver) {
+            // Perform fusion - current op becomes the donor, existing op is the receiver
+            DEBUG(op->proc_id, "Aggressive fusion: Load at 0x%llx (op %ld) donates to load at 0x%llx (op %ld) - same cacheline 0x%llx\n", 
+                  op->inst_info->addr, op->unique_op_number, 
+                  receiver->inst_info->addr, receiver->unique_op_number,
+                  get_cacheline_addr(op->oracle_info.va));
+                  
+            donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
+            delete_ld_uop(op);
+            
+            // Mark both ops as fused
+            mark_load_as_fused(op);
+            mark_load_as_fused(receiver);
+        }
+        
+        // Add this load to tracking for future fusion opportunities
+        add_load_to_fusion_tracking(op);
+    }
+}
+
+void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests) {
+  if(rcvr->table_info->mem_type != MEM_LD) {
+    DEBUG(rcvr->proc_id, "Warning, receiver is not a memory load\n");
+  }
+
+  for(short i = 0; i < num_dests; i++) {
+    bool already_present = false;
+
+    for(short j = 0; j < rcvr->table_info->num_dest_regs; j++) {
+      if(rcvr->inst_info->dests[j].reg == dest_regs[i].reg) {
+        already_present = true;
+        break;
+      }
+    }
+    
+    if(!already_present) {
+      rcvr->inst_info->dests[rcvr->table_info->num_dest_regs] = dest_regs[i];
+      rcvr->table_info->num_dest_regs++;
+      if(rcvr->table_info->num_dest_regs >= MAX_DESTS) {
+        DEBUG(rcvr->proc_id, "Warning: Maximum destination registers reached during fusion\n");
+      }
+    } 
+  }
+}
+
+/**************************************************************************************/
+/* Convert a load op to essentially a no-op */
+
+void delete_ld_uop(Op* op) {
+  if(op->table_info->mem_type == MEM_LD) {
+    DEBUG(op->proc_id, "Deleting load op %ld\n", op->unique_op_number);
+    op->table_info->num_dest_regs = 0;
+    op->table_info->num_src_regs = 0;
+    op->table_info->mem_size = 0;
+    op->inst_info->latency = 1;
+    op->inst_info->extra_ld_latency = 0;
+    op->oracle_info.mem_size = 0;
+  } else {
+    DEBUG(op->proc_id, "WARNING, %ld is not a mem_ld\n", op->unique_op_number);
+  }
 }
 
 /**************************************************************************************/
@@ -813,6 +1006,11 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
   fetch_lag              = cycle_count - last_icache_issue_time;
   last_icache_issue_time = cycle_count;
 
+  // Apply aggressive cache line fusion if enabled
+  if (DO_FUSION && IDEAL_FUSION_MODEL) {
+    fuse_same_cacheline_loads(cur_data);
+  }
+
   for (uns ii = 0; ii < cur_data->op_count; ii++) {
     Op* op = cur_data->ops[ii];
 
@@ -861,7 +1059,24 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
                2 * op->off_path);
 
     thread_map_mem_dep(op);
+    
+    static long long int prev_addr = 0;
+    static long inst_op_counter = 0;
+
     op->fetch_cycle = cycle_count;
+    static long unique_op_number_counter = 0;
+    op->unique_num = unique_op_number_counter++;
+    
+    if(prev_addr == op->inst_info->addr) {
+      inst_op_counter++;
+    } else {
+      inst_op_counter = 0;
+    }
+
+    prev_addr = op->inst_info->addr;
+
+    // Note: We've removed the prediction-based fusion code here
+    // No calls to update_history, predict_fusable, or predict_rcvr
 
     op_count[ic->proc_id]++;          /* increment instruction counters */
     unique_count_per_core[ic->proc_id]++;
@@ -891,20 +1106,6 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
       inc_bstat_fetched(op);
 
       ic->off_path = ic->off_path || op->oracle_info.recover_at_decode || op->oracle_info.recover_at_exec;
-
-      // Measuring basic block lengths
-      /*static int bbl_len = 0;
-      static int bbl_len_dont_end_pred_nt = 0;
-      bbl_len++;
-      bbl_len_dont_end_pred_nt++;
-      if (op->table_info->cf_type) {
-        STAT_EVENT(ic->proc_id, BBL_LENGTH_1 + bbl_len-1);
-        bbl_len = 0;
-        if (op->oracle_info.pred == TAKEN) {
-          STAT_EVENT(ic->proc_id, BBL_DONT_END_PRED_NT_LENGTH_1 + bbl_len_dont_end_pred_nt-1);
-          bbl_len_dont_end_pred_nt = 0;
-        }
-      }*/
     } else {
       // pass the global branch history to all the instructions
       op->oracle_info.pred_global_hist = g_bp_data->global_hist;

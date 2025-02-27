@@ -862,3 +862,8 @@ int parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
                        int max_num) {
   return parse_array(dest, str, max_num, parse_string_token);
 }
+
+// Hash function for cache line addresses
+static inline unsigned int hash_cacheline(Addr cacheline_addr) {
+    return (unsigned int)(cacheline_addr & (FUSION_HASH_SIZE - 1));
+}

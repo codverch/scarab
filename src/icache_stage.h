@@ -155,6 +155,9 @@ Flag icache_off_path(void);
 void move_to_prev_op(void);
 Flag instr_fill_line(Mem_Req* req);
 Flag instr_fill_line(Mem_Req* req);
+void remove_load_from_fusion_tracking(Op* op); 
+void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests);
+void delete_ld_uop(Op* op);
 
 // For branch stat collection
 Flag in_icache(Addr addr);

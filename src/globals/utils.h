@@ -38,6 +38,7 @@
 #include "globals/global_defs.h"
 #include "globals/global_vars.h"
 #include "statistics.h"
+#include "stdbool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -381,6 +382,19 @@ int   parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 
 /* for use in qsort */
 int compare_uns64(const void*, const void*);
+
+// Define a global structure to track all loads in flight and potential fusion opportunities
+// Using a hash table approach to create effectively unlimited tracking
+#define FUSION_HASH_SIZE 4096  
+
+typedef struct FusionLoad {
+    Op* op;                    // The load operation
+    Addr cacheline_addr;       // Cache line address of this load
+    struct FusionLoad* next;   // Pointer to next load in the hash bucket
+    bool already_fused;        // Flag to indicate if this load has been involved in fusion
+} FusionLoad;
+
+
 
 #ifdef __cplusplus
 }
