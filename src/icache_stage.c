@@ -73,7 +73,8 @@
 /* Fusion Macros */
 
 #define DO_FUSION TRUE
-#define IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS TRUE
+#define IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS FALSE
+#define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
 #define FUSION_DEBUG 0
 FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
 bool fusion_table_initialized = false;
@@ -107,6 +108,7 @@ static inline void         log_stats_ic_hit(void);
 static inline void         log_stats_mshr_hit(Addr line_addr);
 static inline void         update_stats_bf_retired(void);
 static inline void         fuse_cacheline_loads(Stage_Data* cur_data);
+static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
 static bool remove_load_from_bucket(Op* op, unsigned int hash_idx);
 
 /**************************************************************************************/
@@ -300,6 +302,36 @@ static Op* find_fusion_candidate(Op* op) {
     return NULL;  // No suitable candidate found
 }
 
+
+// This function looks for a load operation that can be fused with the current op
+static Op* find_same_cacheline_fusion_candidate(Op* op) {
+    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+    // Addr next_cacheline_addr = get_next_cacheline_addr(op->oracle_info.va);
+    unsigned int hash_idx = hash_cacheline(cacheline_addr);
+    // unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
+    
+    
+    // Check current cache line first
+    FusionLoad* curr = fusion_hash[hash_idx];
+    while (curr) {
+        if (curr->cacheline_addr == cacheline_addr && 
+            !curr->already_fused && 
+            curr->op != op && 
+            curr->op->table_info->num_dest_regs > 0 &&
+            curr->op->table_info->mem_type == MEM_LD) {
+
+            if (FUSION_DEBUG) {
+                printf("[FUSION_FIND] Found candidate in current cacheline: op at addr 0x%llx\n", 
+                       curr->op->oracle_info.va);
+            }
+            return curr->op;
+        }
+        curr = curr->next;
+    }
+    
+    return NULL;  // No suitable candidate found
+}
+
 /**************************************************************************************/
 /* Mark a load as fused */
 
@@ -407,6 +439,84 @@ static inline void fuse_cacheline_loads(Stage_Data* cur_data) {
         printf("[FUSION_PROCESS] Total fusions performed: %d\n", fusions_performed);
     }
 }
+
+static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
+    
+    if (!fusion_table_initialized) {
+        init_fusion_system();
+    }
+    
+    if (FUSION_DEBUG) {
+        printf("\n[FUSION_PROCESS] Starting fusion for %d ops\n", cur_data->op_count);
+    }
+    
+    int fusions_performed = 0;
+    
+    // Process each load in the current fetch group
+    for (int i = 0; i < cur_data->op_count; i++) {
+        Op* op = cur_data->ops[i];
+
+        // Add this load to tracking for future fusion opportunities
+        add_load_to_fusion_tracking(op);
+        
+        if (FUSION_DEBUG) {
+            printf("[FUSION_PROCESS] Examining op at addr 0x%llx (type=%d, dest_regs=%d)\n", 
+                   op->oracle_info.va, 
+                   op->table_info->mem_type, op->table_info->num_dest_regs);
+        }
+        
+        // Skip non-load ops or loads that have already been neutralized
+        if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
+            if (FUSION_DEBUG) {
+                printf("[FUSION_PROCESS] Skipping op not a valid load\n");
+            }
+            continue;
+        }
+        
+        // Try to find a candidate for fusion
+        Op* receiver = find_same_cacheline_fusion_candidate(op);
+        
+        if (receiver) {
+            if (FUSION_DEBUG) {
+                printf("[FUSION_PROCESS] FUSION PERFORMED: op at addr 0x%llx fuses with receiver at addr 0x%llx\n", 
+                       op->oracle_info.va, receiver->oracle_info.va);
+                printf("[FUSION_PROCESS] Donor addr: 0x%llx, Receiver addr: 0x%llx\n",
+                       op->oracle_info.va, receiver->oracle_info.va);
+                printf("[FUSION_PROCESS] Donor dest_regs before: %d\n", 
+                       op->table_info->num_dest_regs);
+                printf("[FUSION_PROCESS] Receiver dest_regs before: %d\n", 
+                       receiver->table_info->num_dest_regs);
+            }
+            
+            donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
+            
+            // Now the receiver has more destination registers
+            // We can safely delete the donor op
+            delete_ld_uop(op);
+            
+            // Mark both ops as fused
+            mark_load_as_fused(op);
+            mark_load_as_fused(receiver);
+            
+            fusions_performed++;
+            
+            if (FUSION_DEBUG) {
+                printf("[FUSION_PROCESS] Receiver dest_regs after: %d\n", 
+                       receiver->table_info->num_dest_regs);
+            }
+        } else {
+            if (FUSION_DEBUG) {
+                printf("[FUSION_PROCESS] No fusion performed for op\n");
+            }
+        }
+    }
+    
+    if (FUSION_DEBUG) {
+        printf("[FUSION_PROCESS] Total fusions performed: %d\n", fusions_performed);
+    }
+}
+
+
 
 /**************************************************************************************/
 /* Donate operands from one load to another */
@@ -1199,6 +1309,9 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
   if (DO_FUSION && IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS) {
     fuse_cacheline_loads(cur_data);
 }
+  if(DO_FUSION && IDEAL_FUSION_SAME_CACHELINE_LOADS) {
+    fuse_same_cacheline_loads(cur_data);
+  }
 
   for (uns ii = 0; ii < cur_data->op_count; ii++) {
     Op* op = cur_data->ops[ii];
