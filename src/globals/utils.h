@@ -386,13 +386,7 @@ int compare_uns64(const void*, const void*);
 
 
 #define LHASH_LOAD_FACTOR 0.75
-#define LHashValue int
-
-
-// typedef struct {
-//     long unique_op_num;
-//     void* ptr_to_op;
-// } LHashValue;
+#define LHashValue long
 
 typedef struct LHashNode {
     char* key;
@@ -412,6 +406,8 @@ void lhash_insert(LHash* table, const char* key, LHashValue value);
 int lhash_contains(LHash* table, const char* key, LHashValue* out_value);
 void lhash_remove(LHash* table, const char* key);
 void lhash_free(LHash* table);
+int compare_nodes(const void* a, const void* b);
+void lhash_print_sorted(LHash* table);
 
 
 

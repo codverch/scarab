@@ -981,3 +981,51 @@ void lhash_free(LHash* table) {
     free(table->buckets);
     free(table);
 }
+
+int compare_nodes(const void* a, const void* b) {
+    LHashNode* nodeA = *(LHashNode**)a;
+    LHashNode* nodeB = *(LHashNode**)b;
+    return (nodeA->value > nodeB->value) - (nodeA->value < nodeB->value);
+}
+
+void lhash_print_sorted(LHash* table) {
+    if (table->size == 0) {
+        printf("Hash table is empty.\n");
+        return;
+    }
+
+    LHashNode** nodes = malloc(table->size * sizeof(LHashNode*));
+    size_t count = 0;
+
+    for (size_t i = 0; i < table->capacity; i++) {
+        LHashNode* node = table->buckets[i];
+        while (node) {
+            nodes[count++] = node;
+            node = node->next;
+        }
+    }
+
+    qsort(nodes, table->size, sizeof(LHashNode*), compare_nodes);
+
+    long total = 0;
+
+    for (size_t i = 0; i < table->size; i++) {
+        // printf("%s: %ld\n", nodes[i]->key, nodes[i]->value);
+        total+=nodes[i]->value;
+    }
+
+    // printf("total: %ld\n", total);
+    long cumul = 0;
+
+
+
+    for (size_t i = 0; i < table->size; i++) {
+        long cursor = (table->size - i);
+        if(cursor <= 15)
+          printf("%s: %f\n", nodes[i]->key, ((double)(cumul))/total * 100);
+        cumul += nodes[i]->value;
+        // total+=nodes[i]->value;
+    }
+
+    free(nodes);
+}

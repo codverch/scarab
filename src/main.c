@@ -219,7 +219,7 @@ Scarab's source code is organized as follows:
 
 
 
-void* to_delete_hashtable;
+void* hashtable_for_loads;
 
 // predictor_entry* predictor_table;
 
@@ -251,7 +251,7 @@ int main(int argc, char* argv[], char* envp[]) {
   /* read parameters from PARAMS.in and the command line */
   simulated_argv = get_params(argc, argv);
 
-  to_delete_hashtable = lhash_create(1 << 20);
+  hashtable_for_loads = lhash_create(1 << 8);
 
 
 
@@ -305,7 +305,9 @@ int main(int argc, char* argv[], char* envp[]) {
 
   // lset_print_to_file(sbird_ht_ptr, "sbird_output.txt");
 
-  lhash_free(to_delete_hashtable);
+  lhash_print_sorted(hashtable_for_loads);
+
+  lhash_free(hashtable_for_loads);
 
   return 0;
 }
