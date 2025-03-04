@@ -932,9 +932,19 @@ static void print_predictor_table(void)
 
 }
 
+static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor_pc, long donor_opnum)
+{
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    if(predictor_table[i].PCrcvr == rcvr_pc && predictor_table[i].rcvr_opnum == rcvr_opnum 
+      && predictor_table[i].PCdonor == donor_pc && predictor_table[i].donor_opnum == donor_opnum)
+        return i; 
+  }
+
+  return -1;
+}
+
 #define MAX_HISTORY_LENGTH 64
-
-
 
 static void update_history(Op* op)
 {
@@ -974,21 +984,36 @@ static void update_history(Op* op)
     long rcvr_op_num = op_num_in_inst[i];
     // Reg_Info donor_RI[] = donor_regs[cursor];
     int donot_num_dest = donor_num_dests[cursor];
-
-    if(is_same_cacheline(donor_addr, rcvr_addr))
+    int entry_num = -1;
+    if((entry_num = is_already_in_history_table(rcvr_addr, rcvr_op_num, donor_addr, donor_op_num)) != -1)
     {
-      train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true, donor_regs[cursor], donot_num_dest, donor_unique_num);
-      valid[cursor] = 0;
-      valid[i] = 0;
-      break;
+      // it is already in the table
+      if(is_same_cacheline(donor_addr, rcvr_addr))
+      {
+        train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true, donor_regs[cursor], donot_num_dest, donor_unique_num);
+        valid[cursor] = 0;
+        valid[i] = 0;
+        break;
+      }
+      else
+      {
+        train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, false, donor_regs[cursor], donot_num_dest, donor_unique_num);
+        valid[cursor] = 0;
+        valid[i] = 0;
+        break;
+      }
     }
     else
-    {
-      train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, false, donor_regs[cursor], donot_num_dest, donor_unique_num);
-      valid[cursor] = 0;
-      valid[i] = 0;
-      break;
+    { // it is not already in the table
+      if(is_same_cacheline(donor_addr, rcvr_addr))
+      {
+        train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true, donor_regs[cursor], donot_num_dest, donor_unique_num);
+        valid[cursor] = 0;
+        valid[i] = 0;
+        break;
+      }
     }
+    
   }
   cursor = (cursor + 1) % MAX_HISTORY_LENGTH;
   return;
@@ -1081,7 +1106,7 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     op->fetch_cycle = cycle_count;
     static long unique_op_number_counter = 0;
-    static const long print_count_uop_number = 1000000000l;
+    static const long print_count_uop_number = 1l << 40l;
     op->unique_op_number = unique_op_number_counter++;
     if(prev_addr == op->inst_info->addr)
     {
@@ -1095,21 +1120,31 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     prev_addr = op->inst_info->addr;
 
-      // if(unique_op_number_counter > 1000000)
-      // {
-      //   if(op->table_info->mem_type == MEM_LD)
-      //   {
-      //     print_predictor_table();
-      //   }
-      // }
+    if(op->table_info->mem_type == MEM_LD)
+    {
+      
+      char key[256] = {0};
+      sprintf(key, "%llx, %ld", op->inst_info->addr, op->op_number_per_inst);
+      long old_count = 0;
+      if(lhash_contains(hashtable_for_loads, key, &old_count))
+      {
+        lhash_insert(hashtable_for_loads, key, old_count+1);
+      }
+      else
+      {
+        lhash_insert(hashtable_for_loads, key, 1);
+      }
+    }
 
     if(DO_FUSION)
     {
+
+      
+
       if(unique_op_number_counter > print_count_uop_number && op->table_info->mem_type == MEM_LD)
       {
         printf("unique_op_number %ld with addr %llx has op_num %ld and reads %llx\n", unique_op_number_counter, op->inst_info->addr, op->op_number_per_inst, op->oracle_info.va);
       }
-      
 
       short prediction = predict_fusable(op);
 
