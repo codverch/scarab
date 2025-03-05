@@ -225,11 +225,11 @@
        // Read tab-separated values: donor_addr, receiver_addr, occurrence_count
        while (fscanf(fptr, "%llx\t%llx\t%d", &donor_addr, &receiver_addr, &occurrence_count) == 3) {
            // Debug output for each pair read
-           printf("[FUSION_INIT] Pair: 0x%llx 0x%llx %d\n", donor_addr, receiver_addr, occurrence_count);
+          //  printf("[FUSION_INIT] Pair: 0x%llx 0x%llx %d\n", donor_addr, receiver_addr, occurrence_count);
  
            // Hash the donor and receiver addresses to get index
            unsigned int hash_idx = hash_uop_pair(donor_addr, receiver_addr);
-           printf("Insert at hash index: %d\n", hash_idx);
+          //  printf("Insert at hash index: %d\n", hash_idx);
            unsigned int original_idx = hash_idx;
            
            // Linear probing to find an empty slot
@@ -451,13 +451,13 @@
                
                found_uop_pair = true;
  
-               printf("Occurrence count: %d\n", pair_frequency_table[pair_hash_idx]->occurrence_count);
+              //  printf("Occurrence count: %d\n", pair_frequency_table[pair_hash_idx]->occurrence_count);
                
                // If pair occurs exactly once, don't fuse
                if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
                    should_not_fuse = true;
-                   printf("[FUSION_FIND] Pair occurs exactly once, skipping fusion: donor 0x%llx, receiver 0x%llx\n",
-                          op->inst_info->addr, curr->op->inst_info->addr);
+                  //  printf("[FUSION_FIND] Pair occurs exactly once, skipping fusion: donor 0x%llx, receiver 0x%llx\n",
+                  //         op->inst_info->addr, curr->op->inst_info->addr);
                }
            }
                
@@ -622,6 +622,8 @@
      // Process each load in the current fetch group
      for (int i = 0; i < cur_data->op_count; i++) {
          Op* op = cur_data->ops[i];
+
+         
  
          // Add this load to tracking for future fusion opportunities
          add_load_to_fusion_tracking(op);
@@ -654,6 +656,8 @@
                  printf("[FUSION_PROCESS] Receiver dest_regs before: %d\n", 
                         receiver->table_info->num_dest_regs);
              }
+
+            //  printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
              
              donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
              
@@ -694,13 +698,13 @@
      }
      
      if(rcvr->table_info->mem_type != MEM_LD) {
-         printf("[FUSION_DONATE] WARNING: Receiver op is not a memory load\n");
+        //  printf("[FUSION_DONATE] WARNING: Receiver op is not a memory load\n");
          return;  // Skip fusion for non-load operations
      }
  
      // Check if fusion would exceed register limit
      if (rcvr->table_info->num_dest_regs + num_dests > MAX_DESTS) {
-         printf("[FUSION_DONATE] WARNING: Would exceed MAX_DESTS limit, skipping fusion\n");
+        //  printf("[FUSION_DONATE] WARNING: Would exceed MAX_DESTS limit, skipping fusion\n");
          return;
      }
  
@@ -730,7 +734,7 @@
              }
              
              if(rcvr->table_info->num_dest_regs >= MAX_DESTS) {
-                 printf("[FUSION_DONATE] WARNING: Maximum destination registers reached\n");
+                //  printf("[FUSION_DONATE] WARNING: Maximum destination registers reached\n");
                  break;
              }
          } 
