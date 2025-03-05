@@ -268,6 +268,7 @@ static Op* find_fusion_candidate(Op* op) {
         if (curr->cacheline_addr == cacheline_addr && 
             !curr->already_fused && 
             curr->op != op && 
+            curr->op->inst_info->addr != op->inst_info->addr &&
             curr->op->table_info->num_dest_regs > 0 &&
             curr->op->table_info->mem_type == MEM_LD) {
 
@@ -314,9 +315,13 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
     // Check current cache line first
     FusionLoad* curr = fusion_hash[hash_idx];
     while (curr) {
+        if((curr->op != NULL) && (curr->op->inst_info != NULL)){
+        
+
         if (curr->cacheline_addr == cacheline_addr && 
             !curr->already_fused && 
             curr->op != op && 
+            // curr->op->inst_info->addr != op->inst_info->addr &&
             curr->op->table_info->num_dest_regs > 0 &&
             curr->op->table_info->mem_type == MEM_LD) {
 
@@ -326,7 +331,10 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
             }
             return curr->op;
         }
-        curr = curr->next;
+       
+    }
+     curr = curr->next;
+
     }
     
     return NULL;  // No suitable candidate found
@@ -379,6 +387,8 @@ static inline void fuse_cacheline_loads(Stage_Data* cur_data) {
     // Process each load in the current fetch group
     for (int i = 0; i < cur_data->op_count; i++) {
         Op* op = cur_data->ops[i];
+
+        // printf("[Ideal fusion] Micro-op address: %llx Micro-op type: %d\n", op->inst_info->addr, op->table_info->mem_type);
 
         // Add this load to tracking for future fusion opportunities
         add_load_to_fusion_tracking(op);
@@ -456,6 +466,8 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
     for (int i = 0; i < cur_data->op_count; i++) {
         Op* op = cur_data->ops[i];
 
+        // printf("[ideal fusion] Micro-op address: %llx Micro-op type: %d\n", op->inst_info->addr, op->table_info->mem_type);
+
         // Add this load to tracking for future fusion opportunities
         add_load_to_fusion_tracking(op);
         
@@ -487,6 +499,8 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
                 printf("[FUSION_PROCESS] Receiver dest_regs before: %d\n", 
                        receiver->table_info->num_dest_regs);
             }
+
+            printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
             
             donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
             
