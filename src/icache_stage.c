@@ -321,7 +321,7 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
         if (curr->cacheline_addr == cacheline_addr && 
             !curr->already_fused && 
             curr->op != op && 
-            // curr->op->inst_info->addr != op->inst_info->addr &&
+            curr->op->inst_info->addr != op->inst_info->addr &&
             curr->op->table_info->num_dest_regs > 0 &&
             curr->op->table_info->mem_type == MEM_LD) {
 
@@ -467,10 +467,7 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
         Op* op = cur_data->ops[i];
 
         // printf("[ideal fusion] Micro-op address: %llx Micro-op type: %d\n", op->inst_info->addr, op->table_info->mem_type);
-
-        // Add this load to tracking for future fusion opportunities
-        add_load_to_fusion_tracking(op);
-        
+         
         if (FUSION_DEBUG) {
             printf("[FUSION_PROCESS] Examining op at addr 0x%llx (type=%d, dest_regs=%d)\n", 
                    op->oracle_info.va, 
@@ -487,6 +484,9 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
         
         // Try to find a candidate for fusion
         Op* receiver = find_same_cacheline_fusion_candidate(op);
+
+        // Add this load to tracking for future fusion opportunities
+        add_load_to_fusion_tracking(op);
         
         if (receiver) {
             if (FUSION_DEBUG) {
@@ -500,7 +500,7 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
                        receiver->table_info->num_dest_regs);
             }
 
-            printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
+            // printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
             
             donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
             
@@ -541,13 +541,13 @@ void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests) {
     }
     
     if(rcvr->table_info->mem_type != MEM_LD) {
-        printf("[FUSION_DONATE] WARNING: Receiver op is not a memory load\n");
+        // printf("[FUSION_DONATE] WARNING: Receiver op is not a memory load\n");
         return;  // Skip fusion for non-load operations
     }
 
     // Check if fusion would exceed register limit
     if (rcvr->table_info->num_dest_regs + num_dests > MAX_DESTS) {
-        printf("[FUSION_DONATE] WARNING: Would exceed MAX_DESTS limit, skipping fusion\n");
+        // printf("[FUSION_DONATE] WARNING: Would exceed MAX_DESTS limit, skipping fusion\n");
         return;
     }
 
@@ -577,7 +577,7 @@ void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests) {
             }
             
             if(rcvr->table_info->num_dest_regs >= MAX_DESTS) {
-                printf("[FUSION_DONATE] WARNING: Maximum destination registers reached\n");
+                // printf("[FUSION_DONATE] WARNING: Maximum destination registers reached\n");
                 break;
             }
         } 
