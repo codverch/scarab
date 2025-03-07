@@ -423,55 +423,65 @@
  
  
  // This function looks for a load operation that can be fused with the current op
- 
- static Op* find_same_cacheline_fusion_candidate(Op* op) {
+
+
+static Op* find_same_cacheline_fusion_candidate(Op* op) {
+  printf("[find_same_cacheline_fusion_candidate] Looking for candidate for PC 0x%llx\n", 
+         op->inst_info->addr);
+         
   Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
   unsigned int hash_idx = hash_cacheline(cacheline_addr);
+  
+  printf("[find_same_cacheline_fusion_candidate] Cacheline: 0x%llx, Hash: %u\n", 
+         cacheline_addr, hash_idx);
   
   // Check current cache line
   FusionLoad* curr = fusion_hash[hash_idx];
   
   while (curr) {
-
+      // Skip invalid entries
+      if (curr->op == NULL || curr->op->inst_info == NULL) {
+          curr = curr->next;
+          continue;
+      }
+      
+      // Simple conditions for fusion:
+      // 1. Same cacheline
+      // 2. Not already fused 
+      // 3. Different ops
+      // 5. Valid load with destination registers
       if (curr->cacheline_addr == cacheline_addr && 
           !curr->already_fused && 
-          !curr->never_fuse &&  // Skip if already marked as never_fuse
           curr->op != op && 
+          curr->op->inst_info->addr != op->inst_info->addr &&
           curr->op->table_info->num_dest_regs > 0 &&
           curr->op->table_info->mem_type == MEM_LD) {
           
-          // Check whether the pair occurs exactly once in the pair frequency table
+          // Check if this pair occurs exactly once in our occurrence tracking table
           unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
-          bool found_uop_pair = false;
-          bool should_not_fuse = false;
-
+          
+          // If this pair occurs exactly once, proceed with fusion
           if (pair_frequency_table[pair_hash_idx] != NULL &&
-            pair_frequency_table[pair_hash_idx]->valid == 1 &&
-            pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
-            pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
-        
-            found_uop_pair = true;
-            
-            // If pair occurs exactly once, we want to fuse it
-            should_not_fuse = (pair_frequency_table[pair_hash_idx]->occurrence_count != 1);
-            }
-            
-            // If we found the pair and it occurs exactly once, proceed with fusion
-            if (found_uop_pair && !should_not_fuse) {  
-                if (FUSION_DEBUG) {
-                    printf("[FUSION_FIND] Pair occurs exactly once, fusing: donor 0x%llx, receiver 0x%llx\n",
-                          op->inst_info->addr, curr->op->inst_info->addr);
-                }
-                return curr->op;  // Fuse this candidate
-            }
-   
+              pair_frequency_table[pair_hash_idx]->valid == 1 &&
+              pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
+              pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr &&
+              pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
+              
+              printf("[find_same_cacheline_fusion_candidate] Found candidate at PC 0x%llx with occurrence count 1\n", 
+                     curr->op->inst_info->addr);
+              return curr->op;  // Fuse this candidate
+          }
+          
+          printf("[find_same_cacheline_fusion_candidate] Skipping candidate at PC 0x%llx - occurrence count not 1\n", 
+                 curr->op->inst_info->addr);
       }
+      
       curr = curr->next;
   }
   
+  printf("[find_same_cacheline_fusion_candidate] No suitable candidate found\n");
   return NULL;  // No suitable candidate found
 }
-
  
  /**************************************************************************************/
  /* Mark a load as fused */
@@ -596,11 +606,6 @@
      // Process each load in the current fetch group
      for (int i = 0; i < cur_data->op_count; i++) {
          Op* op = cur_data->ops[i];
-
-         
- 
-         // Add this load to tracking for future fusion opportunities
-         add_load_to_fusion_tracking(op);
          
          if (FUSION_DEBUG) {
              printf("[FUSION_PROCESS] Examining op at addr 0x%llx (type=%d, dest_regs=%d)\n", 
@@ -632,7 +637,7 @@
                         receiver->table_info->num_dest_regs);
              }
 
-             printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
+            //  printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
              
              donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
              
@@ -654,6 +659,9 @@
              if (FUSION_DEBUG) {
                  printf("[FUSION_PROCESS] No fusion performed for op\n");
              }
+
+         // Add this load to tracking for future fusion opportunities
+         add_load_to_fusion_tracking(op);
          }
      }
      

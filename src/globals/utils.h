@@ -392,7 +392,6 @@
      Addr cacheline_addr;       // Cache line address of this load
      struct FusionLoad* next;   // Pointer to next load in the hash bucket
      bool already_fused;        // Flag to indicate if this load has been involved in fusion
-     bool never_fuse;           // Flag to indicate that this load should never be fused with another load
  } FusionLoad;
  
  #define PAIR_HASH_SIZE 65536
