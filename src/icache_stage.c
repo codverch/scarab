@@ -290,6 +290,7 @@
            if (curr->cacheline_addr == cacheline_addr && 
                !curr->already_fused && 
                curr->op != op && 
+               curr->op->inst_info->addr != op->inst_info->addr &&
                curr->op->table_info->num_dest_regs > 0 &&
                curr->op->table_info->mem_type == MEM_LD) {
  
