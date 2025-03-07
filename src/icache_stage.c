@@ -445,57 +445,26 @@
           bool found_uop_pair = false;
           bool should_not_fuse = false;
 
-          if ((pair_frequency_table[pair_hash_idx] != NULL) &&
-              (pair_frequency_table[pair_hash_idx]->valid == 1) &&
-              pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
-              pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
-
-              
-              found_uop_pair = true;
-              
-              // If pair occurs exactly once, don't fuse
-              // If pair occurs exactly once, we want to fuse it
-              if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
-                should_not_fuse = false;  // should fuse
-                // printf("Pair Donor: 0x%llx Receiver: 0x%llx occurs exactly once so fusing it", 
-                //       op->inst_info->addr, curr->op->inst_info->addr);
-              }
-              else {
-                should_not_fuse = true;   // should not fuse for count != 1
-              }
-           }
-              
-          // If we found the pair and it occurs only once, fuse it 
-          if (found_uop_pair && should_not_fuse) { // if should not fuse is true then don't fuse
-              if (FUSION_DEBUG) {
-                  printf("[FUSION_FIND] Pair occurs exactly once, skipping fusion: donor 0x%llx, receiver 0x%llx\n",
-                         op->inst_info->addr, curr->op->inst_info->addr);
-              }
-              
-              // Mark receiver as never_fuse
-              curr->never_fuse = true; 
-              
-              // Mark donor as never_fuse
-              unsigned int donor_hash_idx = hash_cacheline(cacheline_addr);
-              FusionLoad* donor = fusion_hash[donor_hash_idx];
-              while (donor) {
-                  if (donor->op == op) {
-                      donor->never_fuse = true;
-                      break;
-                  }
-                  donor = donor->next;
-              }
-              
-              // Since donor is marked as never_fuse, stop looking for any receivers
-              return NULL;
-          }
-          
-          // If pair wasn't found or occurs multiple times, proceed with fusion
-          if (FUSION_DEBUG) {
-              printf("[FUSION_FIND] Found suitable fusion candidate in current cacheline: op at addr 0x%llx\n",
-                     curr->op->oracle_info.va);
-          }
-          return curr->op;
+          if (pair_frequency_table[pair_hash_idx] != NULL &&
+            pair_frequency_table[pair_hash_idx]->valid == 1 &&
+            pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
+            pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
+        
+            found_uop_pair = true;
+            
+            // If pair occurs exactly once, we want to fuse it
+            should_not_fuse = (pair_frequency_table[pair_hash_idx]->occurrence_count != 1);
+            }
+            
+            // If we found the pair and it occurs exactly once, proceed with fusion
+            if (found_uop_pair && !should_not_fuse) {  
+                if (FUSION_DEBUG) {
+                    printf("[FUSION_FIND] Pair occurs exactly once, fusing: donor 0x%llx, receiver 0x%llx\n",
+                          op->inst_info->addr, curr->op->inst_info->addr);
+                }
+                return curr->op;  // Fuse this candidate
+            }
+   
       }
       curr = curr->next;
   }
