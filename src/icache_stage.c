@@ -303,6 +303,7 @@
      new_load->op = op;
      new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
      new_load->already_fused = false;
+     new_load->never_fuse = false;
      
      // hash_idx is computed based on the cacheline address
      unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
@@ -426,7 +427,11 @@
  // This function looks for a load operation that can be fused with the current op
 
 
-static Op* find_same_cacheline_fusion_candidate(Op* op) {
+ static Op* find_same_cacheline_fusion_candidate(Op* op) {
+  if (!op || !op->inst_info) {
+      return NULL;  // Safety check for caller
+  }
+  
   Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
   unsigned int hash_idx = hash_cacheline(cacheline_addr);
   
@@ -434,11 +439,16 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
   FusionLoad* curr = fusion_hash[hash_idx];
   
   while (curr) {
-
-      if (curr->cacheline_addr == cacheline_addr && 
-          !curr->already_fused && 
-          !curr->never_fuse &&  // Skip if already marked as never_fuse
-          curr->op != op && 
+      // Skip invalid entries
+      if (!curr->op || !curr->op->inst_info || !curr->op->table_info) {
+          curr = curr->next;
+          continue;
+      }
+      
+      if (curr->cacheline_addr == cacheline_addr &&
+          curr->already_fused == false &&
+          curr->never_fuse == false &&  // Skip if already marked as never_fuse
+          curr->op != op &&
           curr->op->inst_info->addr != op->inst_info->addr &&
           curr->op->table_info->num_dest_regs > 0 &&
           curr->op->table_info->mem_type == MEM_LD) {
@@ -447,64 +457,52 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
           unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
           bool found_uop_pair = false;
           bool should_not_fuse = false;
-
-          if ((pair_frequency_table[pair_hash_idx] != NULL) &&
-              (pair_frequency_table[pair_hash_idx]->valid == 1) &&
+          
+          if (pair_frequency_table[pair_hash_idx] != NULL &&
+              pair_frequency_table[pair_hash_idx]->valid == 1 &&
+              // DONOR is the current op
+              // RECEIVER is the curr op (stored in the pair_frequency_table)
               pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
               pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
-
               
-              found_uop_pair = true;
+              found_uop_pair = true;  // This means this donor:receiver pair exists in the pair frequency table
               
-              // If pair occurs exactly once - fuse it 
+              // If pair occurs exactly once - fuse it
               if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
-                should_not_fuse = false;  // should not fuse is false since we want to fuse it
-                // printf("Pair Donor: 0x%llx Receiver: 0x%llx occurs exactly once so fusing it", 
-                //       op->inst_info->addr, curr->op->inst_info->addr);
+                  should_not_fuse = false;  // should not fuse is false since we want to fuse it
+              } else {
+                  should_not_fuse = true;   // should not fuse is true since we don't want to fuse it
               }
-              else {
-                should_not_fuse = true;   // should not fuse is true since we don't want to fuse it
-              }
-           }
-              
-          // if should_not_fuse is false then fuse - so return the receiver
-          if ((found_uop_pair == true) && (should_not_fuse == false)) { 
-              if (FUSION_DEBUG) {
-                  printf("[FUSION_FIND] Pair occurs exactly once, skipping fusion: donor 0x%llx, receiver 0x%llx\n",
-                         op->inst_info->addr, curr->op->inst_info->addr);
-              }
-
-              return curr->op; 
-
-            }
-
-            else {
-              
-                  // Mark receiver as never_fuse
-                  curr->never_fuse = true; 
-                  
-                  // Mark donor as never_fuse
-                  unsigned int donor_hash_idx = hash_cacheline(cacheline_addr);
-                  FusionLoad* donor = fusion_hash[donor_hash_idx];
-                  while (donor) {
-                      if (donor->op == op && donor->already_fused == false) {
-                          donor->never_fuse = true;
-                          break;
-                      }
-                      donor = donor->next;
-                  }
-                  
-                  // Since donor is marked as never_fuse, stop looking for any receivers
-                  return NULL;
           }
           
+          // if should_not_fuse is false then fuse - so return the receiver
+          if (found_uop_pair && !should_not_fuse) {
+              if (FUSION_DEBUG) {
+                  printf("[FUSION_FIND] Found fusible pair that occurs exactly once: donor 0x%llx, receiver 0x%llx\n",
+                         op->inst_info->addr, curr->op->inst_info->addr);
+              }
+              return curr->op;
+          } else {
+              // Mark receiver as never_fuse
+              curr->never_fuse = true;
+              
+              // Mark donor as never_fuse: the donor is the op
+              FusionLoad* donor = fusion_hash[hash_idx];
+              while (donor) {
+                  if (donor->op == op && !donor->already_fused) {
+                      donor->never_fuse = true;
+                      break;
+                  }
+                  donor = donor->next;
+              }
+          }
       }
+      
       curr = curr->next;
   }
   
   return NULL;  // No suitable candidate found
 }
-
  
  /**************************************************************************************/
  /* Mark a load as fused */
@@ -615,6 +613,7 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
  }
  
  static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
+
 
      if (!fusion_table_initialized) {
          init_fusion_system();
