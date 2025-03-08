@@ -648,7 +648,7 @@ static Op* find_same_cacheline_fusion_candidate(Op* op) {
          Op* receiver = find_same_cacheline_fusion_candidate(op);
 
 
-         if (receiver && !receiver->never_fuse) {
+         if (receiver) {
              if (FUSION_DEBUG) {
                  printf("[FUSION_PROCESS] FUSION PERFORMED: op at addr 0x%llx fuses with receiver at addr 0x%llx\n", 
                         op->oracle_info.va, receiver->oracle_info.va);
