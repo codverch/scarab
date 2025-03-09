@@ -408,74 +408,63 @@
  
  
  // This function looks for a load operation that can be fused with the current op
-
  static Op* find_same_cacheline_fusion_candidate(Op* op) {
   if (!op || !op->inst_info || !op->table_info) {
-      return NULL;
+    return NULL;
   }
-  
+  static int fusion_table_found = 0;
   Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
   unsigned int hash_idx = hash_cacheline(cacheline_addr);
-  
   FusionLoad* curr = fusion_hash[hash_idx];
   while (curr) {
-      // Skip invalid entries
-      if (!curr->op || !curr->op->inst_info || !curr->op->table_info) {
-          curr = curr->next;
-          continue;
-      }
-      
-      if (curr->cacheline_addr == cacheline_addr &&
-          !curr->already_fused &&
-          !curr->never_fuse &&
-          curr->op != op &&
-          // curr->op->inst_info->addr != op->inst_info->addr &&
-          curr->op->table_info->num_dest_regs > 0 &&
-          curr->op->table_info->mem_type == MEM_LD) {
-          
-          unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
-          bool found_in_table = false;
-          bool should_fuse = false;
-          
-          // Check pair frequency table (only once)
-          if (pair_frequency_table[pair_hash_idx] != NULL &&
-              pair_frequency_table[pair_hash_idx]->valid &&
-              pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
-              pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
-              
-              found_in_table = true;
-              
-              // Fuse only pairs that occur exactly once
-              if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
-                  should_fuse = true;
-
-                  // printf("DONOR: %llx, RECEIVER: %llx, COUNT: %d\n", op->inst_info->addr, curr->op->inst_info->addr, pair_frequency_table[pair_hash_idx]->occurrence_count);
-              }
-          }
-          
-          if (found_in_table && !should_fuse) {
-              // Found in table but shouldn't fuse (count != 1)
-              curr->never_fuse = true;
-              
-              // Find and mark donor
-              FusionLoad* donor = fusion_hash[hash_idx];
-              while (donor) {
-                  if (donor->op == op) {
-                      donor->never_fuse = true;
-                      break;
-                  }
-                  donor = donor->next;
-              }
-              return NULL;
-          }
-          
-          // Either the pair wasn't found in table, or it occurs exactly once
-          return curr->op;
-      }
+    //* Skip invalid entries*
+    if (!curr->op || !curr->op->inst_info || !curr->op->table_info) {
       curr = curr->next;
+      continue;
+    }
+    if (curr->cacheline_addr == cacheline_addr &&
+        !curr->already_fused &&
+        !curr->never_fuse &&
+        curr->op != op &&
+        //* curr->op->inst_info->addr != op->inst_info->addr &&*
+        curr->op->table_info->num_dest_regs > 0 &&
+        curr->op->table_info->mem_type == MEM_LD) {
+      unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
+      bool found_in_table = false;
+      bool should_fuse = false;
+      //* Check pair frequency table (only once)*
+      if (pair_frequency_table[pair_hash_idx] != NULL &&
+          pair_frequency_table[pair_hash_idx]->valid &&
+          pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
+          pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
+        found_in_table = true;
+        //* Fuse only pairs that occur exactly once*
+        if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
+          should_fuse = true;
+          fusion_table_found++;
+          // printf("fusion table found: %d\n", fusion_table_found);
+          return curr->op;  // Return immediately if found in table and should fuse
+        } else {
+          //* Found in table but shouldn't fuse (count != 1)*
+          curr->never_fuse = true;
+          //* Find and mark donor*
+          FusionLoad* donor = fusion_hash[hash_idx];
+          while (donor) {
+            if (donor->op == op) {
+              donor->never_fuse = true;
+              break;
+            }
+            donor = donor->next;
+          }
+        }
+      } else {
+        // Not found in table at all, return NULL
+        return NULL;
+      }
+    }
+    curr = curr->next;
   }
-  
-  return NULL;  // No suitable candidate found
+  return NULL; //* No suitable candidate found*
 }
  
  /**************************************************************************************/
@@ -597,12 +586,11 @@
          printf("\n[FUSION_PROCESS] Starting fusion for %d ops\n", cur_data->op_count);
      }
      
-     int fusions_performed = 0;
+     static int fusions_performed = 0;
      
      // Process each load in the current fetch group
      for (int i = 0; i < cur_data->op_count; i++) {
          Op* op = cur_data->ops[i];
-
          
          // Skip non-load ops or loads that have already been neutralized
          if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
@@ -610,16 +598,16 @@
              continue;
          }
          
+        //  printf("requesting find_same_cacheline_fusion_candidate\n");
          // Try to find a candidate for fusion
          Op* receiver = find_same_cacheline_fusion_candidate(op);
 
 
          if (receiver) {
 
-             printf("[Fused] donor: %llx receiver: %llx\n", op->inst_info->addr, receiver->inst_info->addr);
              
              donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
-             
+
              // Now the receiver has more destination registers
              // We can safely delete the donor op
              delete_ld_uop(op);
@@ -629,6 +617,7 @@
              mark_load_as_fused(receiver);
              
              fusions_performed++;
+            //  printf("fusions_performed: %d\n", fusions_performed);
              
              if (FUSION_DEBUG) {
                  printf("[FUSION_PROCESS] Receiver dest_regs after: %d\n", 
