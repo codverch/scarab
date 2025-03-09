@@ -406,6 +406,37 @@
      return NULL;  // No suitable candidate found
  }
  
+ /**
+ * find_same_cacheline_fusion_candidate - Searches for a load operation that can be fused with the current op
+ * @op: The current operation being processed (potential donor)
+ *
+ * This function searches for a load operation that can be fused with the current operation.
+ * It looks for operations that:
+ * 1. Are in the same cache line as the current operation
+ * 2. Haven't already been fused with another operation
+ * 3. Aren't marked as "never fuse"
+ * 4. Are different from the current operation
+ * 5. Have at least one destination register 
+ * 6. Are load operations (MEM_LD)
+ *
+ * After finding a candidate that meets these basic criteria, it checks the pair frequency table.
+ * The pair frequency table stores information about how often specific pairs of operations
+ * occur together during execution.
+ *
+ * If the pair is found in the table with an occurrence count of exactly 1, the function
+ * returns the candidate operation to be fused with the current operation.
+ *
+ * If the pair is found in the table but with an occurrence count other than 1, both operations
+ * are marked as "never fuse" to avoid trying to fuse them again in the future.
+ *
+ * If the pair is not found in the table at all, the function returns NULL immediately.
+ * This is because the pair_frequency_table is structured as an array of pointers to FusionPairFreq 
+ * structures, with each hash index pointing to at most one structure. There's no "next" element
+ * to check at that hash index - either there's a matching entry or none.
+ *
+ * Returns: A pointer to the operation that can be fused with the current operation, or NULL
+ * if no suitable candidate is found.
+ */
  
  // This function looks for a load operation that can be fused with the current op
  static Op* find_same_cacheline_fusion_candidate(Op* op) {
@@ -426,28 +457,30 @@
         !curr->already_fused &&
         !curr->never_fuse &&
         curr->op != op &&
-        //* curr->op->inst_info->addr != op->inst_info->addr &&*
+        //* curr->op->inst_info->addr != op->inst_info->addr &&* // because we are tracking the current load after fusion is done
         curr->op->table_info->num_dest_regs > 0 &&
         curr->op->table_info->mem_type == MEM_LD) {
       unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
       bool found_in_table = false;
       bool should_fuse = false;
-      //* Check pair frequency table (only once)* each pair_hash_idx has only one FusionPairFreq struct 
+      
+      /* Check pair frequency table (only once) - each pair_hash_idx has only one FusionPairFreq struct */
       if (pair_frequency_table[pair_hash_idx] != NULL &&
           pair_frequency_table[pair_hash_idx]->valid &&
           pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
           pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
         found_in_table = true;
-        //* Fuse only pairs that occur exactly once* 
+        
+        /* Fuse only pairs that occur exactly once */
         if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
           should_fuse = true;
           fusion_table_found++;
           // printf("fusion table found: %d\n", fusion_table_found);
           return curr->op;  // Return immediately if found in table and should fuse
         } else {
-          //* Found in table but shouldn't fuse (count != 1)*
+          /* Found in table but shouldn't fuse (count != 1) */
           curr->never_fuse = true;
-          //* Find and mark donor*
+          /* Find and mark donor */
           FusionLoad* donor = fusion_hash[hash_idx];
           while (donor) {
             if (donor->op == op) {
@@ -457,14 +490,15 @@
             donor = donor->next;
           }
         }
-      } else { // * Not found at this index in table, return NULL*
-        // Not found in table at all, return NULL
+      } else { 
+        /* Not found in table at all, return NULL immediately
+        * This is because there's no "next" element at the same pair_hash_idx in the frequency table */
         return NULL;
       }
     }
-    curr = curr->next; //* look at the next bucked in the hash table since multiple buckets can have the same hash index (cacheline)*
+    curr = curr->next; /* Look at the next entry in the fusion_hash linked list */
   }
-  return NULL; //* No suitable candidate found*
+  return NULL; // No suitable candidate found
 }
  
  /**************************************************************************************/
