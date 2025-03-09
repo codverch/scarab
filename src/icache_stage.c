@@ -432,13 +432,13 @@
       unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
       bool found_in_table = false;
       bool should_fuse = false;
-      //* Check pair frequency table (only once)*
+      //* Check pair frequency table (only once)* each pair_hash_idx has only one FusionPairFreq struct 
       if (pair_frequency_table[pair_hash_idx] != NULL &&
           pair_frequency_table[pair_hash_idx]->valid &&
           pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
           pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
         found_in_table = true;
-        //* Fuse only pairs that occur exactly once*
+        //* Fuse only pairs that occur exactly once* 
         if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
           should_fuse = true;
           fusion_table_found++;
@@ -457,12 +457,12 @@
             donor = donor->next;
           }
         }
-      } else {
+      } else { // * Not found at this index in table, return NULL*
         // Not found in table at all, return NULL
         return NULL;
       }
     }
-    curr = curr->next;
+    curr = curr->next; //* look at the next bucked in the hash table since multiple buckets can have the same hash index (cacheline)*
   }
   return NULL; //* No suitable candidate found*
 }
