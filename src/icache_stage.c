@@ -152,7 +152,7 @@
  
  static inline unsigned int hash_uop_pair(Addr donor_addr, Addr recvr_addr) {
  
-     unsigned int temp = (unsigned int)(donor_addr ^ recvr_addr) & (PAIR_HASH_SIZE - 1);
+     unsigned int temp = (unsigned int)((donor_addr*0x1f1f1f1f) ^ recvr_addr) & (PAIR_HASH_SIZE - 1);
      // printf("[In hash uop] Donor addr: 0x%llx, Receiver addr: 0x%llx, Temp: %d\n", donor_addr, recvr_addr, temp);
  
  
@@ -230,6 +230,7 @@
  
            // Hash the donor and receiver addresses to get index
            unsigned int hash_idx = hash_uop_pair(donor_addr, receiver_addr);
+          //  printf("Pair Hash:%x\n", hash_idx);
           //  printf("Insert at hash index: %d\n", hash_idx);
            unsigned int original_idx = hash_idx;
            
@@ -267,6 +268,7 @@
            
            pairs_loaded++;
        }
+      //  printf("[FUSION_INIT] %d\n", pairs_loaded);
        
        fclose(fptr);
        
@@ -463,16 +465,22 @@
       unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
       bool found_in_table = false;
       bool should_fuse = false;
-      
+      unsigned int search_idx = pair_hash_idx;
+      while(pair_frequency_table[search_idx] != NULL && pair_frequency_table[search_idx]->valid && (
+            pair_frequency_table[search_idx]->donor_addr != op->inst_info->addr ||
+            pair_frequency_table[search_idx]->recvr_addr != curr->op->inst_info->addr)
+          ) {
+            search_idx = (search_idx + 1) % PAIR_HASH_SIZE;
+          }
       /* Check pair frequency table (only once) - each pair_hash_idx has only one FusionPairFreq struct */
-      if (pair_frequency_table[pair_hash_idx] != NULL &&
-          pair_frequency_table[pair_hash_idx]->valid &&
-          pair_frequency_table[pair_hash_idx]->donor_addr == op->inst_info->addr &&
-          pair_frequency_table[pair_hash_idx]->recvr_addr == curr->op->inst_info->addr) {
+      if (pair_frequency_table[search_idx] != NULL &&
+          pair_frequency_table[search_idx]->valid &&
+          pair_frequency_table[search_idx]->donor_addr == op->inst_info->addr &&
+          pair_frequency_table[search_idx]->recvr_addr == curr->op->inst_info->addr) {
         found_in_table = true;
         
         /* Fuse only pairs that occur exactly once */
-        if (pair_frequency_table[pair_hash_idx]->occurrence_count == 1) {
+        if (pair_frequency_table[search_idx]->occurrence_count == 1) {
           should_fuse = true;
           fusion_table_found++;
           // printf("fusion table found: %d\n", fusion_table_found);
