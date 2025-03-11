@@ -817,7 +817,7 @@ static void copy_reg_info(Reg_Info* dest, Reg_Info* src)
   }
 }
 
-static void train_predictor(long rcvr_pc, int rcvr_op_num, long donor_pc, int donor_op_num, bool success, Reg_Info RI[], int num_dests, long donor_unique_num)
+static void train_predictor( long donor_pc, int donor_op_num, long rcvr_pc, int rcvr_op_num, bool success, Reg_Info RI[], int num_dests, long donor_unique_num)
 {
   static const long maxLRU = 0x0eadbeefdeadbeefl;
   if(success)
@@ -1148,6 +1148,8 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
       short prediction = predict_fusable(op);
 
+      short prediction_rcvr = predict_rcvr(op);
+
       update_history(op); // you could just move this to the node stage but that stupid not retiring business is confusing
       
       if(prediction >= 0)
@@ -1173,7 +1175,6 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
         }
       }
 
-      short prediction_rcvr = predict_rcvr(op);
       if(prediction_rcvr >= 0)
       {
         if(!predictor_table[prediction_rcvr].just_modified)
@@ -1188,6 +1189,8 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
           predictor_table[prediction_rcvr].just_modified = 0;
         }
       }
+
+      
 
 
     }
