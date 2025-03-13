@@ -78,6 +78,9 @@
  #define FUSION_DEBUG_ENABLED FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
+
+ FILE* fusion_log_file = NULL; 
+ bool fusion_logging_initialized = false; 
  
  /**************************************************************************************/
  /* Global Variables */
@@ -108,7 +111,9 @@
  static inline void         log_stats_mshr_hit(Addr line_addr);
  static inline void         update_stats_bf_retired(void);
  static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
- static bool remove_load_from_bucket(Op* op, unsigned int hash_idx);
+ static bool                remove_load_from_bucket(Op* op, unsigned int hash_idx);
+ static void                init_fusion_logging(void); 
+ static void                log_fusion_event(Op* donor, Op* receiver);
  
  /**************************************************************************************/
  /* set_icache_stage: */
@@ -419,6 +424,8 @@
                printf("[fuse_same_cacheline_loads] Donor dest_regs before: %d, Receiver dest_regs before: %d\n", 
                    op->table_info->num_dest_regs, receiver->table_info->num_dest_regs);
            }
+
+           log_fusion_event(op, receiver);
            
            // Perform the fusion operation
            donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
@@ -565,6 +572,53 @@
            op->table_info->mem_size, op->inst_info->latency);
    }
  }
+
+ /**************************************************************************************/
+ /* init_fusion_logging: */
+
+ void init_fusion_logging() {
+  if (fusion_logging_initialized) return;
+
+    fusion_log_file = fopen("fusion_events.csv", "w"); 
+    if (fusion_log_file) {
+      // Write header
+      fprintf(fusion_log_file, "DonorPC,ReceiverPC,DonorMemAddr,ReceiverMemAddr,CachelineAddr\n");
+      fusion_logging_initialized = true;
+      
+      if (FUSION_DEBUG_ENABLED) {
+        printf("[init_fusion_logging] Fusion logging initialized to fusion_events.csv\n");
+      }
+    } else {
+      fprintf(stderr, "Failed to open fusion_events.csv for writing\n");
+    }
+
+ }
+
+  /**************************************************************************************/
+ /* log_fusion_event: */
+
+ void log_fusion_event(Op* donor, Op* receiver) {
+  if (!fusion_logging_initialized) {
+    init_fusion_logging();
+    if (!fusion_logging_initialized) return; // Failed to initialize
+  }
+  
+  Addr donor_pc = donor->inst_info->addr;
+  Addr receiver_pc = receiver->inst_info->addr;
+  Addr donor_mem_addr = donor->oracle_info.va;
+  Addr receiver_mem_addr = receiver->oracle_info.va;
+  Addr cacheline_addr = get_cacheline_addr(donor_mem_addr);
+  
+  // Write to the log file
+  fprintf(fusion_log_file, "0x%llx,0x%llx,0x%llx,0x%llx,0x%llx\n", 
+          donor_pc, receiver_pc, donor_mem_addr, receiver_mem_addr, 
+          cacheline_addr);
+  
+  // Flush periodically to ensure data is written even if simulation crashes
+  if ((cycle_count % 10000) == 0) {
+    fflush(fusion_log_file);
+  }
+}
  
  /**************************************************************************************/
  /* init_icache_stage: */
