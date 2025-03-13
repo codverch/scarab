@@ -1,232 +1,275 @@
-import numpy as np
+#!/usr/bin/env python3
+import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-from matplotlib.ticker import MultipleLocator
-import os
-import glob
-import re
+import seaborn as sns
+import numpy as np
+from collections import Counter, defaultdict
 
-# Set the style to a clean, professional look
-plt.style.use('seaborn-v0_8-whitegrid')
-mpl.rcParams['font.family'] = 'serif'
-mpl.rcParams['font.serif'] = ['Computer Modern Roman', 'Times New Roman', 'Palatino', 'DejaVu Serif']
-mpl.rcParams['axes.edgecolor'] = '#333333'
-mpl.rcParams['axes.linewidth'] = 0.8
-mpl.rcParams['xtick.major.pad'] = 5
-mpl.rcParams['ytick.major.pad'] = 5
+def parse_fusion_events(filename):
+    """Parse the fusion event file with fixed-width format"""
+    
+    # Skip the first two lines (header and separator)
+    with open(filename, 'r') as f:
+        lines = f.readlines()[2:]
+    
+    data = []
+    
+    for line in lines:
+        if not line.strip():  # Skip empty lines
+            continue
+            
+        parts = line.strip().split()
+        if len(parts) < 8:  # Basic validation
+            continue
+            
+        data.append({
+            'DonorPC': parts[0],
+            'ReceiverPC': parts[1],
+            'DonorMemAddr': parts[2],
+            'ReceiverMemAddr': parts[3],
+            'DonorCacheline': parts[4],
+            'ReceiverCacheline': parts[5],
+            'OffsetInCL1': int(parts[6]),
+            'OffsetInCL2': int(parts[7])
+        })
+    
+    return pd.DataFrame(data)
 
-# Full benchmark names
-benchmarks = [
-    'Breadth-First Search',
-    'Single-Source Shortest Paths',
-    'PageRank',
-    'Connected Components',
-    'Betweenness Centrality',
-    'Triangle Counting'
-]
+def analyze_fusion_events(df):
+    """Analyze fusion events data for PC pairs and cachelines"""
+    
+    # Create PC pairs (sorted to make (A,B) and (B,A) count as the same pair)
+    df['PCPair'] = df.apply(lambda row: 
+                       tuple(sorted([row['DonorPC'], row['ReceiverPC']])), 
+                       axis=1)
+    
+    # Get unique counts
+    unique_pc_pairs = df['PCPair'].nunique()
+    unique_pcs = set(df['DonorPC'].unique()) | set(df['ReceiverPC'].unique())
+    unique_donor_cachelines = df['DonorCacheline'].nunique()
+    unique_receiver_cachelines = df['ReceiverCacheline'].nunique()
+    unique_cachelines = set(df['DonorCacheline'].unique()) | set(df['ReceiverCacheline'].unique())
+    
+    print(f"Total fusion events: {len(df)}")
+    print(f"Unique PC pairs: {unique_pc_pairs}")
+    print(f"Unique individual PCs: {len(unique_pcs)}")
+    print(f"Unique cachelines: {len(unique_cachelines)}")
+    print(f"Unique donor cachelines: {unique_donor_cachelines}")
+    print(f"Unique receiver cachelines: {unique_receiver_cachelines}")
+    
+    # Count occurrences of each PC pair
+    pc_pair_counts = Counter(df['PCPair'])
+    
+    # Map PC pairs to the cachelines they access
+    pc_pair_to_cachelines = defaultdict(set)
+    for _, row in df.iterrows():
+        pc_pair = row['PCPair']
+        pc_pair_to_cachelines[pc_pair].add(row['DonorCacheline'])
+        pc_pair_to_cachelines[pc_pair].add(row['ReceiverCacheline'])
+    
+    # Count cachelines per PC pair
+    cachelines_per_pc_pair = {pc_pair: len(cachelines) for pc_pair, cachelines in pc_pair_to_cachelines.items()}
+    
+    # Map cachelines to the PC pairs that access them
+    cacheline_to_pc_pairs = defaultdict(set)
+    for _, row in df.iterrows():
+        cacheline_to_pc_pairs[row['DonorCacheline']].add(row['PCPair'])
+        cacheline_to_pc_pairs[row['ReceiverCacheline']].add(row['PCPair'])
+    
+    # Count PC pairs per cacheline
+    pc_pairs_per_cacheline = {cacheline: len(pc_pairs) for cacheline, pc_pairs in cacheline_to_pc_pairs.items()}
+    
+    # Find PC pairs with multiple occurrences
+    repeat_pc_pairs = {pc_pair: count for pc_pair, count in pc_pair_counts.items() if count > 1}
+    single_pc_pairs = {pc_pair: count for pc_pair, count in pc_pair_counts.items() if count == 1}
+    
+    print(f"PC pairs that occur multiple times: {len(repeat_pc_pairs)}")
+    print(f"PC pairs that occur only once: {len(single_pc_pairs)}")
+    
+    # Calculate statistics
+    avg_cachelines_per_pc_pair = sum(len(cachelines) for cachelines in pc_pair_to_cachelines.values()) / len(pc_pair_to_cachelines)
+    avg_pc_pairs_per_cacheline = sum(len(pc_pairs) for pc_pairs in cacheline_to_pc_pairs.values()) / len(cacheline_to_pc_pairs)
+    
+    print(f"Average cachelines accessed per PC pair: {avg_cachelines_per_pc_pair:.2f}")
+    print(f"Average PC pairs per cacheline: {avg_pc_pairs_per_cacheline:.2f}")
+    
+    return {
+        'pc_pair_counts': pc_pair_counts,
+        'cachelines_per_pc_pair': cachelines_per_pc_pair,
+        'pc_pairs_per_cacheline': pc_pairs_per_cacheline,
+        'pc_pair_to_cachelines': pc_pair_to_cachelines,
+        'cacheline_to_pc_pairs': cacheline_to_pc_pairs
+    }
 
-# Short benchmark names/codes (for file matching)
-benchmark_codes = [
-    'bfs',
-    'sssp',
-    'pr',
-    'cc',
-    'bc',
-    'tc'
-]
+def visualize_analysis(analysis_results):
+    """Create visualizations for the analysis results"""
+    pc_pair_counts = analysis_results['pc_pair_counts']
+    cachelines_per_pc_pair = analysis_results['cachelines_per_pc_pair']
+    pc_pairs_per_cacheline = analysis_results['pc_pairs_per_cacheline']
+    
+    # Set up the plots
+    plt.figure(figsize=(15, 10))
+    
+    # Plot 1: Distribution of PC pair occurrences
+    plt.subplot(2, 2, 1)
+    occurrences = list(pc_pair_counts.values())
+    # Count frequency of each occurrence count
+    occurrence_counts = Counter(occurrences)
+    x = sorted(occurrence_counts.keys())
+    y = [occurrence_counts[i] for i in x]
+    
+    plt.bar(x, y)
+    plt.xlabel('Number of Occurrences')
+    plt.ylabel('Number of PC Pairs')
+    plt.title('Distribution of PC Pair Occurrences')
+    plt.yscale('log')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: Distribution of cachelines per PC pair
+    plt.subplot(2, 2, 2)
+    cacheline_counts = list(cachelines_per_pc_pair.values())
+    # Count frequency of each cacheline count
+    cacheline_count_freq = Counter(cacheline_counts)
+    x = sorted(cacheline_count_freq.keys())
+    y = [cacheline_count_freq[i] for i in x]
+    
+    plt.bar(x, y)
+    plt.xlabel('Number of Cachelines')
+    plt.ylabel('Number of PC Pairs')
+    plt.title('Distribution of Cachelines per PC Pair')
+    plt.yscale('log')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 3: Distribution of PC pairs per cacheline
+    plt.subplot(2, 2, 3)
+    pc_pair_counts_per_cl = list(pc_pairs_per_cacheline.values())
+    # Count frequency of each PC pair count
+    pc_pair_count_freq = Counter(pc_pair_counts_per_cl)
+    x = sorted(pc_pair_count_freq.keys())
+    y = [pc_pair_count_freq[i] for i in x]
+    
+    plt.bar(x, y)
+    plt.xlabel('Number of PC Pairs')
+    plt.ylabel('Number of Cachelines')
+    plt.title('Distribution of PC Pairs per Cacheline')
+    plt.yscale('log')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 4: Top 20 most frequent PC pairs
+    plt.subplot(2, 2, 4)
+    top_pc_pairs = sorted(pc_pair_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    x = [f"Pair {i+1}" for i in range(len(top_pc_pairs))]
+    y = [count for _, count in top_pc_pairs]
+    
+    plt.bar(x, y)
+    plt.xlabel('PC Pair Rank')
+    plt.ylabel('Occurrence Count')
+    plt.title('Top 20 Most Frequent PC Pairs')
+    plt.xticks(rotation=45)
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('fusion_analysis.png', dpi=300)
+    
+    # Additional plot: Scatter plot of PC pairs vs cachelines
+    plt.figure(figsize=(10, 8))
+    
+    # For each PC pair, get its occurrence count and number of cachelines it accesses
+    pc_occurrences = []
+    cacheline_counts = []
+    for pc_pair in analysis_results['pc_pair_to_cachelines']:
+        pc_occurrences.append(pc_pair_counts[pc_pair])
+        cacheline_counts.append(len(analysis_results['pc_pair_to_cachelines'][pc_pair]))
+    
+    # Create a scatter plot with hexbin for density
+    plt.hexbin(pc_occurrences, cacheline_counts, gridsize=20, cmap='viridis', bins='log')
+    plt.colorbar(label='Log Count')
+    plt.xlabel('PC Pair Occurrence Count')
+    plt.ylabel('Number of Cachelines Accessed')
+    plt.title('Relationship Between PC Pair Frequency and Cacheline Diversity')
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('pc_cacheline_relationship.png', dpi=300)
+    
+    print("Visualizations saved to fusion_analysis.png and pc_cacheline_relationship.png")
 
-# Define the base paths to result directories (use absolute paths)
-home_dir = os.path.expanduser("~")  # Get the user's home directory
-baseline_dir = os.path.join(home_dir, "result_baseline_no_fusion")
-fusion_dir = os.path.join(home_dir, "result_fusion")
-
-# Print debug information about directories
-print(f"Baseline directory: {baseline_dir}")
-print(f"Fusion directory: {fusion_dir}")
-print(f"Checking if baseline directory exists: {os.path.exists(baseline_dir)}")
-print(f"Checking if fusion directory exists: {os.path.exists(fusion_dir)}")
-
-# Function to extract IPC from benchmark directory
-def extract_ipc_from_benchmark_dir(base_dir, benchmark_code):
-    """
-    Extract IPC from a benchmark-specific directory based on actual file structure.
-    """
-    bench_dir = os.path.join(base_dir, benchmark_code)
-    print(f"Checking benchmark directory: {bench_dir}")
+def main():
+    # Parse the fusion events file
+    df = parse_fusion_events('fusion_events.txt')
     
-    if not os.path.exists(bench_dir):
-        print(f"  Directory does not exist: {bench_dir}")
-        return None
+    # Analyze the data
+    analysis_results = analyze_fusion_events(df)
     
-    # List all files in the benchmark directory
-    files = os.listdir(bench_dir)
-    print(f"  Found {len(files)} files in directory:")
-    for file in files[:10]:  # Show first 10 files
-        print(f"  - {file}")
-    if len(files) > 10:
-        print(f"  ... and {len(files) - 10} more files")
+    # Visualize the results
+    visualize_analysis(analysis_results)
     
-    # First look for files with the benchmark name that might contain IPC info
-    bench_files = [f for f in files if benchmark_code in f.lower() and f.endswith('.txt')]
+    # Generate a report to answer Tanvir's question
+    pc_pair_counts = analysis_results['pc_pair_counts']
     
-    # Then look for stat files that might contain IPC info
-    stat_files = [f for f in files if 'stat' in f.lower()]
+    # Compute how many PC pairs account for different percentages of fusion events
+    total_events = sum(pc_pair_counts.values())
+    unique_pairs = len(pc_pair_counts)
     
-    # Combine and prioritize benchmark-specific txt files
-    potential_files = bench_files + stat_files
+    sorted_counts = sorted(pc_pair_counts.values(), reverse=True)
+    cumulative = 0
+    thresholds = [25, 50, 75, 90, 95, 99]
+    pairs_needed = []
     
-    if not potential_files:
-        print(f"  No potential IPC files found in {bench_dir}")
-        return None
-    
-    # Try to extract IPC from each potential file
-    for filename in potential_files:
-        filepath = os.path.join(bench_dir, filename)
-        print(f"  Examining file: {filepath}")
+    for i, count in enumerate(sorted_counts):
+        cumulative += count
+        percentage = (cumulative / total_events) * 100
         
-        try:
-            with open(filepath, 'r') as file:
-                content = file.read()
-                print(f"  Successfully read file: {filepath}")
-                
-                # Print first few lines for debugging
-                first_lines = content.split('\n')[:10]
-                print(f"  First few lines of file content:")
-                for line in first_lines:
-                    print(f"    {line}")
-                
-                # Look for IPC in the content
-                ipc_match = re.search(r'IPC:?\s*(\d+\.\d+)', content)
-                if ipc_match:
-                    ipc = float(ipc_match.group(1))
-                    print(f"  Found IPC: {ipc} (pattern: 'IPC: X.XXX')")
-                    return ipc
-                
-                ipc_match = re.search(r'IPC\s*=\s*(\d+\.\d+)', content)
-                if ipc_match:
-                    ipc = float(ipc_match.group(1))
-                    print(f"  Found IPC: {ipc} (pattern: 'IPC = X.XXX')")
-                    return ipc
-                
-                # Search for any numeric value associated with IPC
-                for line in content.split('\n'):
-                    if 'ipc' in line.lower():
-                        print(f"  Found line with 'IPC': {line}")
-                        numbers = re.findall(r'(\d+\.\d+)', line)
-                        if numbers:
-                            ipc = float(numbers[0])
-                            print(f"  Extracted IPC: {ipc} from line")
-                            return ipc
-                
-                print(f"  No IPC value found in {filepath}")
-        except Exception as e:
-            print(f"  Error reading {filepath}: {e}")
+        for j, threshold in enumerate(thresholds):
+            if percentage >= threshold and j < len(thresholds) and thresholds[j] > 0:
+                pairs_needed.append((threshold, i + 1))
+                thresholds[j] = -1  # Mark as processed
     
-    print(f"  Could not find IPC value in any file for {benchmark_code}")
-    return None
-
-# Extract IPC values
-ipc_no_fusion = []
-ipc_with_fusion = []
-
-print("\nExtracting IPC values for each benchmark:")
-print("-" * 80)
-for i, bench_code in enumerate(benchmark_codes):
-    print(f"\nProcessing benchmark: {benchmarks[i]} ({bench_code})")
+    # Write a report
+    with open('fusion_analysis_report.txt', 'w') as f:
+        f.write("Fusion Events Analysis Report\n")
+        f.write("============================\n\n")
+        f.write(f"Total fusion events: {total_events}\n")
+        f.write(f"Unique PC pairs: {unique_pairs}\n\n")
+        
+        f.write("PC Pair Coverage:\n")
+        for threshold, count in pairs_needed:
+            f.write(f"{threshold}% of all fusion events are covered by {count} PC pairs ")
+            f.write(f"({count/unique_pairs*100:.2f}% of all unique pairs)\n")
+            
+        # Calculate single vs multiple occurrence statistics
+        single_occurrence = sum(1 for count in pc_pair_counts.values() if count == 1)
+        multiple_occurrences = unique_pairs - single_occurrence
+        
+        f.write(f"\nPC pairs that occur only once: {single_occurrence} ({single_occurrence/unique_pairs*100:.2f}%)\n")
+        f.write(f"PC pairs that occur multiple times: {multiple_occurrences} ({multiple_occurrences/unique_pairs*100:.2f}%)\n")
+        
+        # Calculate percentages of events from single vs multiple occurrences
+        single_events = single_occurrence  # Each single occurrence pair contributes 1 event
+        multiple_events = total_events - single_events
+        
+        f.write(f"\nFusion events from single-occurrence PC pairs: {single_events} ({single_events/total_events*100:.2f}%)\n")
+        f.write(f"Fusion events from multiple-occurrence PC pairs: {multiple_events} ({multiple_events/total_events*100:.2f}%)\n")
+        
+        f.write("\nConclusion: ")
+        if single_occurrence / unique_pairs > 0.5:
+            f.write("Most PC pairs appear only once, making prediction challenging.\n")
+            if single_events / total_events > 0.5:
+                f.write("These single-occurrence pairs also account for most fusion events, ")
+                f.write("confirming Deepanjali's observation about prediction difficulty due to cold misses.\n")
+            else:
+                f.write("However, the majority of fusion events come from PC pairs that recur multiple times, ")
+                f.write("suggesting that a prediction mechanism could still be effective for most events.\n")
+        else:
+            f.write("Most PC pairs appear multiple times, suggesting potential for prediction.\n")
+            if single_events / total_events > 0.3:
+                f.write("However, a significant portion of fusion events still come from PC pairs that appear only once, ")
+                f.write("confirming the cold miss challenge noted by Deepanjali.\n")
+            else:
+                f.write("The majority of fusion events also come from these recurring PC pairs, ")
+                f.write("suggesting strong potential for effective PC-based prediction.\n")
     
-    # Extract no fusion IPC
-    no_fusion_ipc = extract_ipc_from_benchmark_dir(baseline_dir, bench_code)
-    ipc_no_fusion.append(no_fusion_ipc)
-    
-    # Extract with fusion IPC
-    with_fusion_ipc = extract_ipc_from_benchmark_dir(fusion_dir, bench_code)
-    ipc_with_fusion.append(with_fusion_ipc)
+    print("Analysis report saved to fusion_analysis_report.txt")
 
-# If no IPC values were found, use example values
-if all(x is None for x in ipc_no_fusion) or all(x is None for x in ipc_with_fusion):
-    print("\nCould not extract any IPC values from the results directories. Using example values.")
-    ipc_no_fusion = np.array([0.83, 0.67, 0.91, 0.77, 0.71, 0.63])  # Example baseline IPC values
-    ipc_with_fusion = np.array([1.0, 0.8, 1.05, 0.9, 0.83, 0.74])   # Example IPC values with fusion
-else:
-    # Convert to numpy arrays with fallback values for any missing data
-    for i in range(len(ipc_no_fusion)):
-        if ipc_no_fusion[i] is None:
-            print(f"Warning: No baseline IPC found for {benchmarks[i]}. Using default value 1.0")
-            ipc_no_fusion[i] = 1.0
-        if ipc_with_fusion[i] is None:
-            print(f"Warning: No fusion IPC found for {benchmarks[i]}. Using value 1.2 times baseline")
-            ipc_with_fusion[i] = ipc_no_fusion[i] * 1.2
-    
-    ipc_no_fusion = np.array(ipc_no_fusion)
-    ipc_with_fusion = np.array(ipc_with_fusion)
-
-# Print raw IPC values for verification
-print("\nExtracted IPC Values Summary:")
-print("-" * 80)
-print("Benchmark                   | No Fusion    | With Fusion  | Speedup")
-print("-" * 80)
-for i, bench in enumerate(benchmarks):
-    speedup = ipc_with_fusion[i] / ipc_no_fusion[i]
-    print(f"{bench:28} | {ipc_no_fusion[i]:12.4f} | {ipc_with_fusion[i]:12.4f} | {speedup:8.4f}×")
-
-# Function to normalize IPC values
-def normalize_ipc(ipc_values, baseline_values):
-    """Normalize IPC values to their respective baselines"""
-    return ipc_values / baseline_values
-
-# Normalize IPC relative to the baseline (no fusion) for each benchmark
-baseline_values = ipc_no_fusion.copy()
-ipc_no_fusion_norm = normalize_ipc(ipc_no_fusion, baseline_values)  # Should all be 1.0
-ipc_with_fusion_norm = normalize_ipc(ipc_with_fusion, baseline_values)
-
-# Create figure and axis
-fig, ax = plt.subplots(figsize=(12, 6), dpi=300)
-
-# Set bar width and positions
-bar_width = 0.35
-x = np.arange(len(benchmarks))
-
-# Create bars with pale colors
-bars1 = ax.bar(x - bar_width/2, ipc_no_fusion_norm, bar_width, label='Without Fusion', 
-              color='#f5b01a', edgecolor='#7A93A7', linewidth=0.8, alpha=0.9)
-bars2 = ax.bar(x + bar_width/2, ipc_with_fusion_norm, bar_width, label='With Fusion', 
-              color='#042069', edgecolor='#A7937A', linewidth=0.8, alpha=0.9)
-
-# Add multiplier labels above the bars
-for i, (b1, b2) in enumerate(zip(bars1, bars2)):
-    multiplier = ipc_with_fusion_norm[i]  # Since baseline is normalized to 1.0
-    ax.annotate(f'{multiplier:.2f}×', 
-                xy=(b2.get_x() + b2.get_width()/2, b2.get_height()),
-                xytext=(0, 3),  # 3 points vertical offset
-                textcoords="offset points",
-                ha='center', va='bottom',
-                fontsize=9, color='#555555')
-
-# Customize plot
-ax.set_xlabel('Applications', fontsize=11, labelpad=10)
-ax.set_ylabel('Instructions Per Cylce (IPC) \n Normalized to Without Fusion', fontsize=11, labelpad=10)
-ax.set_title('Fusing all memory loads accessing the same cacheline', 
-             fontsize=13, pad=15, fontweight='regular')
-ax.set_xticks(x)
-ax.set_xticklabels(benchmarks)
-ax.tick_params(axis='x', rotation=45)
-ax.legend(loc='upper left', frameon=True, framealpha=0.9, fontsize=10)
-
-# Add a thin horizontal line at y=1.0 for reference
-ax.axhline(y=1.0, color='#999999', linestyle='-', linewidth=0.7, alpha=0.5)
-
-# Set y-axis to start from 0
-ax.set_ylim(bottom=0, top=max(ipc_with_fusion_norm) * 1.1)
-ax.yaxis.set_major_locator(MultipleLocator(0.2))
-ax.yaxis.set_minor_locator(MultipleLocator(0.1))
-
-# Add grid lines
-ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
-
-# Tight layout and save figure
-plt.tight_layout()
-plt.savefig('ipc_gains_gap_benchmark.pdf', bbox_inches='tight', dpi=300)
-plt.savefig('ipc_gains_gap_benchmark.png', bbox_inches='tight', dpi=300)
-
-# Show plot
-plt.show()
+if __name__ == "__main__":
+    main()
