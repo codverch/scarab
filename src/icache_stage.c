@@ -80,6 +80,7 @@
  bool fusion_table_initialized = false;
 
  FILE* fusion_log_file = NULL; 
+ FILE* fusion_readable_file = NULL;
  bool fusion_logging_initialized = false; 
  
  /**************************************************************************************/
@@ -578,21 +579,37 @@
 
  void init_fusion_logging() {
   if (fusion_logging_initialized) return;
-
-    fusion_log_file = fopen("fusion_events.csv", "w"); 
-    if (fusion_log_file) {
-      // Write header
-      fprintf(fusion_log_file, "DonorPC,ReceiverPC,DonorMemAddr,ReceiverMemAddr,CachelineAddr\n");
-      fusion_logging_initialized = true;
-      
-      if (FUSION_DEBUG_ENABLED) {
-        printf("[init_fusion_logging] Fusion logging initialized to fusion_events.csv\n");
-      }
-    } else {
-      fprintf(stderr, "Failed to open fusion_events.csv for writing\n");
+  
+  // Open CSV file for machine processing
+  fusion_log_file = fopen("fusion_events.csv", "w");
+  
+  // Open TXT file for human reading
+  fusion_readable_file = fopen("fusion_events.txt", "w");
+  
+  if (fusion_log_file && fusion_readable_file) {
+    // Write CSV header - clean, no extra spaces
+    fprintf(fusion_log_file, "DonorPC,ReceiverPC,DonorMemAddr,ReceiverMemAddr,CachelineAddr,OffsetInCL1,OffsetInCL2\n");
+    
+    // Write readable header with nice formatting
+    fprintf(fusion_readable_file, "%-18s %-18s %-18s %-18s %-18s %-11s %-11s\n",
+            "DonorPC", "ReceiverPC", "DonorMemAddr", "ReceiverMemAddr", "CachelineAddr", "OffsetInCL1", "OffsetInCL2");
+    fprintf(fusion_readable_file, "%-18s %-18s %-18s %-18s %-18s %-11s %-11s\n",
+            "==================", "==================", "==================", "==================", "==================", "===========", "===========");
+    
+    fusion_logging_initialized = true;
+    
+    if (FUSION_DEBUG_ENABLED) {
+      printf("[init_fusion_logging] Fusion logging initialized\n");
     }
+  } else {
+    if (fusion_log_file) fclose(fusion_log_file);
+    if (fusion_readable_file) fclose(fusion_readable_file);
+    fusion_log_file = NULL;
+    fusion_readable_file = NULL;
+    fprintf(stderr, "Failed to open fusion log files for writing\n");
+  }
+}
 
- }
 
   /**************************************************************************************/
  /* log_fusion_event: */
@@ -609,15 +626,20 @@
   Addr receiver_mem_addr = receiver->oracle_info.va;
   Addr cacheline_addr = get_cacheline_addr(donor_mem_addr);
   
-  // Write to the log file
-  fprintf(fusion_log_file, "0x%llx,0x%llx,0x%llx,0x%llx,0x%llx\n", 
-          donor_pc, receiver_pc, donor_mem_addr, receiver_mem_addr, 
-          cacheline_addr);
+  // Calculate the offset within the cacheline (assuming 64-byte cachelines)
+  unsigned int offset1 = (unsigned int)(donor_mem_addr & 0x3F);
+  unsigned int offset2 = (unsigned int)(receiver_mem_addr & 0x3F);
   
-  // Flush periodically to ensure data is written even if simulation crashes
-  if ((cycle_count % 10000) == 0) {
-    fflush(fusion_log_file);
-  }
+  // Write to the CSV file - clean format for machine processing
+  fprintf(fusion_log_file, "0x%016llx,0x%016llx,0x%016llx,0x%016llx,0x%016llx,%u,%u\n", 
+          donor_pc, receiver_pc, donor_mem_addr, receiver_mem_addr, 
+          cacheline_addr, offset1, offset2);
+  
+  // Write to the human-readable file with nice spacing
+  fprintf(fusion_readable_file, "0x%016llx 0x%016llx 0x%016llx 0x%016llx 0x%016llx %-11u %-11u\n", 
+          donor_pc, receiver_pc, donor_mem_addr, receiver_mem_addr, 
+          cacheline_addr, offset1, offset2);
+  
 }
  
  /**************************************************************************************/
