@@ -588,13 +588,15 @@
   
   if (fusion_log_file && fusion_readable_file) {
     // Write CSV header - clean, no extra spaces
-    fprintf(fusion_log_file, "DonorPC,ReceiverPC,DonorMemAddr,ReceiverMemAddr,CachelineAddr,OffsetInCL1,OffsetInCL2\n");
+    fprintf(fusion_log_file, "DonorPC,ReceiverPC,DonorMemAddr,ReceiverMemAddr,DonorCacheline,ReceiverCacheline,OffsetInCL1,OffsetInCL2\n");
     
     // Write readable header with nice formatting
-    fprintf(fusion_readable_file, "%-18s %-18s %-18s %-18s %-18s %-11s %-11s\n",
-            "DonorPC", "ReceiverPC", "DonorMemAddr", "ReceiverMemAddr", "CachelineAddr", "OffsetInCL1", "OffsetInCL2");
-    fprintf(fusion_readable_file, "%-18s %-18s %-18s %-18s %-18s %-11s %-11s\n",
-            "==================", "==================", "==================", "==================", "==================", "===========", "===========");
+    fprintf(fusion_readable_file, "%-18s %-18s %-18s %-18s %-18s %-18s %-11s %-11s\n",
+            "DonorPC", "ReceiverPC", "DonorMemAddr", "ReceiverMemAddr", "DonorCacheline", 
+            "ReceiverCacheline", "OffsetInCL1", "OffsetInCL2");
+    fprintf(fusion_readable_file, "%-18s %-18s %-18s %-18s %-18s %-18s %-11s %-11s\n",
+            "==================", "==================", "==================", "==================", 
+            "==================", "==================", "===========", "===========");
     
     fusion_logging_initialized = true;
     
@@ -610,7 +612,6 @@
   }
 }
 
-
   /**************************************************************************************/
  /* log_fusion_event: */
 
@@ -624,22 +625,22 @@
   Addr receiver_pc = receiver->inst_info->addr;
   Addr donor_mem_addr = donor->oracle_info.va;
   Addr receiver_mem_addr = receiver->oracle_info.va;
-  Addr cacheline_addr = get_cacheline_addr(donor_mem_addr);
+  Addr donor_cacheline_addr = get_cacheline_addr(donor_mem_addr);
+  Addr receiver_cacheline_addr = get_cacheline_addr(receiver_mem_addr);
   
   // Calculate the offset within the cacheline (assuming 64-byte cachelines)
   unsigned int offset1 = (unsigned int)(donor_mem_addr & 0x3F);
   unsigned int offset2 = (unsigned int)(receiver_mem_addr & 0x3F);
   
   // Write to the CSV file - clean format for machine processing
-  fprintf(fusion_log_file, "0x%016llx,0x%016llx,0x%016llx,0x%016llx,0x%016llx,%u,%u\n", 
+  fprintf(fusion_log_file, "0x%016llx,0x%016llx,0x%016llx,0x%016llx,0x%016llx,0x%016llx,%u,%u\n", 
           donor_pc, receiver_pc, donor_mem_addr, receiver_mem_addr, 
-          cacheline_addr, offset1, offset2);
+          donor_cacheline_addr, receiver_cacheline_addr, offset1, offset2);
   
   // Write to the human-readable file with nice spacing
-  fprintf(fusion_readable_file, "0x%016llx 0x%016llx 0x%016llx 0x%016llx 0x%016llx %-11u %-11u\n", 
+  fprintf(fusion_readable_file, "0x%016llx 0x%016llx 0x%016llx 0x%016llx 0x%016llx 0x%016llx %-11u %-11u\n", 
           donor_pc, receiver_pc, donor_mem_addr, receiver_mem_addr, 
-          cacheline_addr, offset1, offset2);
-  
+          donor_cacheline_addr, receiver_cacheline_addr, offset1, offset2);
 }
  
  /**************************************************************************************/
