@@ -295,10 +295,10 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused &&
-               curr->pc_addr != op->inst_info->addr &&
+               !curr->already_fused 
+               
                // even if the op changes, we have tracked everything
-               curr->instruction_addr != op->oracle_info.va) 
+               ) 
                {
  
                if (FUSION_DEBUG_ENABLED) {
