@@ -114,7 +114,7 @@
  static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
  static bool                remove_load_from_bucket(Op* op, unsigned int hash_idx);
  static void                init_fusion_logging(void); 
- static void                log_fusion_event(Op* donor, Op* receiver);
+ static void                log_fusion_event(Op* donor, FusionLoad* receiver);
  
  /**************************************************************************************/
  /* set_icache_stage: */
@@ -205,6 +205,8 @@
    new_load->op = op;
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
+   new_load->instruction_addr = op->oracle_info.va; 
+   new_load->pc_addr = op->inst_info->addr; 
    
    // hash_idx is computed based on the cacheline address
    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
@@ -266,8 +268,7 @@
      
      // If not found, try next cache line bucket
      remove_load_from_bucket(op, next_hash_idx);
- }
- 
+ } 
  
  
  /**************************************************************************************/
@@ -294,11 +295,10 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused && 
-               curr->op != op && 
-               curr->op->inst_info->addr != op->inst_info->addr &&
-               curr->op->table_info->num_dest_regs > 0 &&
-               curr->op->table_info->mem_type == MEM_LD) {
+               !curr->already_fused &&
+               // even if the op changes, we have tracked everything
+               curr->instruction_addr != op->inst_info->addr) 
+               {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -307,6 +307,10 @@
                    printf("[find_same_cacheline_fusion_candidate] Its cacheline address is: %llx\n", curr->cacheline_addr);
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
+
+              //  printf("donorpc: %llx, receiverpc: %llx, donormem: %llx, receivermem: %llx, donor cacheline addr: %llx, receiver: %llx\n", 
+              //         op->inst_info->addr, curr->pc_addr, op->oracle_info.va, curr->instruction_addr, cacheline_addr, curr->cacheline_addr); 
+               log_fusion_event(op, curr);
  
                return curr->op;
            }
@@ -426,7 +430,6 @@
                    op->table_info->num_dest_regs, receiver->table_info->num_dest_regs);
            }
 
-           log_fusion_event(op, receiver);
            
            // Perform the fusion operation
            donate_operands(receiver, op->inst_info->dests, op->table_info->num_dest_regs);
@@ -615,16 +618,16 @@
   /**************************************************************************************/
  /* log_fusion_event: */
 
- void log_fusion_event(Op* donor, Op* receiver) {
+ void log_fusion_event(Op* donor, FusionLoad* receiver) {
   if (!fusion_logging_initialized) {
     init_fusion_logging();
     if (!fusion_logging_initialized) return; // Failed to initialize
   }
   
   Addr donor_pc = donor->inst_info->addr;
-  Addr receiver_pc = receiver->inst_info->addr;
+  Addr receiver_pc = receiver->pc_addr; 
   Addr donor_mem_addr = donor->oracle_info.va;
-  Addr receiver_mem_addr = receiver->oracle_info.va;
+  Addr receiver_mem_addr = receiver->instruction_addr; 
   Addr donor_cacheline_addr = get_cacheline_addr(donor_mem_addr);
   Addr receiver_cacheline_addr = get_cacheline_addr(receiver_mem_addr);
   
