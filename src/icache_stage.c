@@ -199,6 +199,7 @@
    new_load->op = op;
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
+   new_load->pc_addr = op->inst_info->addr; // Store the program counter address
    
    // hash_idx is computed based on the cacheline address
    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
