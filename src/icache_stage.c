@@ -288,11 +288,7 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused && 
-               curr->op != op && 
-               curr->op->inst_info->addr != op->inst_info->addr &&
-               curr->op->table_info->num_dest_regs > 0 &&
-               curr->op->table_info->mem_type == MEM_LD) {
+               !curr->already_fused) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
