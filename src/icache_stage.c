@@ -420,6 +420,7 @@
        }
        
        Op* receiver = find_same_cacheline_fusion_candidate(op);
+
        
        if (receiver) {
            if (FUSION_DEBUG_ENABLED) {
@@ -585,7 +586,7 @@
   if (fusion_logging_initialized) return;
   
   // Open CSV file for machine processing
-  fusion_log_file = fopen("fusion_events.csv", "w");
+  fusion_log_file = fopen("fusion_events_new.csv", "w");
   
   // Open TXT file for human reading
   fusion_readable_file = fopen("fusion_events.txt", "w");
@@ -1365,6 +1366,11 @@
  
    for (uns ii = 0; ii < cur_data->op_count; ii++) {
      Op* op = cur_data->ops[ii];
+
+      // also print cacheline address and offset within cacheline 
+    //  printf("PC addr: %llx\tInstruction addr: %llx\tOp type: %d\tCacheline addr: %llx\tOffset within cacheline: %lld\n",
+    //         op->inst_info->addr, op->oracle_info.va, op->table_info->mem_type,
+    //         (ic->fetch_addr & ~0x3F), (op->inst_info->addr & 0x3F));
 
      if(FUSION_DEBUG_ENABLED) {
         printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
