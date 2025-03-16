@@ -396,7 +396,7 @@
                    i, op->inst_info->addr);
            }
            
-           delete_ld_uop(op);
+         
            
            // Mark both ops as fused
            if (FUSION_DEBUG_ENABLED) {
@@ -404,6 +404,8 @@
            }
            mark_load_as_fused(op);
            mark_load_as_fused(receiver);
+
+           delete_ld_uop(op);
            
            fusions_performed++;
            
