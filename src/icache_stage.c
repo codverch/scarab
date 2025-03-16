@@ -199,6 +199,7 @@
    new_load->op = op;
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
+   new_load->pc_addr = op->inst_info->addr;
    
    // hash_idx is computed based on the cacheline address
    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
@@ -297,7 +298,7 @@
                    printf("[find_same_cacheline_fusion_candidate] Its cacheline address is: %llx\n", curr->cacheline_addr);
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
- 
+               printf("Fused\n");
                return curr->op;
            }
        }

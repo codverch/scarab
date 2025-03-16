@@ -390,6 +390,7 @@ int compare_uns64(const void*, const void*);
 typedef struct FusionLoad {
     Op* op;                    // The load operation
     Addr cacheline_addr;       // Cache line address of this load
+    Addr pc_addr; 
     struct FusionLoad* next;   // Pointer to next load in the hash bucket
     bool already_fused;        // Flag to indicate if this load has been involved in fusion
 } FusionLoad;
