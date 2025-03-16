@@ -312,55 +312,21 @@
  /* Mark a load as fused */
  
  static void mark_load_as_fused(Op* op) {
-   if (FUSION_DEBUG_ENABLED) {
-       printf("[mark_load_as_fused] Marking op at PC 0x%llx (mem addr: 0x%llx) as fused\n", 
-           op->inst_info->addr, op->oracle_info.va);
-   }
-   
-   Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
-   Addr next_cacheline_addr = get_next_cacheline_addr(op->oracle_info.va);
+      Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    unsigned int hash_idx = hash_cacheline(cacheline_addr);
-   unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
-   
-   if (FUSION_DEBUG_ENABLED) {
-       printf("[mark_load_as_fused] Checking buckets %u and %u\n", hash_idx, next_hash_idx);
-   }
-   
+
    // Look for the current load in both hash tables
    FusionLoad* curr_load = fusion_hash[hash_idx];
    bool found = false;
    
    while (curr_load) {
        if (curr_load->op == op) {
-           if (FUSION_DEBUG_ENABLED) {
-               printf("[mark_load_as_fused] Found in bucket %u, marking as fused\n", hash_idx);
-           }
+     
            curr_load->already_fused = true;
            found = true;
            break;
        }
        curr_load = curr_load->next;
-   }
-   
-   // Check next cache line bucket if not found in current
-   if (!found) {
-       curr_load = fusion_hash[next_hash_idx];
-       while (curr_load) {
-           if (curr_load->op == op) {
-               if (FUSION_DEBUG_ENABLED) {
-                   printf("[mark_load_as_fused] Found in next bucket %u, marking as fused\n", next_hash_idx);
-               }
-               curr_load->already_fused = true;
-               found = true;
-               break;
-           }
-           curr_load = curr_load->next;
-       }
-   }
-   
-   if (!found && FUSION_DEBUG_ENABLED) {
-       printf("[mark_load_as_fused] WARNING: Op at PC 0x%llx not found in either bucket\n", 
-           op->inst_info->addr);
    }
  }
  
