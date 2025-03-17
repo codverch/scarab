@@ -199,7 +199,9 @@
    new_load->op = op;
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
-   new_load->pc_addr = op->inst_info->addr;
+   new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
+  //  new_load->never_fuse = false;
+
    
    // hash_idx is computed based on the cacheline address
    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
@@ -289,7 +291,9 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused) {
+               !curr->already_fused && 
+               curr->op != op && 
+               curr->op->table_info->mem_type == MEM_LD) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -298,7 +302,7 @@
                    printf("[find_same_cacheline_fusion_candidate] Its cacheline address is: %llx\n", curr->cacheline_addr);
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
-               printf("Fused\n");
+ 
                return curr->op;
            }
        }
@@ -312,21 +316,55 @@
  /* Mark a load as fused */
  
  static void mark_load_as_fused(Op* op) {
-      Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+   if (FUSION_DEBUG_ENABLED) {
+       printf("[mark_load_as_fused] Marking op at PC 0x%llx (mem addr: 0x%llx) as fused\n", 
+           op->inst_info->addr, op->oracle_info.va);
+   }
+   
+   Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+   Addr next_cacheline_addr = get_next_cacheline_addr(op->oracle_info.va);
    unsigned int hash_idx = hash_cacheline(cacheline_addr);
-
+   unsigned int next_hash_idx = hash_cacheline(next_cacheline_addr);
+   
+   if (FUSION_DEBUG_ENABLED) {
+       printf("[mark_load_as_fused] Checking buckets %u and %u\n", hash_idx, next_hash_idx);
+   }
+   
    // Look for the current load in both hash tables
    FusionLoad* curr_load = fusion_hash[hash_idx];
    bool found = false;
    
    while (curr_load) {
        if (curr_load->op == op) {
-     
+           if (FUSION_DEBUG_ENABLED) {
+               printf("[mark_load_as_fused] Found in bucket %u, marking as fused\n", hash_idx);
+           }
            curr_load->already_fused = true;
            found = true;
            break;
        }
        curr_load = curr_load->next;
+   }
+   
+   // Check next cache line bucket if not found in current
+   if (!found) {
+       curr_load = fusion_hash[next_hash_idx];
+       while (curr_load) {
+           if (curr_load->op == op) {
+               if (FUSION_DEBUG_ENABLED) {
+                   printf("[mark_load_as_fused] Found in next bucket %u, marking as fused\n", next_hash_idx);
+               }
+               curr_load->already_fused = true;
+               found = true;
+               break;
+           }
+           curr_load = curr_load->next;
+       }
+   }
+   
+   if (!found && FUSION_DEBUG_ENABLED) {
+       printf("[mark_load_as_fused] WARNING: Op at PC 0x%llx not found in either bucket\n", 
+           op->inst_info->addr);
    }
  }
  
@@ -396,7 +434,7 @@
                    i, op->inst_info->addr);
            }
            
-         
+      
            
            // Mark both ops as fused
            if (FUSION_DEBUG_ENABLED) {
@@ -404,7 +442,6 @@
            }
            mark_load_as_fused(op);
            mark_load_as_fused(receiver);
-
            delete_ld_uop(op);
            
            fusions_performed++;
