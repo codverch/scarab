@@ -454,8 +454,6 @@
       return NULL;
     }
 
-    printf("Micro-op PC: %llx\n", op->inst_info->addr);
-
     static int fusion_table_found = 0;
     bool found_in_table = false;
     bool should_fuse = false;
@@ -481,29 +479,29 @@
           }
     
         // INSERTED: Log why single-occurrence pairs might not be fused
-        // if(pair_frequency_table[search_idx] != NULL && 
-        //   pair_frequency_table[search_idx]->valid &&
-        //   pair_frequency_table[search_idx]->donor_addr == op->inst_info->addr &&
-        //   pair_frequency_table[search_idx]->recvr_addr == curr->pc_addr &&
-        //   pair_frequency_table[search_idx]->occurrence_count == 1) {
+        if(pair_frequency_table[search_idx] != NULL && 
+          pair_frequency_table[search_idx]->valid &&
+          pair_frequency_table[search_idx]->donor_addr == op->inst_info->addr &&
+          pair_frequency_table[search_idx]->recvr_addr == curr->pc_addr &&
+          pair_frequency_table[search_idx]->occurrence_count == 1) {
           
-        //     // This micro-op pair is in the frequency table with count=1
-        //     // Log why it may not be fused
-        //     if (curr->cacheline_addr != cacheline_addr && curr->already_fused == false) {
-        //       printf("[Single occurrence but different cacheline] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
-        //             op->inst_info->addr, curr->pc_addr);
-        //     }
+            // This micro-op pair is in the frequency table with count=1
+            // Log why it may not be fused
+            if (curr->cacheline_addr != cacheline_addr && curr->already_fused == false) {
+              printf("[Different cacheline but receiver not fused] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
+                    op->inst_info->addr, curr->pc_addr);
+            }
 
-        //     else if(curr->cacheline_addr != cacheline_addr && curr->already_fused == true) {
-        //       printf("[Single occurrence but different cacheline and already fused] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
-        //             op->inst_info->addr, curr->pc_addr);
-        //     }
+            else if(curr->cacheline_addr != cacheline_addr && curr->already_fused == true) {
+              printf("[Different cacheline and receiver already fused] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
+                    op->inst_info->addr, curr->pc_addr);
+            }
 
-        //     else if(curr->cacheline_addr == cacheline_addr && curr->already_fused == true) {
-        //       printf("[Single occurrence but already fused] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
-        //             op->inst_info->addr, curr->pc_addr);
-        //     }
-        // }
+            else if(curr->cacheline_addr == cacheline_addr && curr->already_fused == true) {
+              printf("[Same cacheline but receiver already fused] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
+                    op->inst_info->addr, curr->pc_addr);
+            }
+        }
 
     // printf("whether cacheline_addr is equal to cacheline_addr: %d\n", curr->cacheline_addr == cacheline_addr);
     // printf("whether already_fused: %d\n", curr->already_fused);
@@ -529,10 +527,9 @@
             should_fuse = true;
             fusion_table_found++;
 
-          printf("Fused. DonorPC: %llx\tReceiverPC: %llx\n", 
-            op->inst_info->addr, curr->pc_addr);
+          printf("[Same cacheline and receiver not already fused] Donor addr: 0x%llx, Receiver addr: 0x%llx\n", 
+                    op->inst_info->addr, curr->pc_addr);
           
-                 
           return curr->op;  // Return immediately if found in table and should fuse
         } 
         else {
