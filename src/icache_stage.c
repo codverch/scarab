@@ -72,7 +72,7 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS FALSE
  #define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
  #define FUSION_DEBUG_ENABLED FALSE
@@ -200,6 +200,9 @@
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
+   if(op->table_info->num_src_regs > 0) {
+    new_load->reg_id = op->inst_info->srcs[0].id; 
+   }
   //  new_load->never_fuse = false;
 
    
@@ -291,9 +294,7 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused && 
-               curr->op != op && 
-               curr->op->table_info->mem_type == MEM_LD) {
+               !curr->already_fused) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -302,6 +303,16 @@
                    printf("[find_same_cacheline_fusion_candidate] Its cacheline address is: %llx\n", curr->cacheline_addr);
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
+
+              //  printf("First op: %llx\tSecond op: %llx\tCacheblock addr: %llx\n", op->inst_info->addr, curr->pc_addr, cacheline_addr); 
+
+              // First op cacheblock offset 
+              unsigned long long cacheblock_offset_micro_op_1 = cacheline_addr & 0x3F;
+              unsigned long long cacheblock_offset_micro_op_2 = curr->cacheline_addr & 0x3F; 
+
+              // Print fusion candidates and their cacheblock offsets
+              printf("First op: %llx\t Op1 offset : %llx\tSecond op: %llx\t Op2 offset: %llx\n", 
+                  op->inst_info->addr, cacheblock_offset_micro_op_1, curr->pc_addr, cacheblock_offset_micro_op_2);
  
                return curr->op;
            }
@@ -567,6 +578,7 @@
            op->table_info->mem_size, op->inst_info->latency);
    }
  }
+
  
  /**************************************************************************************/
  /* init_icache_stage: */
@@ -1291,8 +1303,8 @@
         printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
             unsstr64(op_count[ic->proc_id]), hexstr64s(op->oracle_info.va));
      }
-    
- 
+
+
      ASSERTM(ic->proc_id, ic->off_path == op->off_path,
              "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
  

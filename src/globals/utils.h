@@ -37,6 +37,7 @@
 #include <time.h>
 #include "globals/global_defs.h"
 #include "globals/global_vars.h"
+#include "globals/global_types.h"
 #include "statistics.h"
 #include "stdbool.h"
 
@@ -393,8 +394,9 @@ typedef struct FusionLoad {
     Addr pc_addr; 
     struct FusionLoad* next;   // Pointer to next load in the hash bucket
     bool already_fused;        // Flag to indicate if this load has been involved in fusion
-} FusionLoad;
+    uns16 reg_id;  // flattened register number (unique across sets)
 
+} FusionLoad;
 
 
 #ifdef __cplusplus
