@@ -194,15 +194,13 @@
        }
        return;
    }
-   
+
    // copying the op pointer, computing the cacheline addr, and initializing already_fused flag
    new_load->op = op;
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
-   if(op->table_info->num_src_regs > 0) {
-    new_load->reg_id = op->inst_info->srcs[0].id; 
-   }
+   new_load->reg_id = op->inst_info->srcs[0].id; // Flattened register number (unique across sets)
   //  new_load->never_fuse = false;
 
    
@@ -397,6 +395,11 @@
    // Process each load in the current fetch group
    for (int i = 0; i < cur_data->op_count; i++) {
        Op* op = cur_data->ops[i];
+
+      // if(op->table_info->mem_type == MEM_LD) {
+      //   printf("Op PC: %llx\tOp cacheblock:%llx\tOp reg: %d\n", op->inst_info->addr, op->oracle_info.va, op->inst_info->srcs[0].id);
+      // }
+
        
        if (FUSION_DEBUG_ENABLED) {
            printf("[fuse_same_cacheline_loads] Processing op #%d at PC 0x%llx (type: %d)\n", 
