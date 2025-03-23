@@ -304,15 +304,13 @@
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
 
-              //  printf("First op: %llx\tSecond op: %llx\tCacheblock addr: %llx\n", op->inst_info->addr, curr->pc_addr, cacheline_addr); 
-
               // First op cacheblock offset 
-              unsigned long long cacheblock_offset_micro_op_1 = cacheline_addr & 0x3F;
-              unsigned long long cacheblock_offset_micro_op_2 = curr->cacheline_addr & 0x3F; 
+              unsigned long long cacheblock_offset_micro_op_2 = cacheline_addr & 0x3F;
+              unsigned long long cacheblock_offset_micro_op_1 = curr->cacheline_addr & 0x3F; 
 
               // Print fusion candidates and their cacheblock offsets
-              printf("First op: %llx\t Op1 offset : %llx\tSecond op: %llx\t Op2 offset: %llx\n", 
-                  op->inst_info->addr, cacheblock_offset_micro_op_1, curr->pc_addr, cacheblock_offset_micro_op_2);
+              printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\n", 
+                 curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id);
  
                return curr->op;
            }
