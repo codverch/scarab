@@ -1,232 +1,167 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import glob
+import os
 import matplotlib as mpl
 from matplotlib.ticker import MultipleLocator
-import os
-import glob
-import re
 
-# Set the style to a clean, professional look
-plt.style.use('seaborn-v0_8-whitegrid')
-mpl.rcParams['font.family'] = 'serif'
-mpl.rcParams['font.serif'] = ['Computer Modern Roman', 'Times New Roman', 'Palatino', 'DejaVu Serif']
-mpl.rcParams['axes.edgecolor'] = '#333333'
-mpl.rcParams['axes.linewidth'] = 0.8
-mpl.rcParams['xtick.major.pad'] = 5
-mpl.rcParams['ytick.major.pad'] = 5
-
-# Full benchmark names
-benchmarks = [
-    'Breadth-First Search',
-    'Single-Source Shortest Paths',
-    'PageRank',
-    'Connected Components',
-    'Betweenness Centrality',
-    'Triangle Counting'
-]
-
-# Short benchmark names/codes (for file matching)
-benchmark_codes = [
-    'bfs',
-    'sssp',
-    'pr',
-    'cc',
-    'bc',
-    'tc'
-]
-
-# Define the base paths to result directories (use absolute paths)
-home_dir = os.path.expanduser("~")  # Get the user's home directory
-baseline_dir = os.path.join(home_dir, "result_baseline_no_fusion")
-fusion_dir = os.path.join(home_dir, "result_fusion")
-
-# Print debug information about directories
-print(f"Baseline directory: {baseline_dir}")
-print(f"Fusion directory: {fusion_dir}")
-print(f"Checking if baseline directory exists: {os.path.exists(baseline_dir)}")
-print(f"Checking if fusion directory exists: {os.path.exists(fusion_dir)}")
-
-# Function to extract IPC from benchmark directory
-def extract_ipc_from_benchmark_dir(base_dir, benchmark_code):
-    """
-    Extract IPC from a benchmark-specific directory based on actual file structure.
-    """
-    bench_dir = os.path.join(base_dir, benchmark_code)
-    print(f"Checking benchmark directory: {bench_dir}")
+def analyze_fusion_strides_by_workload():
+    # Set up professional styling
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman', 'DejaVu Serif'],
+        'font.size': 11,
+        'axes.labelsize': 12,
+        'axes.titlesize': 14,
+        'axes.spines.top': True,
+        'axes.spines.right': True,
+        'axes.spines.left': True,
+        'axes.spines.bottom': True,
+        'axes.linewidth': 1.0,
+        'figure.figsize': (14, 5.5),
+        'figure.dpi': 150,
+        'savefig.dpi': 300,
+        'savefig.bbox': 'tight',
+    })
     
-    if not os.path.exists(bench_dir):
-        print(f"  Directory does not exist: {bench_dir}")
-        return None
+    # Define columns for our data
+    workload_strides = {}
     
-    # List all files in the benchmark directory
-    files = os.listdir(bench_dir)
-    print(f"  Found {len(files)} files in directory:")
-    for file in files[:10]:  # Show first 10 files
-        print(f"  - {file}")
-    if len(files) > 10:
-        print(f"  ... and {len(files) - 10} more files")
-    
-    # First look for files with the benchmark name that might contain IPC info
-    bench_files = [f for f in files if benchmark_code in f.lower() and f.endswith('.txt')]
-    
-    # Then look for stat files that might contain IPC info
-    stat_files = [f for f in files if 'stat' in f.lower()]
-    
-    # Combine and prioritize benchmark-specific txt files
-    potential_files = bench_files + stat_files
-    
-    if not potential_files:
-        print(f"  No potential IPC files found in {bench_dir}")
-        return None
-    
-    # Try to extract IPC from each potential file
-    for filename in potential_files:
-        filepath = os.path.join(bench_dir, filename)
-        print(f"  Examining file: {filepath}")
+    # Process each file
+    for file_path in glob.glob('/users/deepmish/results/*.txt'):
+        workload = os.path.basename(file_path).split('.')[0]  # Extract workload name
+        workload_strides[workload] = []
         
-        try:
-            with open(filepath, 'r') as file:
-                content = file.read()
-                print(f"  Successfully read file: {filepath}")
-                
-                # Print first few lines for debugging
-                first_lines = content.split('\n')[:10]
-                print(f"  First few lines of file content:")
-                for line in first_lines:
-                    print(f"    {line}")
-                
-                # Look for IPC in the content
-                ipc_match = re.search(r'IPC:?\s*(\d+\.\d+)', content)
-                if ipc_match:
-                    ipc = float(ipc_match.group(1))
-                    print(f"  Found IPC: {ipc} (pattern: 'IPC: X.XXX')")
-                    return ipc
-                
-                ipc_match = re.search(r'IPC\s*=\s*(\d+\.\d+)', content)
-                if ipc_match:
-                    ipc = float(ipc_match.group(1))
-                    print(f"  Found IPC: {ipc} (pattern: 'IPC = X.XXX')")
-                    return ipc
-                
-                # Search for any numeric value associated with IPC
-                for line in content.split('\n'):
-                    if 'ipc' in line.lower():
-                        print(f"  Found line with 'IPC': {line}")
-                        numbers = re.findall(r'(\d+\.\d+)', line)
-                        if numbers:
-                            ipc = float(numbers[0])
-                            print(f"  Extracted IPC: {ipc} from line")
-                            return ipc
-                
-                print(f"  No IPC value found in {filepath}")
-        except Exception as e:
-            print(f"  Error reading {filepath}: {e}")
+        # Extract fusion candidate lines
+        with open(file_path, 'r') as f:
+            for line in f:
+                if line.startswith('Op1 PC:'):
+                    parts = line.strip().split()
+                    try:
+                        op1_offset = int(parts[14])
+                        op2_offset = int(parts[17])
+                        stride = abs(op2_offset - op1_offset)
+                        
+                        workload_strides[workload].append(stride)
+                    except (IndexError, ValueError):
+                        continue
     
-    print(f"  Could not find IPC value in any file for {benchmark_code}")
-    return None
-
-# Extract IPC values
-ipc_no_fusion = []
-ipc_with_fusion = []
-
-print("\nExtracting IPC values for each benchmark:")
-print("-" * 80)
-for i, bench_code in enumerate(benchmark_codes):
-    print(f"\nProcessing benchmark: {benchmarks[i]} ({bench_code})")
+    # Sort workloads based on the percentage of 0 stride (most important metric)
+    workload_zero_percent = {}
+    for workload, strides in workload_strides.items():
+        if strides:
+            zero_count = sum(1 for s in strides if s == 0)
+            workload_zero_percent[workload] = (zero_count / len(strides)) * 100
     
-    # Extract no fusion IPC
-    no_fusion_ipc = extract_ipc_from_benchmark_dir(baseline_dir, bench_code)
-    ipc_no_fusion.append(no_fusion_ipc)
+    # Sort workloads by their 0-stride percentage
+    sorted_workloads = sorted(workload_zero_percent.keys(), 
+                             key=lambda w: workload_zero_percent[w], reverse=True)
     
-    # Extract with fusion IPC
-    with_fusion_ipc = extract_ipc_from_benchmark_dir(fusion_dir, bench_code)
-    ipc_with_fusion.append(with_fusion_ipc)
-
-# If no IPC values were found, use example values
-if all(x is None for x in ipc_no_fusion) or all(x is None for x in ipc_with_fusion):
-    print("\nCould not extract any IPC values from the results directories. Using example values.")
-    ipc_no_fusion = np.array([0.83, 0.67, 0.91, 0.77, 0.71, 0.63])  # Example baseline IPC values
-    ipc_with_fusion = np.array([1.0, 0.8, 1.05, 0.9, 0.83, 0.74])   # Example IPC values with fusion
-else:
-    # Convert to numpy arrays with fallback values for any missing data
-    for i in range(len(ipc_no_fusion)):
-        if ipc_no_fusion[i] is None:
-            print(f"Warning: No baseline IPC found for {benchmarks[i]}. Using default value 1.0")
-            ipc_no_fusion[i] = 1.0
-        if ipc_with_fusion[i] is None:
-            print(f"Warning: No fusion IPC found for {benchmarks[i]}. Using value 1.2 times baseline")
-            ipc_with_fusion[i] = ipc_no_fusion[i] * 1.2
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, len(sorted_workloads), figsize=(14, 5.5), sharey=True)
     
-    ipc_no_fusion = np.array(ipc_no_fusion)
-    ipc_with_fusion = np.array(ipc_with_fusion)
+    # If there's only one workload, wrap axes in a list
+    if len(sorted_workloads) == 1:
+        axes = [axes]
+    
+    # Define color palette - professional blue
+    aligned_color = '#4682B4'  # Steel blue for 8-byte aligned
+    
+    # Common strides to display (multiples of 8 up to 64)
+    display_strides = list(range(0, 65, 8))
+    
+    # Create the plots
+    for i, (ax, workload) in enumerate(zip(axes, sorted_workloads)):
+        strides = workload_strides[workload]
+        
+        if not strides:  # Handle empty workloads
+            ax.text(0.5, 0.5, 'No Data', ha='center', va='center', transform=ax.transAxes)
+            continue
+        
+        # Count occurrences of each stride value
+        stride_counts = {}
+        for stride in strides:
+            stride_counts[stride] = stride_counts.get(stride, 0) + 1
+        
+        # Calculate total strides for percentage
+        total_strides = len(strides)
+        
+        # Prepare data for plotting - focus on multiples of 8
+        x_values = display_strides
+        y_values = [(stride_counts.get(x, 0) / total_strides) * 100 for x in x_values]
+        
+        # Create bar positions
+        bar_positions = np.arange(len(x_values))
+        
+        # Plot the bars
+        bars = ax.bar(bar_positions, y_values, width=0.75, color=aligned_color, 
+                     edgecolor='black', linewidth=0.7, zorder=3)
+        
+        # Add percentage labels on top of the bars
+        for j, (bar, y_val) in enumerate(zip(bars, y_values)):
+            if y_val >= 0.5:  # Show percentage for any meaningful value
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5, 
+                       f"{y_val:.0f}%", ha='center', va='bottom', 
+                       color='black', fontsize=9, fontweight='normal')
+        
+        # Format axes and grid
+        ax.set_xticks(bar_positions)
+        ax.set_xticklabels([str(x) for x in x_values], fontsize=10)
+        ax.set_ylim(0, 45)  # Set max to 45% for better visibility
+        
+        # Y-axis grid lines - every 10% but more subtle
+        ax.yaxis.set_major_locator(MultipleLocator(10))
+        ax.grid(axis='y', linestyle=':', color='gray', alpha=0.4, zorder=0)
+        
+        # Set workload name as title
+        ax.set_title(workload.capitalize(), fontsize=14, pad=10, fontweight='bold')
+        
+        # Only show y label on first subplot
+        if i == 0:
+            ax.set_ylabel('Load Micro-op Pairs Accessing\nSame Cacheline (%)', 
+                          fontsize=12, labelpad=10)
+        
+        # Enhance the appearance of the axes
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.0)
+            spine.set_color('black')
+            
+        # Add subtle background shading for alternate grid rows
+        for y in range(0, 101, 20):
+            ax.axhspan(y, y+10, color='#f5f5f5', alpha=0.3, zorder=0)
+        
+    # Add common x-label
+    fig.text(0.5, 0.02, 'Stride Between Micro-ops (Bytes Offset Within Cacheline)', 
+             ha='center', fontsize=13, fontweight='bold')
+    
+    # Add title with more space
+    fig.suptitle('Distribution of Memory Access Strides Across Workloads', 
+                fontsize=16, fontweight='bold', y=0.98)
+    
 
-# Print raw IPC values for verification
-print("\nExtracted IPC Values Summary:")
-print("-" * 80)
-print("Benchmark                   | No Fusion    | With Fusion  | Speedup")
-print("-" * 80)
-for i, bench in enumerate(benchmarks):
-    speedup = ipc_with_fusion[i] / ipc_no_fusion[i]
-    print(f"{bench:28} | {ipc_no_fusion[i]:12.4f} | {ipc_with_fusion[i]:12.4f} | {speedup:8.4f}×")
+    
+    # Create a legend with styled elements
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=aligned_color, edgecolor='black', label='8-Byte Aligned Strides')
+    ]
+    
+    # Place legend at bottom right with a border
+    leg = fig.legend(handles=legend_elements, loc='lower right', bbox_to_anchor=(0.99, 0.01),
+                   frameon=True, framealpha=0.9, facecolor='white', edgecolor='#CCCCCC')
+    leg.get_frame().set_linewidth(0.8)
+    
+    # Add a thin border around the entire figure
+    fig.patch.set_linewidth(1)
+    fig.patch.set_edgecolor('black')
+    
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0.07, 1, 0.93])
+    plt.subplots_adjust(wspace=0.05)  # Reduce spacing between subplots
+    
+    # Save with high quality
+    plt.savefig('stride_distribution_enhanced.png', dpi=300, bbox_inches='tight')
+    plt.show()
 
-# Function to normalize IPC values
-def normalize_ipc(ipc_values, baseline_values):
-    """Normalize IPC values to their respective baselines"""
-    return ipc_values / baseline_values
-
-# Normalize IPC relative to the baseline (no fusion) for each benchmark
-baseline_values = ipc_no_fusion.copy()
-ipc_no_fusion_norm = normalize_ipc(ipc_no_fusion, baseline_values)  # Should all be 1.0
-ipc_with_fusion_norm = normalize_ipc(ipc_with_fusion, baseline_values)
-
-# Create figure and axis
-fig, ax = plt.subplots(figsize=(12, 6), dpi=300)
-
-# Set bar width and positions
-bar_width = 0.35
-x = np.arange(len(benchmarks))
-
-# Create bars with pale colors
-bars1 = ax.bar(x - bar_width/2, ipc_no_fusion_norm, bar_width, label='Without Fusion', 
-              color='#f5b01a', edgecolor='#7A93A7', linewidth=0.8, alpha=0.9)
-bars2 = ax.bar(x + bar_width/2, ipc_with_fusion_norm, bar_width, label='With Fusion', 
-              color='#042069', edgecolor='#A7937A', linewidth=0.8, alpha=0.9)
-
-# Add multiplier labels above the bars
-for i, (b1, b2) in enumerate(zip(bars1, bars2)):
-    multiplier = ipc_with_fusion_norm[i]  # Since baseline is normalized to 1.0
-    ax.annotate(f'{multiplier:.2f}×', 
-                xy=(b2.get_x() + b2.get_width()/2, b2.get_height()),
-                xytext=(0, 3),  # 3 points vertical offset
-                textcoords="offset points",
-                ha='center', va='bottom',
-                fontsize=9, color='#555555')
-
-# Customize plot
-ax.set_xlabel('Applications', fontsize=11, labelpad=10)
-ax.set_ylabel('Instructions Per Cylce (IPC) \n Normalized to Without Fusion', fontsize=11, labelpad=10)
-ax.set_title('Fusing all memory loads accessing the same cacheline', 
-             fontsize=13, pad=15, fontweight='regular')
-ax.set_xticks(x)
-ax.set_xticklabels(benchmarks)
-ax.tick_params(axis='x', rotation=45)
-ax.legend(loc='upper left', frameon=True, framealpha=0.9, fontsize=10)
-
-# Add a thin horizontal line at y=1.0 for reference
-ax.axhline(y=1.0, color='#999999', linestyle='-', linewidth=0.7, alpha=0.5)
-
-# Set y-axis to start from 0
-ax.set_ylim(bottom=0, top=max(ipc_with_fusion_norm) * 1.1)
-ax.yaxis.set_major_locator(MultipleLocator(0.2))
-ax.yaxis.set_minor_locator(MultipleLocator(0.1))
-
-# Add grid lines
-ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
-
-# Tight layout and save figure
-plt.tight_layout()
-plt.savefig('ipc_gains_gap_benchmark.pdf', bbox_inches='tight', dpi=300)
-plt.savefig('ipc_gains_gap_benchmark.png', bbox_inches='tight', dpi=300)
-
-# Show plot
-plt.show()
+analyze_fusion_strides_by_workload()
