@@ -201,6 +201,7 @@
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
    new_load->reg_id = op->inst_info->srcs[0].id; // Flattened register number (unique across sets)
+   new_load->effec_addr = op->oracle_info.va; 
   //  new_load->never_fuse = false;
 
    
@@ -292,7 +293,7 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused) {
+            !curr->already_fused) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -303,8 +304,9 @@
                }
 
               // First op cacheblock offset 
-              unsigned long long cacheblock_offset_micro_op_2 = cacheline_addr & 0x3F;
-              unsigned long long cacheblock_offset_micro_op_1 = curr->cacheline_addr & 0x3F; 
+              unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
+              unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
+
 
               // Print fusion candidates and their cacheblock offsets
               printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\n", 
