@@ -33,11 +33,11 @@ plt.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
 plt.gcf().set_facecolor('white')
 plt.gca().set_facecolor('white')
 
-# Define colors for regions with exactly specified hex codes
-super_hot_color = "#C41230"  # Exact dark red for super hot (0-1%)
-hot_color = "#e57373"        # Pink for hot (1-15%)
-warm_color = "#f9d62e"       # Exact specified yellow for warm (15-50%)
-cold_color = "#89c3f3"       # Exact specified blue for cold (50-100%)
+# Define colors for regions with more vibrant colors (reduced transparency later)
+super_hot_color = "#b41d1e"  # Specified red hex code for super hot (0-1%)
+hot_color = "#FF6B6B"        # More vibrant pink for hot (1-15%)
+warm_color = "#FFD700"       # Brighter gold for warm (15-50%)
+cold_color = "#6CB4EE"       # More vibrant blue for cold (50-100%)
 
 # Define the regions as percentages
 super_hot_range = (0, 1)
@@ -45,16 +45,16 @@ hot_range = (1, 15)
 warm_range = (15, 50)
 cold_range = (50, 100)
 
-# Create rectangular patches for each temperature region
+# Create rectangular patches for each temperature region with HIGHER alpha values for more vibrancy
 # Each rectangle spans from the start to end percentage on x-axis, and full height on y-axis
 super_hot_rect = Rectangle(xy=(super_hot_range[0], 0), width=super_hot_range[1]-super_hot_range[0], 
-                          height=100, alpha=0.35, color=super_hot_color, zorder=0)
+                          height=100, alpha=0.6, color=super_hot_color, zorder=0)
 hot_rect = Rectangle(xy=(hot_range[0], 0), width=hot_range[1]-hot_range[0], 
-                     height=100, alpha=0.2, color=hot_color, zorder=0)
+                     height=100, alpha=0.5, color=hot_color, zorder=0)
 warm_rect = Rectangle(xy=(warm_range[0], 0), width=warm_range[1]-warm_range[0], 
-                     height=100, alpha=0.2, color=warm_color, zorder=0)
+                     height=100, alpha=0.5, color=warm_color, zorder=0)
 cold_rect = Rectangle(xy=(cold_range[0], 0), width=cold_range[1]-cold_range[0], 
-                     height=100, alpha=0.2, color=cold_color, zorder=0)
+                     height=100, alpha=0.5, color=cold_color, zorder=0)
 
 # Add rectangles to the plot
 plt.gca().add_patch(super_hot_rect)
@@ -65,11 +65,11 @@ plt.gca().add_patch(cold_rect)
 # Create annotation for super hot with a slightly diagonal arrow
 plt.annotate('super hot', 
              xy=(0.8, 85),  # Arrow tip position (slightly below text for diagonal effect)
-             xytext=(3, 90),  # Text position at top
+             xytext=(2, 90),  # Text position adjusted right
              fontsize=14,
              fontweight='bold',
-             color='#C41230',
-             arrowprops=dict(facecolor='#C41230', 
+             color='#b41d1e',  # Match the specified hex red
+             arrowprops=dict(facecolor='#b41d1e', 
                             shrink=0.02,  # Small shrink for a tighter arrow
                             width=1.5,    # Thin arrow
                             headwidth=6,  # Small arrowhead
