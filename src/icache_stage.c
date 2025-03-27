@@ -78,7 +78,8 @@
  #define FUSION_DEBUG_ENABLED FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
- 
+ static unsigned int micro_op_number = 0;
+
  /**************************************************************************************/
  /* Global Variables */
  
@@ -173,7 +174,7 @@
  /**************************************************************************************/
  /* Add a load to the fusion tracking system */
  
- static void add_load_to_fusion_tracking(Op* op) {
+ static void add_load_to_fusion_tracking(Op* op, unsigned int micro_op_num) {
    // Track valid loads: only those that are memory loads with destination registers
    if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
        if (FUSION_DEBUG_ENABLED) {
@@ -202,6 +203,7 @@
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
    new_load->reg_id = op->inst_info->srcs[0].id; // Flattened register number (unique across sets)
    new_load->effec_addr = op->oracle_info.va; 
+   new_load->micro_op_id = micro_op_num;
   //  new_load->never_fuse = false;
 
    
@@ -304,13 +306,15 @@
                }
 
               // First op cacheblock offset 
-              unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
-              unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
+              // unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
+              // unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
 
 
               // Print fusion candidates and their cacheblock offsets
-              printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\n", 
-                 curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id);
+              // printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\n", 
+              //    curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id);
+              printf("Micro-op 1: %-16llx  Micro-op 2: %-16llx  Cacheblock Address: %-16llx  Micro-op 1 Number: %-8d  Micro-op 2 Number: %-8d\n", 
+                curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, curr->micro_op_id, micro_op_number);
  
                return curr->op;
            }
@@ -402,6 +406,10 @@
       //   printf("Op PC: %llx\tOp cacheblock:%llx\tOp reg: %d\n", op->inst_info->addr, op->oracle_info.va, op->inst_info->srcs[0].id);
       // }
 
+      micro_op_number++;
+
+      // printf("Micro-op %llx: Micro-op Number: %d\n", op->inst_info->addr, micro_op_number);
+
        
        if (FUSION_DEBUG_ENABLED) {
            printf("[fuse_same_cacheline_loads] Processing op #%d at PC 0x%llx (type: %d)\n", 
@@ -470,7 +478,7 @@
            }
            
            // Only add this op to the tracking system if we couldn't fuse it with an existing op
-           add_load_to_fusion_tracking(op);
+           add_load_to_fusion_tracking(op, micro_op_number);
        }
    }
    

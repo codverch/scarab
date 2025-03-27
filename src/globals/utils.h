@@ -392,9 +392,11 @@ typedef struct FusionLoad {
     Op* op;                    // The load operation
     Addr cacheline_addr;       // Cache line address of this load
     Addr pc_addr; 
+    Addr effec_addr;       // Effective address of this load
     struct FusionLoad* next;   // Pointer to next load in the hash bucket
     bool already_fused;        // Flag to indicate if this load has been involved in fusion
     uns16 reg_id;  // flattened register number (unique across sets)
+    unsigned int micro_op_id; // Tracking all micro-ops (throughout the application) based on their occurrence order in the trace
 
 } FusionLoad;
 
