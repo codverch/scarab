@@ -392,7 +392,6 @@ struct Mementry {
     long read_addresses[8]; // MAX_LD_NUM = 8
     long num_dst;
     uint8_t dst_regs[8]; // MAX_DST_REGS_NUM = 8
-    uint8_t num_uops;
 };
 
 struct fusentry {
@@ -400,7 +399,6 @@ struct fusentry {
     long num_dst;
     long dst_regs[8];
     uint8_t type;
-    uint8_t og_num_uops;
 };
 
 #define INITIAL_TABLE_SIZE 16

@@ -719,10 +719,10 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
       memcpy(&F, Fp, sizeof(F));
       if(F.type == 0) { // fusable type
         // printf("Inst had %d num_ld\n", inst->num_ld);
-        // inst->num_dst_regs = (uint8_t) F.num_dst;
-        // for(short i = 0; i < 8; ++i) {
-        //   inst->dst_regs[i] = F.dst_regs[i];
-        // }
+        inst->num_dst_regs = (uint8_t) F.num_dst;
+        for(short i = 0; i < 8; ++i) {
+          inst->dst_regs[i] = F.dst_regs[i];
+        }
         // printf("did some fusion %ld\n", counter);
         // printf("Inst has %d num_ld\n", inst->num_ld);
       } else if (F.type == 1) { // delete type
@@ -925,10 +925,10 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
     M.num_ld = inst->num_ld;
     memcpy(M.read_addresses, inst->ld_vaddr, sizeof(inst->ld_vaddr));
     M.num_dst = inst->num_dst_regs;
-    M.num_uops = idx;
     memcpy(M.dst_regs, inst->dst_regs, sizeof(inst->dst_regs));
     save_struct(&M);
   } 
+  counter++;
 
   return idx;
 }
