@@ -320,6 +320,8 @@ void end_line_accumulate(Flag last_line_of_ft) {
           ASSERT(uop_cache_proc_id, uop_cache_line);
 
           // the line should be identical
+          if(uop_cache_line->n_uops != insert_line->n_uops)
+             printf("uop_cache_line->n_uops %d != insert_line->n_uops %d\n", uop_cache_line->n_uops, insert_line->n_uops);
           ASSERT(uop_cache_proc_id, uop_cache_line->n_uops == insert_line->n_uops &&
                                     uop_cache_line->offset == insert_line->offset &&
                                     uop_cache_line->end_of_ft == insert_line->end_of_ft);

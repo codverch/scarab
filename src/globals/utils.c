@@ -862,3 +862,136 @@ int parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
                        int max_num) {
   return parse_array(dest, str, max_num, parse_string_token);
 }
+
+
+
+// Hash function (modified)
+unsigned long python_parsed_hash(long counter, unsigned long table_size) {
+    unsigned long shifted_counter = counter >> 3;  // Divide by 8
+    unsigned long prime_number = 31;
+    return (shifted_counter * prime_number) % table_size;
+}
+
+// Create a new hash table
+struct hash_table *python_parsed_create_table(unsigned long size) {
+    struct hash_table *ht = (struct hash_table*) malloc(sizeof(struct hash_table));
+    ht->table = (struct fusentry**) malloc(sizeof(struct fusentry *) * size);
+    memset(ht->table, 0, sizeof(struct fusentry *) * size);  // Initialize the table to NULL
+    ht->table_size = size;
+    ht->count = 0;
+    return ht;
+}
+
+// Resize the hash table (double the size)
+void python_parsed_resize_table(struct hash_table *ht) {
+    unsigned long new_size = ht->table_size * 2;
+    struct fusentry **new_table = (struct fusentry**) malloc(sizeof(struct fusentry *) * new_size);
+    memset(new_table, 0, sizeof(struct fusentry *) * new_size);
+
+    // Rehash all existing entries
+    for (unsigned long i = 0; i < ht->table_size; i++) {
+        if (ht->table[i]) {
+            struct fusentry *entry = ht->table[i];
+            unsigned long new_index = python_parsed_hash(entry->counter, new_size);
+
+            // Handle collisions using linear probing
+            while (new_table[new_index]) {
+                new_index = (new_index + 1) % new_size;  // Linear probing
+            }
+
+            new_table[new_index] = entry;
+        }
+    }
+
+    free(ht->table);
+    ht->table = new_table;
+    ht->table_size = new_size;
+}
+
+// Insert a new entry into the hash table
+void python_parsed_insert(struct hash_table *ht, struct fusentry *entry) {
+    // Resize if the load factor exceeds the threshold
+    if (ht->count >= ht->table_size * RESIZE_THRESHOLD) {
+        python_parsed_resize_table(ht);
+    }
+
+    unsigned long index = python_parsed_hash(entry->counter, ht->table_size);
+
+    // Handle collisions using linear probing
+    while (ht->table[index]) {
+        index = (index + 1) % ht->table_size;  // Linear probing
+    }
+
+    ht->table[index] = entry;
+    ht->count++;
+}
+
+// Lookup an entry by counter value
+struct fusentry *python_parsed_lookup(struct hash_table *ht, long counter) {
+    unsigned long index = python_parsed_hash(counter, ht->table_size);
+
+    // Handle collisions using linear probing
+    while (ht->table[index]) {
+        if (ht->table[index]->counter == counter) {
+            return ht->table[index];
+        }
+        index = (index + 1) % ht->table_size;  // Linear probing
+    }
+
+    return NULL;  // Not found
+}
+
+// Delete an entry by counter value
+void python_parsed_delete_entry(struct hash_table *ht, long counter) {
+    unsigned long index = python_parsed_hash(counter, ht->table_size);
+
+    // Handle collisions using linear probing
+    while (ht->table[index]) {
+        if (ht->table[index]->counter == counter) {
+            free(ht->table[index]);
+            ht->table[index] = NULL;
+            ht->count--;
+            return;
+        }
+        index = (index + 1) % ht->table_size;  // Linear probing
+    }
+}
+
+// Function to read fusentry from the binary file and store it in the hash table
+void python_parsed_read_fusentry_from_file(struct hash_table *ht, const char *filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Error opening file");
+        return;
+    }
+
+    struct fusentry *entry;
+    unsigned long size_of_entry = sizeof(struct fusentry);
+
+    while (1) {
+        entry = (struct fusentry*) malloc(size_of_entry);
+        size_t bytes_read = fread(entry, 1, size_of_entry, file);
+        printf("Got %ld -- %d\n", entry->counter, entry->type);
+        if (bytes_read < size_of_entry) {
+            // Break if we reach the end of the file or there's an error
+            if (bytes_read == 0) {
+                break;
+            } else {
+                perror("Error reading file");
+                free(entry);
+                break;
+            }
+        }
+        
+        // Insert the entry into the hash table
+        python_parsed_insert(ht, entry);
+    }
+
+    fclose(file);
+}
+
+// Function to get the current size (number of elements) of the hash table
+unsigned long python_parsed_get_table_size(struct hash_table *ht) {
+    return ht->count;
+}
+

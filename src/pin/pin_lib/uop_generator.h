@@ -47,6 +47,7 @@ Flag uop_generator_get_bom(uns proc_id);  // Called before
 Flag uop_generator_get_eom(uns proc_id);  // Called after uop_generator_get_uop.
 void uop_generator_recover(uns8 proc_id);
 
+
 #ifdef __cplusplus
 }
 #endif

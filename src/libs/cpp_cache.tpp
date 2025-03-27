@@ -7,6 +7,7 @@
 #include <vector>
 #include "debug/debug_macros.h"
 #include "debug/debug_print.h"
+#include <limits>
 
 extern "C" {
 #include "globals/assert.h"

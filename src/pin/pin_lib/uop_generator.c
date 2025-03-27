@@ -48,6 +48,9 @@
 #include "uop_generator.h"
 #include "math.h"
 
+#include <stdio.h>
+#include <string.h>
+
 /**************************************************************************************/
 /* Macros */
 
@@ -291,6 +294,19 @@ static char* ctype_pin_inst_ld_and_st_addrs(uns proc_id, ctype_pin_inst* inst) {
 
 #endif
 
+static void save_struct(const struct Mementry *M) {
+    FILE *file = fopen(RECORD_FILE, "ab"); // Open in append binary mode
+    if (!file) {
+        perror("Failed to open file");
+        return;
+    }
+
+    fwrite(M, sizeof(struct Mementry), 1, file); // Write struct to file
+    fclose(file);
+}
+
+
+
 void uop_generator_get_uop(uns proc_id, Op* op, ctype_pin_inst* inst) {
   Trace_Uop*  trace_uop = NULL;
   Trace_Uop** trace_uop_array;
@@ -302,6 +318,10 @@ void uop_generator_get_uop(uns proc_id, Op* op, ctype_pin_inst* inst) {
 
   if(bom[proc_id]) {
     ASSERT(proc_id, inst != NULL);
+
+  
+    
+    
     convert_pinuop_to_t_uop(proc_id, inst, trace_uop_array);
 
     op->bom           = TRUE;
@@ -635,9 +655,9 @@ static void add_rep_uops(ctype_pin_inst* pi, Trace_Uop** trace_uop, uns* idx) {
 
 static Flag use_ld1_addr_regs(const uns8 proc_id, const compressed_op* pi,
                               const uns load_seq_num) {
-  if((0 == load_seq_num) || pi->is_gather_scatter)
+  if((0 == load_seq_num) || pi->is_gather_scatter) {
     return TRUE;
-  else {
+  } else {
     ASSERT(proc_id, 1 == load_seq_num);
     return FALSE;
   }
@@ -648,6 +668,8 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
   /* Generating microinstructions for the trace instruction. The
    * general sequence of every instruction other than REP insts is:
    *     load_1, load_2, operate, store, control                 */
+
+
 
   uns  idx         = 0;
   Flag has_load    = pi->num_ld > 0;
@@ -669,6 +691,65 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
   /* both REP MOVS and REP STOS are is_rep_st, meaning alu uop is independent of
    * mem uops */
   Flag is_rep_st = (pi->is_string) && has_store;
+
+  if(RECORD && RUN) {
+    printf("You can either record or run (not both)");
+    exit(1);
+  }
+
+  ctype_pin_inst* inst = pi;
+  
+  static long counter = 0;
+  // printf("Found %ld\n", counter);
+  if(inst->num_ld && RUN) {
+    static int first_time = 1;
+    static struct hash_table* ht = NULL;
+    if(first_time) {
+      ht = python_parsed_create_table(10000l);
+      python_parsed_read_fusentry_from_file(ht, RUN_FILE);
+      printf("[hash table] read %ld entries\n", python_parsed_get_table_size(ht));
+      first_time = 0;
+    }
+    // am I something in the HT
+    struct fusentry F;
+    struct fusentry* Fp;
+    Fp = python_parsed_lookup(ht, counter);
+    if(Fp) {
+      // do something
+      memcpy(&F, Fp, sizeof(F));
+      if(F.type == 0) { // fusable type
+        // printf("Inst had %d num_ld\n", inst->num_ld);
+        // inst->num_dst_regs = (uint8_t) F.num_dst;
+        // for(short i = 0; i < 8; ++i) {
+        //   inst->dst_regs[i] = F.dst_regs[i];
+        // }
+        // printf("did some fusion %ld\n", counter);
+        // printf("Inst has %d num_ld\n", inst->num_ld);
+      } else if (F.type == 1) { // delete type
+        inst->num_ld = 0;
+        inst->has_push = 0;
+        inst->has_pop = 0;
+        inst->num_st = 0;
+        inst->is_move = 0;
+        inst->num_dst_regs = 0;
+        inst->cf_type = NOT_CF;
+        inst->op_type = OP_NOP;
+        inst->num_src_regs = 0;
+
+        has_alu = FALSE;
+        has_control = FALSE;
+        has_load = FALSE;
+        
+        // printf("did some deletion %ld\n", counter);
+
+      } else {
+        // unimplemented -- for branch misses
+      }
+    }
+  }
+
+
+  // printf("has_alu %d\n", has_alu);
 
   /* Loads */
   for(uns i = 0; i < pi->num_ld; ++i) {
@@ -701,6 +782,8 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
       }
     }
   }
+
+  // printf("idx after loads %d\n", idx);
 
   /* Operate */
   if(has_alu) {
@@ -746,6 +829,7 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
       }
     }
   }
+  // printf("idx after alu %d\n", idx);
 
   /* Store */
   if(has_store) {
@@ -784,6 +868,8 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
     }
   }
 
+  // printf("idx after str %d\n", idx);
+
   /* Control */
   if(has_control) {
     Trace_Uop* uop = trace_uop[idx];
@@ -809,9 +895,16 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
     }
   }
 
+  // printf("idx after ctrl %d\n", idx);
+
+
   if(pi->is_string) {
     add_rep_uops(pi, trace_uop, &idx);
   }
+
+  // printf("idx after string %d\n", idx);
+
+  
 
   // make a nop if no ops were generated
   if(idx == 0) {
@@ -821,7 +914,21 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
 
     uop->op_type = OP_NOP;
     STAT_EVENT(0, STATIC_PIN_NOP);
+
   }
+  // printf("idx: %d\n", idx);
+
+  if(inst->num_ld && RECORD) {
+    struct Mementry M;
+    M.counter = counter;
+    M.instruction_addr = inst->instruction_addr;
+    M.num_ld = inst->num_ld;
+    memcpy(M.read_addresses, inst->ld_vaddr, sizeof(inst->ld_vaddr));
+    M.num_dst = inst->num_dst_regs;
+    M.num_uops = idx;
+    memcpy(M.dst_regs, inst->dst_regs, sizeof(inst->dst_regs));
+    save_struct(&M);
+  } 
 
   return idx;
 }
@@ -867,6 +974,8 @@ void convert_pinuop_to_t_uop(uns8 proc_id, ctype_pin_inst* pi,
     pi->st_vaddr[st] = convert_to_cmp_addr(proc_id, pi->st_vaddr[st]);
   }
 
+  
+
   Flag need_to_gen_uops = new_entry || (pi->fake_inst && !generated_dummy_nop) ||
                           pi->is_gather_scatter /* always regenerate uops for
                                                    gather/scatter, because the
@@ -876,9 +985,17 @@ void convert_pinuop_to_t_uop(uns8 proc_id, ctype_pin_inst* pi,
 
   if (pi->fake_inst && !generated_dummy_nop)
     generated_dummy_nop = TRUE;
-
+  // need_to_gen_uops = 1;
+  // new_entry = 1;
   if(need_to_gen_uops) {
+
+    
+    // static long counter = 0;
     num_uop = generate_uops(proc_id, pi, trace_uop);
+    // printf("Went here %ld\n", counter+=num_uop);
+    // printf("num uops %d\n", num_uop);
+    // printf("Type: %d\n", trace_uop[0]->op_type);
+
     ASSERT(proc_id, num_uop > 0);
 
     info->trace_info.num_uop = num_uop;

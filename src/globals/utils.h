@@ -38,6 +38,7 @@
 #include "globals/global_defs.h"
 #include "globals/global_vars.h"
 #include "statistics.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -381,6 +382,49 @@ int   parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 
 /* for use in qsort */
 int compare_uns64(const void*, const void*);
+
+
+
+struct Mementry {
+    long counter;
+    long instruction_addr;
+    long num_ld;
+    long read_addresses[8]; // MAX_LD_NUM = 8
+    long num_dst;
+    uint8_t dst_regs[8]; // MAX_DST_REGS_NUM = 8
+    uint8_t num_uops;
+};
+
+struct fusentry {
+    long counter;
+    long num_dst;
+    long dst_regs[8];
+    uint8_t type;
+    uint8_t og_num_uops;
+};
+
+#define INITIAL_TABLE_SIZE 16
+#define RESIZE_THRESHOLD 0.75
+
+// Define the hash table structure
+struct hash_table {
+    struct fusentry **table;
+    unsigned long table_size;
+    unsigned long count;  // Number of entries in the table
+};
+
+
+
+// Function prototypes with python_parsed_ prefix
+unsigned long python_parsed_hash(long counter, unsigned long table_size);
+struct hash_table *python_parsed_create_table(unsigned long size);
+void python_parsed_resize_table(struct hash_table *ht);
+void python_parsed_insert(struct hash_table *ht, struct fusentry *entry);
+struct fusentry *python_parsed_lookup(struct hash_table *ht, long counter);
+void python_parsed_delete_entry(struct hash_table *ht, long counter);
+void python_parsed_read_fusentry_from_file(struct hash_table *ht, const char *filename);
+unsigned long python_parsed_get_table_size(struct hash_table *ht);
+
 
 #ifdef __cplusplus
 }

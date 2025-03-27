@@ -35,17 +35,18 @@ struct hash_fn
 std::unordered_map<key, Inst_Info*, hash_fn> hash_map;
 
   Inst_Info *cpp_hash_table_access_create(int core, uint64_t addr, uint64_t lsb_bytes, uint64_t msb_bytes, uint8_t op_idx, unsigned char *new_entry) {
-    *new_entry = false;
+    *new_entry = true;
     key _key(addr, lsb_bytes, msb_bytes, op_idx);
-    auto lookup = hash_map.find(_key);
-    if (lookup != hash_map.end()) {
-      return lookup->second;
-    }
-    else {
-      Inst_Info * info = new Inst_Info(); //&vec.back();
-      hash_map.insert(std::pair<key, Inst_Info*>(_key, info));
-      *new_entry = true;
-      return info;
-    }
+    return new Inst_Info();
+    // auto lookup = hash_map.find(_key);
+    // if (lookup != hash_map.end()) {
+    //   return lookup->second;
+    // }
+    // else {
+    //   Inst_Info * info = new Inst_Info(); //&vec.back();
+    //   hash_map.insert(std::pair<key, Inst_Info*>(_key, info));
+    //   *new_entry = true;
+    //   return info;
+    // }
   }
 
