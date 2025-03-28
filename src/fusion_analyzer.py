@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Fusion Pair Distance Analyzer
+Fusion Analyzer
 
-This script analyzes distances between Micro-op 1 and Micro-op 2 within each fusion pair.
-It generates histograms showing the distribution of these distances for each workload.
+This script analyzes distances between micro-op pairs that access the same cacheline
+and generates histograms for each workload.
 
 Usage:
     python fusion_analyzer.py <input_directory> [--output OUTPUT_DIR]
@@ -17,19 +17,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict, namedtuple
 
-# Define a structure to hold fusion pair information
-FusionPair = namedtuple('FusionPair', ['pc1', 'pc2', 'cacheline', 'op_num1', 'op_num2', 'distance'])
+# Define a structure to hold micro-op pair information
+MicroOpPair = namedtuple('MicroOpPair', ['pc1', 'pc2', 'cacheline', 'op_num1', 'op_num2'])
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Analyze distances within fusion pairs')
+    parser = argparse.ArgumentParser(description='Analyze distances between micro-op pairs accessing the same cacheline')
     parser.add_argument('input', help='Directory containing the workload files')
     parser.add_argument('--output', '-o', default='fusion_analysis', help='Output directory for results')
     parser.add_argument('--debug', action='store_true', help='Print debug information')
+    parser.add_argument('--title', default='Inter Micro-op PC Pair Distance (in µops) for Pairs Accessing the Same Cacheline', 
+                       help='Title template for histograms')
+    parser.add_argument('--bins', default='0,1,10,20,30,40,50,60,70,80,90,100', 
+                       help='Comma-separated list of bin edges')
+    parser.add_argument('--max-y', type=float, default=None,
+                       help='Maximum value for y-axis (default: auto-calculated)')
     return parser.parse_args()
 
 def parse_file(file_path, debug=False):
-    """Parse a file to extract fusion pairs and their internal distances."""
-    fusion_pairs = []
+    """Parse a file to extract micro-op pairs."""
+    micro_op_pairs = []
     
     with open(file_path, 'r') as f:
         line_num = 0
@@ -39,7 +45,7 @@ def parse_file(file_path, debug=False):
             if "Micro-op 1:" not in line:
                 continue
                 
-            # Try to extract fusion pair information with flexible spacing
+            # Try to extract micro-op pair information with flexible spacing
             pattern = r'Micro-op\s+1:\s+([0-9a-fA-Fx]+)\s+Micro-op\s+2:\s+([0-9a-fA-Fx]+)\s+Cacheblock\s+Address:\s+([0-9a-fA-Fx]+)\s+Micro-op\s+1\s+Number:\s+(\d+)'
             match = re.search(pattern, line)
             
@@ -55,193 +61,260 @@ def parse_file(file_path, debug=False):
                 
                 if op_num2_match:
                     op_num2 = int(op_num2_match.group(1))
-                    # Calculate the distance directly: op_num2 - op_num1 - 1
-                    # The -1 accounts for not counting the endpoints
-                    distance = op_num2 - op_num1 - 1
-                    fusion_pairs.append(FusionPair(pc1, pc2, cacheline, op_num1, op_num2, distance))
+                    micro_op_pairs.append(MicroOpPair(pc1, pc2, cacheline, op_num1, op_num2))
                     
-                    if debug and len(fusion_pairs) <= 5:
-                        print(f"Line {line_num}: Distance between Micro-op 1 ({op_num1}) and Micro-op 2 ({op_num2}) = {distance}")
+                    if debug and len(micro_op_pairs) <= 5:
+                        print(f"Line {line_num}: Micro-op 1 ({op_num1}) and Micro-op 2 ({op_num2})")
                 else:
                     # Some lines might be missing op_num2, skip them
                     if debug:
                         print(f"Warning: Line {line_num} missing op_num2: {line.strip()}")
     
-    return fusion_pairs
+    return micro_op_pairs
 
-def generate_histogram(workload, fusion_pairs, output_dir):
-    """Create a histogram visualization for fusion pair distances."""
+def compute_distances(micro_op_pairs):
+    """Compute distances between micro-op pairs in the same cacheline."""
+    # Group pairs by cacheline
+    cacheline_groups = defaultdict(list)
+    for pair in micro_op_pairs:
+        cacheline_groups[pair.cacheline].append(pair)
+    
+    # Compute distances between pairs in the same cacheline
+    distances = []
+    
+    for cacheline, pairs in cacheline_groups.items():
+        # Only compute distances if there are at least 2 pairs for this cacheline
+        if len(pairs) < 2:
+            continue
+            
+        # Compare each pair with every other pair
+        for i in range(len(pairs)):
+            for j in range(i+1, len(pairs)):
+                # Calculate distance between op_num values
+                distance = abs(pairs[i].op_num2 - pairs[j].op_num2)
+                distances.append(distance)
+    
+    return distances
+
+def generate_individual_histograms(workload_data, bins, output_dir, title_template, max_y=None):
+    """Create individual histograms for each workload."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    if not fusion_pairs:
-        print(f"No fusion pairs to visualize for {workload}")
+    # Filter out workloads with no data
+    workload_data = {k: v for k, v in workload_data.items() if v}
+    
+    if not workload_data:
+        print("No data available for visualization")
         return
     
-    # Extract distances
-    distances = [pair.distance for pair in fusion_pairs]
+    # Set up high-quality plotting parameters
+    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams['savefig.dpi'] = 300
+    plt.rcParams['font.family'] = 'serif'
+    plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
     
-    # Define the specific bins as requested
-    bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, float('inf')]
-    bin_labels = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-90", "90-100", ">100"]
+    # Convert string bins to numeric list if needed
+    if isinstance(bins, str):
+        bins = [float(x) for x in bins.split(',')]
     
-    # Compute histogram
-    hist, _ = np.histogram(distances, bins=bins)
+    # Add infinity as the last bin edge if not present
+    if bins[-1] != float('inf'):
+        bins.append(float('inf'))
     
-    # Convert to percentages
-    percentages = hist * 100 / len(distances)
+    # Create custom bin labels
+    bin_labels = []
+    for i in range(len(bins)-1):
+        if i == 0:
+            bin_labels.append('0')  # First bin is exactly 0
+        elif i == len(bins) - 2:  # Last bin before infinity
+            bin_labels.append(f'>{int(bins[i])}')
+        else:
+            bin_labels.append(f'{int(bins[i])}-{int(bins[i+1]-1)}')
     
-    # Create the histogram
-    plt.figure(figsize=(12, 6))
-    bars = plt.bar(range(len(hist)), percentages, alpha=0.7)
+    # Define nice colors
+    bar_color = '#2F8E9E'
     
-    # Add percentage labels on top of each bar
-    for i, bar in enumerate(bars):
-        height = bar.get_height()
-        if height > 0:  # Only add labels to visible bars
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                    f'{percentages[i]:.1f}%',
-                    ha='center', va='bottom', rotation=0)
+    # Map workload names to display names
+    workload_names_map = {
+        'clang': 'Clang',
+        'gcc': 'Gcc',
+        'mysql': 'Mysql',
+        'mongodb': 'Mongodb',
+        'postgres': 'Postgres'
+    }
     
-    plt.title(f'{workload}: Distribution of Distances Within Fusion Pairs')
-    plt.xlabel('Distance (micro-ops)')
-    plt.ylabel('Percentage of Pairs (%)')
-    plt.xticks(range(len(bin_labels)), bin_labels)
-    plt.grid(True, alpha=0.3, linestyle='--', axis='y')
-    
-    # Add text with total count
-    plt.figtext(0.15, 0.85, f"Total Fusion Pairs: {len(fusion_pairs):,}", 
-                bbox=dict(facecolor='white', alpha=0.8))
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'{workload}_fusion_distance_histogram.png'), dpi=300)
-    plt.close()
-    
-    # Create a more detailed histogram for small distances (0-20)
-    small_distances = [d for d in distances if d <= 20]
-    if small_distances:
-        plt.figure(figsize=(12, 6))
+    # Compute overall max count if not specified
+    if max_y is None:
+        max_count = 0
+        for workload, micro_op_pairs in workload_data.items():
+            distances = compute_distances(micro_op_pairs)
+            hist, _ = np.histogram(distances, bins=bins)
+            max_count = max(max_count, max(hist))
         
-        # Use individual bins for 0-20
-        small_bins = list(range(21))
-        small_hist, _ = np.histogram(small_distances, bins=small_bins)
-        small_percentages = small_hist * 100 / len(distances)  # percentage of ALL distances
+        # Round max count up to nearest 100, add some padding for labels
+        max_y = 100 * np.ceil(max_count / 100) + 100
+    
+    # Process each workload
+    for workload, micro_op_pairs in workload_data.items():
+        distances = compute_distances(micro_op_pairs)
         
-        bars = plt.bar(range(len(small_hist)), small_percentages, alpha=0.7)
+        # Compute histogram
+        hist, _ = np.histogram(distances, bins=bins)
         
-        # Add percentage labels
-        for i, bar in enumerate(bars):
+        # Create figure
+        plt.figure(figsize=(10, 6))
+        
+        # Plot bars
+        bars = plt.bar(range(len(hist)), hist, color=bar_color, width=0.7)
+        
+        # Add count labels on top of each bar
+        for bar in bars:
             height = bar.get_height()
-            if height > 0:  # Only add labels to visible bars
-                plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                        f'{small_percentages[i]:.1f}%',
-                        ha='center', va='bottom', rotation=90 if small_percentages[i] < 3 else 0,
-                        fontsize=8 if small_percentages[i] < 5 else 10)
+            plt.text(
+                bar.get_x() + bar.get_width()/2,  # x-position (center of bar)
+                height + max_y * 0.02,            # y-position (just above bar)
+                f'{int(height):,}',               # text (integer count)
+                ha='center',                      # horizontal alignment
+                va='bottom',                      # vertical alignment
+                fontsize=10,                      # font size
+                rotation=0                        # horizontal text
+            )
         
-        plt.title(f'{workload}: Distribution of Small Distances (≤20) Within Fusion Pairs')
-        plt.xlabel('Distance (micro-ops)')
-        plt.ylabel('Percentage of All Pairs (%)')
-        plt.xticks(range(21))
-        plt.grid(True, alpha=0.3, linestyle='--', axis='y')
+        # Set title and labels
+        display_name = workload_names_map.get(workload, workload.capitalize())
+        plt.title(title_template.format(workload=display_name), fontsize=16, pad=10)
+        plt.ylabel('Number of Inter Micro-op Pairs\nAccessing Same Cacheline', fontsize=11)
         
+        # Set xticks and labels
+        plt.xticks(range(len(bin_labels)), bin_labels, fontsize=9, rotation=45, ha='right')
+        
+        # Set consistent y-axis limits
+        plt.ylim(0, max_y)
+        
+        # Add grid lines
+        plt.grid(True, axis='y', linestyle='--', alpha=0.3)
+        
+        # Remove top and right spines
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        
+        # Adjust layout
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f'{workload}_small_fusion_distance_histogram.png'), dpi=300)
+        
+        # Save figure for this workload
+        output_base = os.path.join(output_dir, f'{workload}_inter_pair_distance_histogram')
+        plt.savefig(f'{output_base}.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{output_base}.pdf', format='pdf', bbox_inches='tight')
+        
         plt.close()
+        
+        print(f"Histogram for {workload} saved to {output_base}.png and {output_base}.pdf")
 
-def write_summary_report(workload, fusion_pairs, output_dir):
-    """Write a summary report with metadata and distance statistics."""
+def write_summary_report(workload_data, bins, output_dir):
+    """Write a summary report with metadata and distance statistics for all workloads."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    report_path = os.path.join(output_dir, f'{workload}_summary.txt')
+    report_path = os.path.join(output_dir, 'inter_pair_distance_summary.txt')
     
     with open(report_path, 'w') as f:
-        f.write(f"===== {workload}: Fusion Pair Distance Analysis Summary =====\n\n")
+        f.write("===== Inter Micro-op Pair Distance Analysis Summary =====\n\n")
         
-        # Metadata section
-        f.write("===== Metadata =====\n")
-        f.write(f"Total fusion pairs: {len(fusion_pairs)}\n")
+        f.write(f"{'Workload':<15} | {'Total Pairs':<15} | {'Avg Distance':<15} | {'Median':<10} | {'% ≤10':<10}\n")
+        f.write(f"{'-'*15} | {'-'*15} | {'-'*15} | {'-'*10} | {'-'*10}\n")
         
-        # Count unique cachelines
-        unique_cachelines = len(set(pair.cacheline for pair in fusion_pairs))
-        f.write(f"Total unique cachelines accessed: {unique_cachelines}\n")
-        
-        # Count unique PC pairs
-        unique_pc_pairs = len(set((pair.pc1, pair.pc2) for pair in fusion_pairs))
-        f.write(f"Unique PC pairs: {unique_pc_pairs}\n\n")
-        
-        # Distance statistics
-        if fusion_pairs:
-            distances = [pair.distance for pair in fusion_pairs]
+        for workload in sorted(workload_data.keys()):
+            micro_op_pairs = workload_data[workload]
             
-            f.write("===== Distance Statistics =====\n")
-            f.write(f"Average distance: {np.mean(distances):.2f} micro-ops\n")
-            f.write(f"Median distance: {np.median(distances):.2f} micro-ops\n")
-            f.write(f"Minimum distance: {min(distances)} micro-ops\n")
-            f.write(f"Maximum distance: {max(distances)} micro-ops\n\n")
+            if micro_op_pairs:
+                distances = compute_distances(micro_op_pairs)
+                small_dist_pct = sum(1 for d in distances if d <= 10) * 100 / len(distances)
+                
+                f.write(f"{workload:<15} | {len(micro_op_pairs):<15,d} | {np.mean(distances):<15.2f} | {np.median(distances):<10.2f} | {small_dist_pct:<10.2f}%\n")
+            else:
+                f.write(f"{workload:<15} | {'0':<15} | {'N/A':<15} | {'N/A':<10} | {'N/A':<10}\n")
+                
+        f.write("\n\n")
+        
+        # Detailed statistics by workload
+        for workload, micro_op_pairs in sorted(workload_data.items()):
+            if not micro_op_pairs:
+                continue
+                
+            f.write(f"===== {workload} =====\n")
+            distances = compute_distances(micro_op_pairs)
             
-            # Distance distribution
-            f.write("===== Distance Distribution =====\n")
-            bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, float('inf')]
-            bin_labels = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-90", "90-100", ">100"]
-            
+            # Compute histogram
             hist, _ = np.histogram(distances, bins=bins)
             
-            f.write(f"{'Range':<10} | {'Count':<10} | {'Percentage':<10}\n")
-            f.write(f"{'-'*10} | {'-'*10} | {'-'*10}\n")
+            f.write(f"{'Range':<12} | {'Count':<10} | {'Percentage':<10}\n")
+            f.write(f"{'-'*12} | {'-'*10} | {'-'*10}\n")
+            
+            bin_labels = []
+            for i in range(len(bins)-1):
+                if i == 0:
+                    bin_labels.append('0')
+                elif bins[i+1] == float('inf'):
+                    bin_labels.append(f"> {int(bins[i])}")
+                else:
+                    bin_labels.append(f"{int(bins[i])}-{int(bins[i+1]-1)}")
             
             for i, count in enumerate(hist):
                 percentage = count * 100 / len(distances)
-                f.write(f"{bin_labels[i]:<10} | {count:<10,d} | {percentage:<10.2f}%\n")
-            
-            # Focus on small distances (0-20)
-            f.write("\n===== Small Distances (0-20) =====\n")
-            f.write(f"{'Distance':<10} | {'Count':<10} | {'Percentage':<10}\n")
-            f.write(f"{'-'*10} | {'-'*10} | {'-'*10}\n")
-            
-            for distance in range(21):
-                count = sum(1 for d in distances if d == distance)
-                percentage = count * 100 / len(distances)
-                f.write(f"{distance:<10} | {count:<10,d} | {percentage:<10.2f}%\n")
-            
-            # Top cachelines
-            cacheline_counts = defaultdict(int)
-            for pair in fusion_pairs:
-                cacheline_counts[pair.cacheline] += 1
+                f.write(f"{bin_labels[i]:<12} | {count:<10,d} | {percentage:<10.2f}%\n")
                 
-            f.write("\n===== Top Cachelines by Pair Count =====\n")
-            top_cachelines = sorted(cacheline_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-            
-            for i, (cacheline, count) in enumerate(top_cachelines, 1):
-                percentage = count * 100 / len(fusion_pairs)
-                f.write(f"{i}. Cacheline {cacheline}: {count} pairs ({percentage:.2f}%)\n")
-                
-            # Example pairs with very small distances
-            small_pairs = [pair for pair in fusion_pairs if pair.distance <= 5]
-            if small_pairs:
-                f.write("\n===== Examples of Pairs with Very Small Distances (≤5) =====\n")
-                for i, pair in enumerate(sorted(small_pairs, key=lambda x: x.distance)[:10], 1):
-                    f.write(f"{i}. Distance {pair.distance}: PC1={pair.pc1}, PC2={pair.pc2}, Cacheline={pair.cacheline}\n")
-            
-        else:
-            f.write("No fusion pairs found for this workload.\n")
+            f.write("\n")
     
     print(f"Summary report written to {report_path}")
 
-def write_csv_data(workload, fusion_pairs, output_dir):
-    """Write raw fusion pair data to a CSV file."""
+def write_csv_data(workload_data, bins, output_dir):
+    """Write CSV data for all workloads."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    csv_path = os.path.join(output_dir, f'{workload}_fusion_pairs.csv')
+    # Write histogram data CSV
+    hist_data_path = os.path.join(output_dir, 'histogram_data.csv')
     
-    with open(csv_path, 'w') as f:
-        f.write("pc1,pc2,cacheline,op_num1,op_num2,distance\n")
+    with open(hist_data_path, 'w') as f:
+        # Create header with bin labels
+        bin_labels = []
+        for i in range(len(bins)-1):
+            if i == 0:
+                bin_labels.append('0')
+            elif bins[i+1] == float('inf'):
+                bin_labels.append(f">{int(bins[i])}")
+            else:
+                bin_labels.append(f"{int(bins[i])}-{int(bins[i+1]-1)}")
         
-        for pair in fusion_pairs:
-            f.write(f"{pair.pc1},{pair.pc2},{pair.cacheline},{pair.op_num1},{pair.op_num2},{pair.distance}\n")
+        f.write("workload," + ",".join(bin_labels) + "\n")
+        
+        # Write data for each workload
+        for workload, micro_op_pairs in sorted(workload_data.items()):
+            if not micro_op_pairs:
+                continue
+                
+            distances = compute_distances(micro_op_pairs)
+            hist, _ = np.histogram(distances, bins=bins)
+            
+            f.write(f"{workload}," + ",".join(f"{c}" for c in hist) + "\n")
     
-    print(f"CSV data written to {csv_path}")
+    print(f"Histogram data CSV written to {hist_data_path}")
+    
+    # Write raw pair data for each workload
+    for workload, micro_op_pairs in workload_data.items():
+        if not micro_op_pairs:
+            continue
+            
+        csv_path = os.path.join(output_dir, f'{workload}_inter_pairs.csv')
+        
+        with open(csv_path, 'w') as f:
+            f.write("pc1,pc2,cacheline,op_num1,op_num2\n")
+            
+            for pair in micro_op_pairs:
+                f.write(f"{pair.pc1},{pair.pc2},{pair.cacheline},{pair.op_num1},{pair.op_num2}\n")
+        
+        print(f"CSV data written to {csv_path}")
 
 def main():
     args = parse_args()
@@ -255,22 +328,10 @@ def main():
     if not os.path.exists(args.output):
         os.makedirs(args.output)
     
-    # Debug: print a sample line from each file
-    if args.debug:
-        print("=== Debug Information ===")
-        if os.path.isdir(args.input):
-            files = glob.glob(os.path.join(args.input, "*.txt"))
-            for file_path in files:
-                try:
-                    with open(file_path, 'r') as f:
-                        for line in f:
-                            if "Micro-op 1:" in line:
-                                print(f"Sample line from {os.path.basename(file_path)}:")
-                                print(f"  {line.strip()}")
-                                break
-                except Exception as e:
-                    print(f"Error reading {file_path}: {e}")
-        print("=== End Debug Information ===")
+    # Parse bins
+    bins = [float(x) for x in args.bins.split(',')]
+    if bins[-1] != float('inf'):
+        bins.append(float('inf'))
     
     # Get list of workload files
     if os.path.isdir(args.input):
@@ -285,110 +346,28 @@ def main():
         return
     
     # Process each workload file
-    combined_report_data = []
+    workload_data = {}
     
     for file_path in files:
         workload = os.path.splitext(os.path.basename(file_path))[0]
         print(f"Processing {workload}...")
         
-        # Parse file to extract fusion pairs
-        fusion_pairs = parse_file(file_path, args.debug)
-        print(f"  Found {len(fusion_pairs)} fusion pairs")
+        # Parse file to extract micro-op pairs
+        micro_op_pairs = parse_file(file_path, args.debug)
+        print(f"  Found {len(micro_op_pairs)} micro-op pairs")
         
-        if fusion_pairs:
-            # Generate histogram
-            generate_histogram(workload, fusion_pairs, args.output)
-            
-            # Write summary report
-            write_summary_report(workload, fusion_pairs, args.output)
-            
-            # Write CSV data
-            write_csv_data(workload, fusion_pairs, args.output)
-            
-            # Collect data for combined report
-            distances = [pair.distance for pair in fusion_pairs]
-            small_dist_pct = sum(1 for d in distances if d <= 10) * 100 / len(distances)
-            combined_report_data.append({
-                'workload': workload,
-                'total_pairs': len(fusion_pairs),
-                'avg_distance': np.mean(distances),
-                'median_distance': np.median(distances),
-                'small_dist_pct': small_dist_pct
-            })
+        # Store micro-op pairs for this workload
+        workload_data[workload] = micro_op_pairs
     
-    # Create combined summary report
-    if combined_report_data:
-        combined_report_path = os.path.join(args.output, 'combined_summary.txt')
-        with open(combined_report_path, 'w') as f:
-            f.write("===== Combined Summary for All Workloads =====\n\n")
-            
-            f.write(f"{'Workload':<15} | {'Total Pairs':<15} | {'Avg Distance':<15} | {'Median':<10} | {'% ≤10':<10}\n")
-            f.write(f"{'-'*15} | {'-'*15} | {'-'*15} | {'-'*10} | {'-'*10}\n")
-            
-            for data in sorted(combined_report_data, key=lambda x: x['median_distance']):
-                f.write(f"{data['workload']:<15} | {data['total_pairs']:<15,d} | {data['avg_distance']:<15.2f} | {data['median_distance']:<10.2f} | {data['small_dist_pct']:<10.2f}%\n")
-        
-        print(f"Combined summary written to {combined_report_path}")
-        
-        # Generate combined histogram
-        plt.figure(figsize=(14, 8))
-        
-        # Prepare data
-        workloads = [data['workload'] for data in combined_report_data]
-        medians = [data['median_distance'] for data in combined_report_data]
-        pct_small = [data['small_dist_pct'] for data in combined_report_data]
-        
-        # Sort by median distance
-        sorted_indices = np.argsort(medians)
-        sorted_workloads = [workloads[i] for i in sorted_indices]
-        sorted_medians = [medians[i] for i in sorted_indices]
-        sorted_pct_small = [pct_small[i] for i in sorted_indices]
-        
-        # Create bar chart
-        bars = plt.bar(range(len(sorted_workloads)), sorted_medians, alpha=0.7)
-        
-        # Add labels
-        for i, bar in enumerate(bars):
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                    f'{sorted_medians[i]:.1f}',
-                    ha='center', va='bottom')
-        
-        plt.title('Median Distance Within Fusion Pairs by Workload')
-        plt.xlabel('Workload')
-        plt.ylabel('Median Distance (micro-ops)')
-        plt.xticks(range(len(sorted_workloads)), sorted_workloads, rotation=45)
-        plt.grid(True, alpha=0.3, linestyle='--', axis='y')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(args.output, 'combined_median_distances.png'), dpi=300)
-        plt.close()
-        
-        # Create bar chart for percentage of small distances
-        plt.figure(figsize=(14, 8))
-        
-        # Sort by percentage of small distances (descending)
-        sorted_indices = np.argsort(pct_small)[::-1]
-        sorted_workloads = [workloads[i] for i in sorted_indices]
-        sorted_pct_small = [pct_small[i] for i in sorted_indices]
-        
-        bars = plt.bar(range(len(sorted_workloads)), sorted_pct_small, alpha=0.7)
-        
-        for i, bar in enumerate(bars):
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                    f'{sorted_pct_small[i]:.1f}%',
-                    ha='center', va='bottom')
-        
-        plt.title('Percentage of Fusion Pairs with Small Distances (≤10) by Workload')
-        plt.xlabel('Workload')
-        plt.ylabel('Percentage (%)')
-        plt.xticks(range(len(sorted_workloads)), sorted_workloads, rotation=45)
-        plt.grid(True, alpha=0.3, linestyle='--', axis='y')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(args.output, 'combined_small_distances_percentage.png'), dpi=300)
-        plt.close()
+    # Generate individual histograms
+    title_template = "Inter Micro-op PC Pair Distance: {workload}"
+    generate_individual_histograms(workload_data, bins, args.output, title_template, args.max_y)
+    
+    # Write combined summary report
+    write_summary_report(workload_data, bins, args.output)
+    
+    # Write CSV data
+    write_csv_data(workload_data, bins, args.output)
     
     print(f"Analysis complete. Results saved to {args.output}/")
 
