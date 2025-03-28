@@ -204,6 +204,7 @@
    new_load->reg_id = op->inst_info->srcs[0].id; // Flattened register number (unique across sets)
    new_load->effec_addr = op->oracle_info.va; 
    new_load->micro_op_id = micro_op_num;
+   new_load->mem_size = op->table_info->mem_size; 
   //  new_load->never_fuse = false;
 
    
@@ -313,8 +314,8 @@
               // Print fusion candidates and their cacheblock offsets
               // printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\n", 
               //    curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id);
-              printf("Micro-op 1: %-16llx  Micro-op 2: %-16llx  Cacheblock Address: %-16llx  Micro-op 1 Number: %-8d  Micro-op 2 Number: %-8d\n", 
-                curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, curr->micro_op_id, micro_op_number);
+                printf("Micro-op 1: %-16llx  Micro-op 2: %-16llx  Cacheblock Address: %-16llx  Micro-op 1 Number: %-8d  Micro-op 2 Number: %-8d\t Micro-op 1 Memory Size: %-8d  Micro-op 2 Memory Size: %-8d\n",
+                  curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size);
  
                return curr->op;
            }
@@ -408,7 +409,7 @@
 
       micro_op_number++;
 
-      // printf("Micro-op %llx: Micro-op Number: %d\n", op->inst_info->addr, micro_op_number);
+      // printf("[in find] Micro-op %llx: Micro-op Number: %d\n", op->inst_info->addr, micro_op_number);
 
        
        if (FUSION_DEBUG_ENABLED) {

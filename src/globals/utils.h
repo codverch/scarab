@@ -397,6 +397,7 @@ typedef struct FusionLoad {
     bool already_fused;        // Flag to indicate if this load has been involved in fusion
     uns16 reg_id;  // flattened register number (unique across sets)
     unsigned int micro_op_id; // Tracking all micro-ops (throughout the application) based on their occurrence order in the trace
+    unsigned int mem_size; // Number of bytes read by this load
 
 } FusionLoad;
 
