@@ -78,6 +78,7 @@
  #define FUSION_DEBUG_ENABLED FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
+ static unsigned int micro_op_num_global = 0; 
  
  /**************************************************************************************/
  /* Global Variables */
@@ -200,6 +201,8 @@
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
+   new_load->micro_op_num =  micro_op_num_global; 
+   new_load->mem_size = op->table_info->mem_size; 
   //  new_load->never_fuse = false;
 
    
@@ -291,9 +294,7 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused && 
-               curr->op != op && 
-               curr->op->table_info->mem_type == MEM_LD) {
+               !curr->already_fused) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -302,7 +303,14 @@
                    printf("[find_same_cacheline_fusion_candidate] Its cacheline address is: %llx\n", curr->cacheline_addr);
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
- 
+
+               // add prints to files.
+               // 1. Print PC addresses of both, Cacheblock addresses of both 
+               // 2. Print (1) + print memory sizes 
+               // 3. Print (2) + print base register of both micro-ops 
+              // Pc addr: op->inst_info_addr
+              // instruction addr: op->oracle_info.va 
+
                return curr->op;
            }
        }
@@ -388,6 +396,8 @@
    // Process each load in the current fetch group
    for (int i = 0; i < cur_data->op_count; i++) {
        Op* op = cur_data->ops[i];
+
+      micro_op_num_global++; 
        
        if (FUSION_DEBUG_ENABLED) {
            printf("[fuse_same_cacheline_loads] Processing op #%d at PC 0x%llx (type: %d)\n", 
