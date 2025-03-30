@@ -201,7 +201,8 @@
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
-   new_load->reg_id = op->inst_info->srcs[0].id; // Flattened register number (unique across sets)
+  //  new_load->reg_id = op->inst_info->srcs[0].id; // Flattened register number (unique across sets)
+   new_load->reg_id = op->inst_info->srcs[0].id;
    new_load->effec_addr = op->oracle_info.va; 
    new_load->micro_op_id = micro_op_num;
    new_load->mem_size = op->table_info->mem_size; 
@@ -307,15 +308,14 @@
                }
 
               // First op cacheblock offset 
-              // unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
-              // unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
+              unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
+              unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
 
 
               // Print fusion candidates and their cacheblock offsets
-              // printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\n", 
-              //    curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id);
-                printf("Micro-op 1: %-16llx  Micro-op 2: %-16llx  Cacheblock Address: %-16llx  Micro-op 1 Number: %-8d  Micro-op 2 Number: %-8d\t Micro-op 1 Memory Size: %-8d  Micro-op 2 Memory Size: %-8d\n",
-                  curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size);
+              // print PC, cacheblock, offset, base reg, micro-op id, and memory size for both ops in one line
+              printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\tOp1 micro-op id: %d\tOp2 micro-op id: %d\tOp1 mem size: %d\tOp2 mem size: %d\n", 
+                curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size);
  
                return curr->op;
            }
@@ -1310,6 +1310,9 @@
  
    for (uns ii = 0; ii < cur_data->op_count; ii++) {
      Op* op = cur_data->ops[ii];
+
+     
+
 
      if(FUSION_DEBUG_ENABLED) {
         printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
