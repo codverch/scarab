@@ -395,6 +395,9 @@
      bool already_fused;        // Flag to indicate if this load has been involved in fusion
      unsigned int micro_op_num; 
      unsigned int mem_size; 
+     unsigned int base_reg;
+     Addr effec_addr; 
+     uns num_reg;
  } FusionLoad;
  
  

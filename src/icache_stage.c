@@ -201,8 +201,11 @@
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
+   new_load->effec_addr = op->oracle_info.va; // Store the effective address for debugging
    new_load->micro_op_num =  micro_op_num_global; 
    new_load->mem_size = op->table_info->mem_size; 
+   new_load->base_reg = op->inst_info->srcs[0].reg; // Assuming the base register is the first source register
+   new_load->num_reg = op->inst_info->table_info->num_src_regs; // Number of source registers used in the load operation
   //  new_load->never_fuse = false;
 
    
@@ -282,6 +285,7 @@
    
    Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    unsigned int hash_idx = hash_cacheline(cacheline_addr);
+
    
    if (FUSION_DEBUG_ENABLED) {
        printf("[find_same_cacheline_fusion_candidate] Cacheline Address: %llx\n", cacheline_addr);
@@ -290,6 +294,7 @@
    
    // Check current cache line bucket
    FusionLoad* curr = fusion_hash[hash_idx];
+   FILE* output_file = fopen("/users/pragna/scarab_setup/fusion_candidates_sssp.txt", "a");
    
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
@@ -304,12 +309,36 @@
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
 
+              unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F; // curr
+              unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F; // candidate
+
+               
                // add prints to files.
                // 1. Print PC addresses of both, Cacheblock addresses of both 
-               // 2. Print (1) + print memory sizes 
+               Addr PC_addr_curr = curr->pc_addr;
+               Addr PC_addr_cand = op->inst_info->addr;
+               
+               Addr cacheblock_addr_curr = curr->cacheline_addr;
+               Addr cacheblock_addr_cand = get_cacheline_addr(op->oracle_info.va);
+                unsigned int mem_size_cand = op->table_info->mem_size;
+                unsigned int mem_size_curr = curr->mem_size;
+
                // 3. Print (2) + print base register of both micro-ops 
-              // Pc addr: op->inst_info_addr
-              // instruction addr: op->oracle_info.va 
+                unsigned int base_reg_cand = op->inst_info->srcs[0].reg;
+                unsigned int base_reg_curr = curr->base_reg;
+                uns mem_reg_cand = op->inst_info->table_info->num_src_regs; // if this is > 0 then its using a src register. else using imm value.
+                uns mem_reg_curr = curr->num_reg; //print this also.
+
+              // micro op number
+              unsigned int micro_op_num_cand = micro_op_num_global;
+              unsigned int micro_op_num_curr = curr->micro_op_num;
+
+              // print everything for curr
+              fprintf(output_file, "\n Offset, PC_addr_curr, cacheblock_addr_curr, mem_size_curr, base_reg_curr, num_reg_curr, micro_op_num_curr : %llx, %llx, %llx, %d, %d, %d, %d\n", 
+                  cacheblock_offset_micro_op_1, PC_addr_curr, cacheblock_addr_curr, mem_size_curr, base_reg_curr, mem_reg_curr, micro_op_num_curr);
+              // print everything for candidate
+              fprintf(output_file, "Offset, PC_addr_cand, cacheblock_addr_cand, mem_size_cand, base_reg_cand, num_reg_cand, micro_op_num_cand : %llx, %llx, %llx, %d, %d, %d, %d\n", 
+                  cacheblock_offset_micro_op_2, PC_addr_cand, cacheblock_addr_cand, mem_size_cand, base_reg_cand, mem_reg_cand, micro_op_num_cand);
 
                return curr->op;
            }
@@ -383,7 +412,7 @@
        printf("\n\n\n");
        printf("[fuse_same_cacheline_loads] Processing %d ops for fusion\n", cur_data->op_count);
    }
-   
+
    if (!fusion_table_initialized) {
        if (FUSION_DEBUG_ENABLED) {
            printf("[fuse_same_cacheline_loads] Fusion table not initialized, initializing now\n");
@@ -1296,6 +1325,7 @@
  
    for (uns ii = 0; ii < cur_data->op_count; ii++) {
      Op* op = cur_data->ops[ii];
+
 
      if(FUSION_DEBUG_ENABLED) {
         printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
