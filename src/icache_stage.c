@@ -314,10 +314,22 @@
 
               // Print fusion candidates and their cacheblock offsets
               // print PC, cacheblock, offset, base reg, micro-op id, and memory size for both ops in one line
-              printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\tOp1 micro-op id: %d\tOp2 micro-op id: %d\tOp1 mem size: %d\tOp2 mem size: %d\n", 
-                curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size);
- 
-               return curr->op;
+              // printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\tOp1 micro-op id: %d\tOp2 micro-op id: %d\tOp1 mem size: %d\tOp2 mem size: %d\n", 
+              //   curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size);
+
+              // if the memory size is same and base register is same, then return the candidate
+              // and the differeence in micro-ops is less than or equal to 10 i.e., 1-10 micro-ops
+
+              if(curr->mem_size == op->table_info->mem_size && curr->reg_id == op->inst_info->srcs[0].id) {
+                if(micro_op_number - curr->micro_op_id <= 10) {
+                  return curr->op;
+                }
+              }
+
+              else {
+                return NULL;  // No suitable candidate found
+              }
+               
            }
        }
        curr = curr->next;
