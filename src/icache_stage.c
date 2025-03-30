@@ -297,7 +297,12 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-            !curr->already_fused) {
+            !curr->already_fused &&
+            curr->mem_size == op->table_info->mem_size &&
+            curr->reg_id == op->inst_info->srcs[0].id &&
+            micro_op_number - curr->micro_op_id <= 10
+          
+          ) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -308,8 +313,8 @@
                }
 
               // First op cacheblock offset 
-              unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
-              unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
+              // unsigned long long cacheblock_offset_micro_op_1 = curr->effec_addr & 0x3F;
+              // unsigned long long cacheblock_offset_micro_op_2 = op->oracle_info.va & 0x3F;
 
 
               // Print fusion candidates and their cacheblock offsets
@@ -320,15 +325,7 @@
               // if the memory size is same and base register is same, then return the candidate
               // and the differeence in micro-ops is less than or equal to 10 i.e., 1-10 micro-ops
 
-              if(curr->mem_size == op->table_info->mem_size && curr->reg_id == op->inst_info->srcs[0].id) {
-                if(micro_op_number - curr->micro_op_id <= 10) {
-                  return curr->op;
-                }
-              }
-
-              else {
-                return NULL;  // No suitable candidate found
-              }
+              return curr->op;  // Return the candidate for fusion
                
            }
        }
