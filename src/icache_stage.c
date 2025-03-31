@@ -335,9 +335,7 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-            !curr->already_fused &&
-            curr->mem_size == op->table_info->mem_size &&
-            curr->reg_id == op->inst_info->srcs[0].id
+            !curr->already_fused 
           
           ) {
  
@@ -483,6 +481,12 @@
        if (FUSION_DEBUG_ENABLED) {
            printf("[fuse_same_cacheline_loads] Processing op #%d at PC 0x%llx (type: %d)\n", 
                i, op->inst_info->addr, op->table_info->mem_type);
+       }
+
+
+       // Print memory stores and their cacheblock address
+       if(op->table_info->mem_type == MEM_ST) {
+        printf("Store PC: %llx\tStore Cacheblock: %llx\tMicro-op num: %d\n", op->inst_info->addr, get_cacheline_addr(op->oracle_info.va), micro_op_number);
        }
        
        // Skip non-load ops or loads that have already been neutralized
