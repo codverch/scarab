@@ -259,13 +259,14 @@
                     continue;
                 }
             }
+
+            // printf("Op1 PC: %llx, Op2 PC: %llx, Distance: %d\n", op1_addr, op2_addr, distance);
             
-            // Skip pairs with distance > 10 since we only want to fuse
-            // micro-op pairs with distance <= 10
-            if (distance > 10) {
-                continue;
+            // Skip pairs with distance outside the range 1-20
+            if (distance < 1 || distance > 20) {
+              continue;
             }
-            
+                        
             if (FUSION_DEBUG) {
                 printf("[FUSION_INIT] Loaded pair: op1=0x%llx, op2=0x%llx, distance=%d\n", 
                        op1_addr, op2_addr, distance);
@@ -499,12 +500,14 @@
   Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
   unsigned int hash_idx = hash_cacheline(cacheline_addr);
   FusionLoad* curr = fusion_hash[hash_idx];
+
   while (curr) {
     //* Skip invalid entries*
     if (!curr->op || !curr->op->inst_info || !curr->op->table_info) {
       curr = curr->next;
       continue;
     }
+
     if (curr->cacheline_addr == cacheline_addr &&
         !curr->already_fused &&
         !curr->never_fuse &&
@@ -512,25 +515,32 @@
         curr->reg_id == op->inst_info->srcs[0].id  // same base register 
         ) {
 
+
       unsigned int pair_hash_idx = hash_uop_pair(op->inst_info->addr, curr->op->inst_info->addr);
       bool found_in_table = false;
       bool should_fuse = false;
       unsigned int search_idx = pair_hash_idx;
+
       while(pair_frequency_table[search_idx] != NULL && pair_frequency_table[search_idx]->valid && (
             pair_frequency_table[search_idx]->op1_addr != curr->pc_addr ||
             pair_frequency_table[search_idx]->op2_addr != op->inst_info->addr)
           ) {
             search_idx = (search_idx + 1) % PAIR_HASH_SIZE;
           }
+
       /* Check pair frequency table (only once) - each pair_hash_idx has only one FusionPairFreq struct */
       if (pair_frequency_table[search_idx] != NULL &&
           pair_frequency_table[search_idx]->valid &&
           pair_frequency_table[search_idx]->op1_addr == curr->pc_addr  &&
           pair_frequency_table[search_idx]->op2_addr == op->inst_info->addr) {
         found_in_table = true;
+
+        printf("Found in table\n");
         
-        /* Fuse only pairs that have a distance <= 10 */
-        if (pair_frequency_table[search_idx]->distance <= 10) {
+        /* Fuse only pairs that have a distance between 1 and 20 */
+        if (pair_frequency_table[search_idx]->distance >= 1 && 
+          pair_frequency_table[search_idx]->distance <= 20) {
+          
           should_fuse = true;
           fusion_table_found++;
           // printf("fusion table found: %d\n", fusion_table_found);
