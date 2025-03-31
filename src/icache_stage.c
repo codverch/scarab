@@ -263,7 +263,7 @@
             // printf("Op1 PC: %llx, Op2 PC: %llx, Distance: %d\n", op1_addr, op2_addr, distance);
             
             // Skip pairs with distance outside the range 1-20
-            if (distance < 51 || distance > 100) {
+            if (distance < 101) {
               continue;
             }
                         
@@ -536,9 +536,8 @@
         found_in_table = true;
 
         
-        /* Fuse only pairs that have a distance between 1 and 20 */
-        if (pair_frequency_table[search_idx]->distance >= 51 && 
-          pair_frequency_table[search_idx]->distance <= 100) {
+        /* Fuse only pairs that have a distance greater than 100 */
+        if (pair_frequency_table[search_idx]->distance >= 100) {
           
           should_fuse = true;
           fusion_table_found++;
