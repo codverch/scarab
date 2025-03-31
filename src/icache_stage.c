@@ -72,7 +72,7 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS FALSE
  #define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
  #define FUSION_DEBUG_ENABLED FALSE
@@ -206,8 +206,46 @@
    new_load->effec_addr = op->oracle_info.va; 
    new_load->micro_op_id = micro_op_num;
    new_load->mem_size = op->table_info->mem_size; 
-  //  new_load->never_fuse = false;
+   // check whether reg-to-reg or reg-to-mem load
 
+   // check if the source is a register
+   bool src_is_reg = false;
+    for (int i = 0; i < op->table_info->num_src_regs; i++) {
+        if (op->inst_info->srcs[i].type == INT_REG || op->inst_info->srcs[i].type == FP_REG
+            || op->inst_info->srcs[i].type == SPEC_REG || op->inst_info->srcs[i].type == EXTRA_REG) {
+            // src is a register
+            src_is_reg = true;
+            break;
+        }
+    }
+
+    // check if the destination is a register
+    bool dest_is_reg = false;
+    for (int i = 0; i < op->table_info->num_dest_regs; i++) {
+        if (op->inst_info->dests[i].type == INT_REG || op->inst_info->dests[i].type == FP_REG
+            || op->inst_info->dests[i].type == SPEC_REG || op->inst_info->dests[i].type == EXTRA_REG) {
+            // dest is a register
+            // set the flag to true
+            dest_is_reg = true;
+            break;
+        }
+    }
+
+    // classify the load as reg-to-reg or reg-to-mem
+    if (src_is_reg && dest_is_reg) {
+        new_load->reg_to_reg = true;
+        new_load->reg_to_mem = false;
+    }
+    // source is not a register and destination is a register this means 
+    // it is loading from memory to register
+    else if (!src_is_reg && dest_is_reg) {
+        new_load->reg_to_reg = false;
+        new_load->reg_to_mem = true;
+    }
+    else {
+        new_load->reg_to_reg = false;
+        new_load->reg_to_mem = false;
+    }
    
    // hash_idx is computed based on the cacheline address
    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
@@ -318,8 +356,32 @@
 
               // Print fusion candidates and their cacheblock offsets
               // print PC, cacheblock, offset, base reg, micro-op id, and memory size for both ops in one line
-              // printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 Offset: %lld\t Op2 offset: %lld\t Op1 base reg: %d\tOp2 base reg: %d\tOp1 micro-op id: %d\tOp2 micro-op id: %d\tOp1 mem size: %d\tOp2 mem size: %d\n", 
-              //   curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, cacheblock_offset_micro_op_1, cacheblock_offset_micro_op_2, curr->reg_id, op->inst_info->srcs[0].id, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size);
+
+               // whether current op is reg-to-reg or reg-to-mem
+
+               bool op_reg_to_reg = false; 
+               for(int i = 0; i < op->table_info->num_src_regs; i++) {
+                   if (op->inst_info->srcs[i].type == INT_REG || op->inst_info->srcs[i].type == FP_REG
+                       || op->inst_info->srcs[i].type == SPEC_REG || op->inst_info->srcs[i].type == EXTRA_REG) {
+                        // src is a register
+                        op_reg_to_reg = true;
+                        break;
+                   }
+               }
+
+                bool op_reg_to_mem = false;
+                for(int i = 0; i < op->table_info->num_dest_regs; i++) {
+                    if (op->inst_info->dests[i].type == INT_REG || op->inst_info->dests[i].type == FP_REG
+                        || op->inst_info->dests[i].type == SPEC_REG || op->inst_info->dests[i].type == EXTRA_REG) {
+                        // dest is a register
+                        op_reg_to_mem = true;
+                        break;
+                    }
+                }
+
+
+              printf("Op1 PC: %llx\t Op2 PC: %llx\t Op1 Cacheblock: %llx\t Op2 Cacheblock: %llx\t Op1 base reg: %d\tOp2 base reg: %d\tOp1 micro-op id: %d\tOp2 micro-op id: %d\tOp1 mem size: %d\tOp2 mem size: %d\tOp1 reg-to-reg: %d\tOp2 reg-to-reg: %d\tOp1 reg-to-mem: %d\tOp2 reg-to-mem: %d\n",
+                curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, curr->reg_id, op->inst_info->srcs[0].id, curr->micro_op_id, micro_op_number, curr->mem_size, op->table_info->mem_size, curr->reg_to_reg, op_reg_to_reg, curr->reg_to_mem, op_reg_to_mem);
  
                return curr->op;
            }
