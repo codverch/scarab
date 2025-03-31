@@ -535,7 +535,6 @@
           pair_frequency_table[search_idx]->op2_addr == op->inst_info->addr) {
         found_in_table = true;
 
-        printf("Found in table\n");
         
         /* Fuse only pairs that have a distance between 1 and 20 */
         if (pair_frequency_table[search_idx]->distance >= 1 && 
