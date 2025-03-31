@@ -398,8 +398,6 @@ typedef struct FusionLoad {
     uns16 reg_id;  // flattened register number (unique across sets)
     unsigned int micro_op_id; // Tracking all micro-ops (throughout the application) based on their occurrence order in the trace
     unsigned int mem_size; // Number of bytes read by this load
-    bool never_fuse;
-
 } FusionLoad;
 
 #define PAIR_HASH_SIZE 65536
