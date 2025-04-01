@@ -308,6 +308,9 @@ static inline Flag map_fetch_fill_op(Stage_Data* src_sd, int* fetch_idx) {
     DEBUG(map->proc_id, "Fetching opnum=%llu from %s at idx=%i\n", op->op_num, src_sd->name, *fetch_idx);
     if (!op->decode_cycle) decode_stage_process_op(op);
     op->map_cycle = cycle_count;
+    if(op->humza_flag) {
+      printf("[MAP] I found the op at cycle %lld\n", cycle_count);
+    }
     dest_sd->ops[dest_sd->op_count++] = op;
     src_sd->ops[*fetch_idx] = NULL;
     src_sd->op_count--;

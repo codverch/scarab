@@ -7,6 +7,7 @@
 #include "prefetcher/pref.param.h"
 #include "memory/memory.param.h"
 
+#include <iostream>
 #include <deque>
 #include <vector>
 #include <iostream>
@@ -507,6 +508,10 @@ void FT::ft_add_op(Op *op, FT_Ended_By ft_ended_by) {
   } else {
     if (op->bom) {
       // assert consecutivity
+      if(!(ops.back()->inst_info->addr + ops.back()->inst_info->trace_info.inst_size
+                      == op->inst_info->addr)) {
+        std::cout << ops.back()->inst_info->addr << " + " << (int) ops.back()->inst_info->trace_info.inst_size << " != " << op->inst_info->addr << std::endl;
+      }
       ASSERT(set_proc_id, ops.back()->inst_info->addr + ops.back()->inst_info->trace_info.inst_size
                       == op->inst_info->addr);
     } else {

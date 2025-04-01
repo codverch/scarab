@@ -507,6 +507,10 @@ void node_issue(Stage_Data* src_sd) {
     /* set op fields */
     op->node_id     = node->node_count;
     op->issue_cycle = cycle_count;
+    
+    if(op->humza_flag) {
+      printf("[ISSUE] I found the op at %lld\n", cycle_count);
+    }
 
     /* add to node list & update node state*/
     ASSERT(node->proc_id, !op->in_node_list);
@@ -971,6 +975,14 @@ void node_retire() {
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
     op->retire_cycle = cycle_count;
+
+    if(op->humza_flag) {
+      printf("[RETIRE] I found the op at %lld\n", cycle_count);
+      printf("To confirm, this is an op with type %d and mem type %d\n", op->table_info->op_type, op->table_info->mem_type);
+    }
+
+      // printf("This is an op with type %d and mem type %d\n", op->table_info->op_type, op->table_info->mem_type);
+    
 
     // free the previous register entries with same architectural destination
     rename_table_commit(op);

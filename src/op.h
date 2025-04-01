@@ -151,6 +151,7 @@ typedef struct Dp_Info_struct {
 // typedef in globals/global_types.h
 struct Op_struct {
   // {{{ op_pool stuff --- don't use outside of op pool management
+  int humza_flag;
   Flag op_pool_valid;  // is op allocated from the op_pool?
   Op*  op_pool_next;   // either next free or next active op
   uns  op_pool_id;     // unique identifier for op (doesn't change)

@@ -384,44 +384,70 @@ int   parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 int compare_uns64(const void*, const void*);
 
 
-
+// yes all of these don't need to be long but I don't want to wrestle with the packing everytime I change something
 struct Mementry {
     long counter;
     long instruction_addr;
-    long num_ld;
-    long read_addresses[8]; // MAX_LD_NUM = 8
-    long num_dst;
-    uint8_t dst_regs[8]; // MAX_DST_REGS_NUM = 8
+    long read_address; 
+    long num_l1d_regs;
+    long l1d_regs[2];
+    long num_dst_regs;
+    uint8_t dst_regs[8];
+    // long num_src_regs; // a memory load should not have src registers
+    // long src_regs[8]; 
 };
 
 struct fusentry {
+    long instruction_addr;
     long counter;
     long num_dst;
-    long dst_regs[8];
-    uint8_t type;
+    uint8_t dst_regs[8];
+    long type;
 };
 
-#define INITIAL_TABLE_SIZE 16
-#define RESIZE_THRESHOLD 0.75
+// humza hash functions below
 
-// Define the hash table structure
-struct hash_table {
-    struct fusentry **table;
-    unsigned long table_size;
-    unsigned long count;  // Number of entries in the table
-};
+#define SB_INITIAL_CAPACITY 16
+#define SB_LOAD_FACTOR 0.5
+#define SB_KEY_MAX_LENGTH 64
 
+// Status values for an entry.
+enum { SB_EMPTY = 0, SB_OCCUPIED = 1, SB_DELETED = 2 };
 
+// The hash table struct.
+typedef struct SB_HashTable {
+    void *entries;       // contiguous block of memory for entries
+    size_t capacity;     // total number of slots
+    size_t size;         // number of OCCUPIED slots
+    size_t value_size;   // size (in bytes) of each value
+    size_t entry_size;   // computed as: sizeof(int) + SB_KEY_MAX_LENGTH + value_size
+} SB_HashTable;
 
-// Function prototypes with python_parsed_ prefix
-unsigned long python_parsed_hash(long counter, unsigned long table_size);
-struct hash_table *python_parsed_create_table(unsigned long size);
-void python_parsed_resize_table(struct hash_table *ht);
-void python_parsed_insert(struct hash_table *ht, struct fusentry *entry);
-struct fusentry *python_parsed_lookup(struct hash_table *ht, long counter);
-void python_parsed_delete_entry(struct hash_table *ht, long counter);
-void python_parsed_read_fusentry_from_file(struct hash_table *ht, const char *filename);
-unsigned long python_parsed_get_table_size(struct hash_table *ht);
+// --- Added hash function prototype ---
+// Computes a hash value for a C string.
+unsigned long sb_hash(const char *str);
+
+// Create a new hash table.
+//   initial_capacity: starting capacity (use SB_INITIAL_CAPACITY if unsure)
+//   value_size: size (in bytes) of the value to store.
+SB_HashTable* sb_create_table(size_t initial_capacity, size_t value_size);
+
+// Free the hash table.
+void sb_free_table(SB_HashTable *ht);
+
+// Insert or update an entry with the given key and value.
+// Returns 0 on success, or -1 on failure.
+int sb_insert(SB_HashTable *ht, const char *key, const void *value);
+
+// Delete the entry with the given key.
+// Returns 0 on success, or -1 if key not found.
+int sb_delete(SB_HashTable *ht, const char *key);
+
+// Retrieve a pointer to the value for the given key.
+// Returns NULL if the key is not found.
+void* sb_get(SB_HashTable *ht, const char *key);
+
+int sb_fusentriess_from_file(SB_HashTable* ht, char* path);
 
 
 #ifdef __cplusplus

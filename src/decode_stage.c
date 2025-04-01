@@ -242,6 +242,10 @@ void decode_stage_process_op(Op* op) {
   Cf_Type cf = op->table_info->cf_type;
   op->decode_cycle = cycle_count;
 
+  if(op->humza_flag) {
+    printf("[DECODE] I found the op at %lld\n", cycle_count);
+  }
+
   if(cf) {
     DEBUG(dec->proc_id, "Decode CF instruction bar:%i fetch_addr:%llx op_num:%llu recover:%i\n",
           op->table_info->bar_type & BAR_FETCH ? TRUE : FALSE, op->inst_info->addr, op->op_num,

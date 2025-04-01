@@ -37,6 +37,8 @@
 #include "core.param.h"
 #include "general.param.h"
 
+#include <time.h>
+
 #define CMP_ADDR_MASK (((Addr)-1) << 58)
 /**************************************************************************************/
 /* breakpoint: A function to help debugging. */
@@ -864,134 +866,243 @@ int parse_string_array(char dest[][MAX_STR_LENGTH + 1], const void* str,
 }
 
 
+// humza hash functions
 
-// Hash function (modified)
-unsigned long python_parsed_hash(long counter, unsigned long table_size) {
-    unsigned long shifted_counter = counter >> 3;  // Divide by 8
-    unsigned long prime_number = 31;
-    return (shifted_counter * prime_number) % table_size;
+
+// Returns a pointer to the status field for a given slot.
+static inline int* sb_entry_status(SB_HashTable *ht, size_t index) {
+    return (int*)((char*)ht->entries + index * ht->entry_size);
 }
 
-// Create a new hash table
-struct hash_table *python_parsed_create_table(unsigned long size) {
-    struct hash_table *ht = (struct hash_table*) malloc(sizeof(struct hash_table));
-    ht->table = (struct fusentry**) malloc(sizeof(struct fusentry *) * size);
-    memset(ht->table, 0, sizeof(struct fusentry *) * size);  // Initialize the table to NULL
-    ht->table_size = size;
-    ht->count = 0;
+// Returns a pointer to the key field for a given slot.
+static inline char* sb_entry_key(SB_HashTable *ht, size_t index) {
+    return (char*)ht->entries + index * ht->entry_size + sizeof(int);
+}
+
+// Returns a pointer to the value field for a given slot.
+static inline void* sb_entry_value(SB_HashTable *ht, size_t index) {
+    return (void*)((char*)ht->entries + index * ht->entry_size + sizeof(int) + SB_KEY_MAX_LENGTH);
+}
+
+// --- Hash function ---
+// Simple hash function for C strings.
+unsigned long sb_hash(const char *str) {
+    unsigned long hash = 15213;
+    int c;
+    size_t len = 0;
+
+    // Loop through each character of the string, making sure we don't exceed SB_KEY_MAX_LENGTH.
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c;
+        if(len++ == (SB_KEY_MAX_LENGTH - 1)) {
+          printf("Warning, hash overflowed\n");
+        }
+    }
+    return hash;
+}
+
+
+// --- Internal function: Resize the hash table ---
+static int sb_resize_table(SB_HashTable *ht, size_t new_capacity) {
+    void *old_entries = ht->entries;
+    size_t old_capacity = ht->capacity;
+    
+    void *new_entries = calloc(new_capacity, ht->entry_size);
+    if (!new_entries)
+        return -1;
+    
+    size_t old_size = ht->size;
+    ht->size = 0;
+    ht->capacity = new_capacity;
+    ht->entries = new_entries;
+    
+    // Reinsert each OCCUPIED entry.
+    for (size_t i = 0; i < old_capacity; i++) {
+        int *old_status = (int*)((char*)old_entries + i * ht->entry_size);
+        if (*old_status == SB_OCCUPIED) {
+            char *old_key = (char*)old_entries + i * ht->entry_size + sizeof(int);
+            void *old_value = (char*)old_entries + i * ht->entry_size + sizeof(int) + SB_KEY_MAX_LENGTH;
+            unsigned long hash_val = sb_hash(old_key);
+            size_t index = hash_val % ht->capacity;
+            while (1) {
+                int *status = (int*)((char*)ht->entries + index * ht->entry_size);
+                if (*status != SB_OCCUPIED) {
+                    *status = SB_OCCUPIED;
+                    char *key_ptr = (char*)ht->entries + index * ht->entry_size + sizeof(int);
+                    memcpy(key_ptr, old_key, SB_KEY_MAX_LENGTH);
+                    void *value_ptr = (char*)ht->entries + index * ht->entry_size + sizeof(int) + SB_KEY_MAX_LENGTH;
+                    memcpy(value_ptr, old_value, ht->value_size);
+                    ht->size++;
+                    break;
+                }
+                index = (index + 1) % ht->capacity;
+            }
+        }
+    }
+    
+    free(old_entries);
+    return (ht->size == old_size) ? 0 : -1;
+}
+
+// --- Create a new hash table ---
+SB_HashTable* sb_create_table(size_t initial_capacity, size_t value_size) {
+    SB_HashTable *ht = malloc(sizeof(SB_HashTable));
+    if (!ht)
+        return NULL;
+    
+    ht->capacity = (initial_capacity > 0) ? initial_capacity : SB_INITIAL_CAPACITY;
+    ht->size = 0;
+    ht->value_size = value_size;
+    ht->entry_size = sizeof(int) + SB_KEY_MAX_LENGTH + value_size;
+    ht->entries = calloc(ht->capacity, ht->entry_size);
+    if (!ht->entries) {
+        free(ht);
+        return NULL;
+    }
+    // Memory is zeroed so all statuses are SB_EMPTY.
     return ht;
 }
 
-// Resize the hash table (double the size)
-void python_parsed_resize_table(struct hash_table *ht) {
-    unsigned long new_size = ht->table_size * 2;
-    struct fusentry **new_table = (struct fusentry**) malloc(sizeof(struct fusentry *) * new_size);
-    memset(new_table, 0, sizeof(struct fusentry *) * new_size);
-
-    // Rehash all existing entries
-    for (unsigned long i = 0; i < ht->table_size; i++) {
-        if (ht->table[i]) {
-            struct fusentry *entry = ht->table[i];
-            unsigned long new_index = python_parsed_hash(entry->counter, new_size);
-
-            // Handle collisions using linear probing
-            while (new_table[new_index]) {
-                new_index = (new_index + 1) % new_size;  // Linear probing
-            }
-
-            new_table[new_index] = entry;
-        }
-    }
-
-    free(ht->table);
-    ht->table = new_table;
-    ht->table_size = new_size;
-}
-
-// Insert a new entry into the hash table
-void python_parsed_insert(struct hash_table *ht, struct fusentry *entry) {
-    // Resize if the load factor exceeds the threshold
-    if (ht->count >= ht->table_size * RESIZE_THRESHOLD) {
-        python_parsed_resize_table(ht);
-    }
-
-    unsigned long index = python_parsed_hash(entry->counter, ht->table_size);
-
-    // Handle collisions using linear probing
-    while (ht->table[index]) {
-        index = (index + 1) % ht->table_size;  // Linear probing
-    }
-
-    ht->table[index] = entry;
-    ht->count++;
-}
-
-// Lookup an entry by counter value
-struct fusentry *python_parsed_lookup(struct hash_table *ht, long counter) {
-    unsigned long index = python_parsed_hash(counter, ht->table_size);
-
-    // Handle collisions using linear probing
-    while (ht->table[index]) {
-        if (ht->table[index]->counter == counter) {
-            return ht->table[index];
-        }
-        index = (index + 1) % ht->table_size;  // Linear probing
-    }
-
-    return NULL;  // Not found
-}
-
-// Delete an entry by counter value
-void python_parsed_delete_entry(struct hash_table *ht, long counter) {
-    unsigned long index = python_parsed_hash(counter, ht->table_size);
-
-    // Handle collisions using linear probing
-    while (ht->table[index]) {
-        if (ht->table[index]->counter == counter) {
-            free(ht->table[index]);
-            ht->table[index] = NULL;
-            ht->count--;
-            return;
-        }
-        index = (index + 1) % ht->table_size;  // Linear probing
-    }
-}
-
-// Function to read fusentry from the binary file and store it in the hash table
-void python_parsed_read_fusentry_from_file(struct hash_table *ht, const char *filename) {
-    FILE *file = fopen(filename, "rb");
-    if (!file) {
-        perror("Error opening file");
+// --- Free the hash table ---
+void sb_free_table(SB_HashTable *ht) {
+    if (!ht)
         return;
+    free(ht->entries);
+    free(ht);
+}
+
+// --- Insert or update an entry ---
+int sb_insert(SB_HashTable *ht, const char *key, const void *value) {
+    if ((double)ht->size / ht->capacity > SB_LOAD_FACTOR) {
+        if (sb_resize_table(ht, ht->capacity * 2) != 0)
+            return -1;
     }
-
-    struct fusentry *entry;
-    unsigned long size_of_entry = sizeof(struct fusentry);
-
+    
+    unsigned long hash_val = sb_hash(key);
+    size_t index = hash_val % ht->capacity;
+    size_t first_deleted = (size_t)-1;
+    
     while (1) {
-        entry = (struct fusentry*) malloc(size_of_entry);
-        size_t bytes_read = fread(entry, 1, size_of_entry, file);
-        printf("Got %ld -- %d\n", entry->counter, entry->type);
-        if (bytes_read < size_of_entry) {
-            // Break if we reach the end of the file or there's an error
-            if (bytes_read == 0) {
-                break;
-            } else {
-                perror("Error reading file");
-                free(entry);
-                break;
+        int *status = sb_entry_status(ht, index);
+        if (*status == SB_EMPTY) {
+            if (first_deleted != (size_t)-1)
+                index = first_deleted;
+            *sb_entry_status(ht, index) = SB_OCCUPIED;
+            char *key_ptr = sb_entry_key(ht, index);
+            strncpy(key_ptr, key, SB_KEY_MAX_LENGTH - 1);
+            key_ptr[SB_KEY_MAX_LENGTH - 1] = '\0';
+            memcpy(sb_entry_value(ht, index), value, ht->value_size);
+            ht->size++;
+            return 0;
+        } else if (*status == SB_DELETED) {
+            if (first_deleted == (size_t)-1)
+                first_deleted = index;
+        } else if (*status == SB_OCCUPIED) {
+            char *key_ptr = sb_entry_key(ht, index);
+            if (strncmp(key, key_ptr, SB_KEY_MAX_LENGTH) == 0) {
+                // Key exists; update value.
+                memcpy(sb_entry_value(ht, index), value, ht->value_size);
+                return 0;
             }
         }
-        
-        // Insert the entry into the hash table
-        python_parsed_insert(ht, entry);
+        index = (index + 1) % ht->capacity;
     }
+    return -1; // Should never reach here.
+}
 
+// --- Delete an entry ---
+int sb_delete(SB_HashTable *ht, const char *key) {
+    unsigned long hash_val = sb_hash(key);
+    size_t index = hash_val % ht->capacity;
+    while (1) {
+        int *status = sb_entry_status(ht, index);
+        if (*status == SB_EMPTY)
+            return -1;  // Key not found.
+        if (*status == SB_OCCUPIED) {
+            char *key_ptr = sb_entry_key(ht, index);
+            if (strncmp(key, key_ptr, SB_KEY_MAX_LENGTH) == 0) {
+                *status = SB_DELETED;
+                ht->size--;
+                return 0;
+            }
+        }
+        index = (index + 1) % ht->capacity;
+    }
+    return -1;
+}
+
+// --- Retrieve an entry's value ---
+void* sb_get(SB_HashTable *ht, const char *key) {
+    unsigned long hash_val = sb_hash(key);
+    size_t index = hash_val % ht->capacity;
+    while (1) {
+        int *status = sb_entry_status(ht, index);
+        if (*status == SB_EMPTY)
+            return NULL;
+        if (*status == SB_OCCUPIED) {
+            char *key_ptr = sb_entry_key(ht, index);
+            if (strncmp(key, key_ptr, SB_KEY_MAX_LENGTH) == 0)
+                return sb_entry_value(ht, index);
+        }
+        index = (index + 1) % ht->capacity;
+    }
+    return NULL;
+}
+
+int sb_fusentriess_from_file(SB_HashTable* ht, char* path) {
+  if (!ht || ht->value_size != sizeof(struct fusentry)) {
+    printf("Either ht is null or expects a different size\n");
+    exit(1);
+  }
+
+  FILE *file = fopen(path, "rb");
+  if (!file) {
+    printf("Couldn't open %s\n", path);
+    exit(1);
+  }
+
+  // Determine total number of entries
+  fseek(file, 0, SEEK_END);
+  long file_size = ftell(file);
+  rewind(file);
+
+  size_t total_entries = file_size / sizeof(struct fusentry);
+  if (total_entries == 0) {
+    printf("File is empty or does not contain valid entries.\n");
     fclose(file);
-}
+    return -1;
+  }
 
-// Function to get the current size (number of elements) of the hash table
-unsigned long python_parsed_get_table_size(struct hash_table *ht) {
-    return ht->count;
-}
+  struct fusentry F;
+  unsigned long read_count = 0;
+  int next_update = 5;  // Update every 5%
 
+  printf("Reading from %s (%zu entries)...\n", path, total_entries);
+
+  // Start timing
+  clock_t start_time = clock();
+
+  while (fread(&F, sizeof(struct fusentry), 1, file) == 1) {
+    char key[128];
+    sprintf(key, "%ld,%ld", F.instruction_addr, F.counter);
+    sb_insert(ht, key, &F);
+    read_count++;
+
+    int percentage = (int)(100.0 * read_count / total_entries);
+    if (percentage >= next_update) {
+      // Calculate rate
+      double elapsed_secs = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+      double rate = elapsed_secs > 0 ? read_count / elapsed_secs : 0;
+
+      printf("\rProgress: [%3d%%] - Rate: %.2f entries/sec", percentage, rate);
+      fflush(stdout);
+
+      next_update += 5;  // Update at next 5% mark
+    }
+  }
+
+  fclose(file);
+  printf("\n[hash] Read %ld entries from %s\n", read_count, path);
+
+  return 0;
+}

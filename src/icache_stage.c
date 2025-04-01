@@ -863,6 +863,10 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
     thread_map_mem_dep(op);
     op->fetch_cycle = cycle_count;
 
+    if(op->humza_flag) {
+      printf("[FETCH] I found the op at cycle %lld\n", cycle_count);
+    }
+
     op_count[ic->proc_id]++;          /* increment instruction counters */
     unique_count_per_core[ic->proc_id]++;
     unique_count++;

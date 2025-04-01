@@ -320,6 +320,9 @@ void cmp_wake(Op* src_op, Op* dep_op, uns8 rdy_bit) {
     /* However, update the rdy_cycle now so that the dependence is
        maintained when the op enters RS. */
     dep_op->rdy_cycle = MAX2(dep_op->rdy_cycle, src_op->wake_cycle);
+    if(dep_op->humza_flag) {
+      printf("[READY] I found the op at cycle %lld\n", dep_op->rdy_cycle);
+    }
     return;
   }
 

@@ -158,6 +158,8 @@ struct Table_Info_struct {
   uns16    true_op_type;  /// type of opcode from PIN. Should not be used for
                           /// Scarab timing.
 
+  int humza_flag;
+
   uns num_dest_regs;  // number of destination registers written
   uns num_src_regs;   // number of source registers read
 

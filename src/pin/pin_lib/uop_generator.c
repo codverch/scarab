@@ -70,6 +70,8 @@ struct Trace_Uop_struct {
   uns num_src_regs;       // number of source registers read
   uns num_agen_src_regs;  // memory address calculation read for ztrace
 
+  int humza_flag;
+
   uns  inst_size;  // instruction size
   Addr addr;
 
@@ -392,6 +394,11 @@ void uop_generator_get_uop(uns proc_id, Op* op, ctype_pin_inst* inst) {
   op->in_rdy_list              = FALSE;
   op->in_node_list             = FALSE;
   op->oracle_info.recovery_sch = FALSE;
+  op->humza_flag   =   trace_uop->humza_flag;
+
+  if(op->humza_flag) {
+    printf("I found the op!!\n");
+  }
 
   op->req    = NULL;
   op->marked = FALSE;
@@ -499,6 +506,8 @@ void convert_t_uop_to_info(uns8 proc_id, Trace_Uop* t_uop, Inst_Info* info) {
                                                                // function based
                                                                // on the same
                                                                // table info.
+
+  info->table_info->humza_flag = t_uop->humza_flag;
 
   ASSERT(proc_id, info);
   ASSERT(proc_id, info->table_info);
@@ -692,65 +701,92 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
    * mem uops */
   Flag is_rep_st = (pi->is_string) && has_store;
 
+  static long counter = 0;
+
   if(RECORD && RUN) {
     printf("You can either record or run (not both)");
     exit(1);
   }
 
-  ctype_pin_inst* inst = pi;
-  
-  static long counter = 0;
-  // printf("Found %ld\n", counter);
-  if(inst->num_ld && RUN) {
-    static int first_time = 1;
-    static struct hash_table* ht = NULL;
-    if(first_time) {
-      ht = python_parsed_create_table(10000l);
-      python_parsed_read_fusentry_from_file(ht, RUN_FILE);
-      printf("[hash table] read %ld entries\n", python_parsed_get_table_size(ht));
-      first_time = 0;
-    }
-    // am I something in the HT
-    struct fusentry F;
-    struct fusentry* Fp;
-    Fp = python_parsed_lookup(ht, counter);
-    if(Fp) {
-      // do something
-      memcpy(&F, Fp, sizeof(F));
-      if(F.type == 0) { // fusable type
-        // printf("Inst had %d num_ld\n", inst->num_ld);
-        inst->num_dst_regs = (uint8_t) F.num_dst;
-        for(short i = 0; i < 8; ++i) {
-          inst->dst_regs[i] = F.dst_regs[i];
-        }
-        // printf("did some fusion %ld\n", counter);
-        // printf("Inst has %d num_ld\n", inst->num_ld);
-      } else if (F.type == 1) { // delete type
-        inst->num_ld = 0;
-        inst->has_push = 0;
-        inst->has_pop = 0;
-        inst->num_st = 0;
-        inst->is_move = 0;
-        inst->num_dst_regs = 0;
-        inst->cf_type = NOT_CF;
-        inst->op_type = OP_NOP;
-        inst->num_src_regs = 0;
+  if(RUN) {
+    if(pi->num_ld == 1 && pi->cf_type == NOT_CF) {
+      static SB_HashTable* fentable = NULL;
+      if(!fentable) {
+        fentable = sb_create_table(256, sizeof(struct fusentry));
+        sb_fusentriess_from_file(fentable, RUN_FILE);
+      }
+      static SB_HashTable* countable = NULL;
+      if(!countable) {
+        countable = sb_create_table(256, sizeof(long));
+      }
 
-        has_alu = FALSE;
-        has_control = FALSE;
-        has_load = FALSE;
-        
-        // printf("did some deletion %ld\n", counter);
-
+      char addressAsString[64];
+      sprintf(addressAsString, "%ld", pi->instruction_addr);
+      long* old_count = sb_get(countable, addressAsString);
+      long count = 0;
+      if(!old_count) {
+        count = 1;
+        sb_insert(countable, addressAsString, &count);
       } else {
-        // unimplemented -- for branch misses
+        count = *old_count + 1;
+        sb_insert(countable, addressAsString, &count);
+      }
+      
+      char addressAndCounterAsString[64];
+      sprintf(addressAndCounterAsString, "%ld,%ld", pi->instruction_addr, count);
+      struct fusentry* FP = NULL;
+      if((FP = sb_get(fentable, addressAndCounterAsString)) != NULL) {
+        // do something with it
+        // printf("I found %s which should be %s\n", addressAndCounterAsString, (FP->type ? "DELETED" : "FUSED") );
+        if(FP->type == 0) {
+          // fused
+          pi->num_dst_regs = FP->num_dst;
+          for(int i = 0; i < 8; i++) {
+            pi->dst_regs[i] = FP->dst_regs[i];
+          }
+        } else if(FP->type == 1) {
+          // delete
+          pi->num_dst_regs = 0;
+          pi->has_push = 0;
+          pi->has_pop = 0;
+          pi->num_st = 0;
+          pi->is_move = 0;
+          pi->num_src_regs = 0;
+          if(pi->cf_type != NOT_CF) {
+            printf("Warning, messing with a control flow instruction\n");
+          }
+          pi->cf_type = NOT_CF;
+          has_control = 0;
+          pi->op_type = OP_NOP;
+          pi->num_ld = 0;
+
+        }
       }
     }
+  } else if(RECORD) {
+    if(pi->num_ld == 1 && pi->cf_type == NOT_CF) { // TODO this is redundant since we are still copying all the addresses, will save space 
+      
+      struct Mementry M;
+      M.counter = counter;
+      M.instruction_addr = pi->instruction_addr;
+      M.read_address = pi->ld_vaddr[0];
+      M.num_l1d_regs = pi->num_ld1_addr_regs;
+      for(int i = 0; i < 2; ++i) {
+        M.l1d_regs[i] = pi->ld1_addr_regs[i];
+      }
+      M.num_dst_regs = pi->num_dst_regs;
+      for(int i = 0; i < 8; ++i) {
+        M.dst_regs[i] = pi->dst_regs[i];
+      }
+      save_struct(&M);
+    }
+    else {
+      // ignore, we are only looking at instructions with one memory load for now
+    }
   }
+  
 
-
-  // printf("has_alu %d\n", has_alu);
-
+  
   /* Loads */
   for(uns i = 0; i < pi->num_ld; ++i) {
     Trace_Uop* uop = trace_uop[idx];
@@ -916,19 +952,8 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
     STAT_EVENT(0, STATIC_PIN_NOP);
 
   }
-  // printf("idx: %d\n", idx);
 
-  if(inst->num_ld && RECORD) {
-    struct Mementry M;
-    M.counter = counter;
-    M.instruction_addr = inst->instruction_addr;
-    M.num_ld = inst->num_ld;
-    memcpy(M.read_addresses, inst->ld_vaddr, sizeof(inst->ld_vaddr));
-    M.num_dst = inst->num_dst_regs;
-    memcpy(M.dst_regs, inst->dst_regs, sizeof(inst->dst_regs));
-    save_struct(&M);
-  } 
-  counter++;
+  counter += idx;
 
   return idx;
 }
@@ -992,7 +1017,6 @@ void convert_pinuop_to_t_uop(uns8 proc_id, ctype_pin_inst* pi,
     
     // static long counter = 0;
     num_uop = generate_uops(proc_id, pi, trace_uop);
-    // printf("Went here %ld\n", counter+=num_uop);
     // printf("num uops %d\n", num_uop);
     // printf("Type: %d\n", trace_uop[0]->op_type);
 

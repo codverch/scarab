@@ -282,7 +282,17 @@ void update_exec_stage(Stage_Data* src_sd) {
       exec->proc_id,
       get_fu_type(op->table_info->op_type, op->table_info->is_simd) & fu->type);
     exec_cycle      = cycle_count + MAX2(latency, -latency);
+
+    if(op->humza_flag) {
+      printf("[EXECUTE] I found the op at cycle %lld\n", exec_cycle);
+    }
+
+
     op->sched_cycle = cycle_count;
+
+    if(op->humza_flag) {
+      printf("[SCHED] I found the op at cycle %lld\n", op->sched_cycle);
+    }
 
     DEBUG(exec->proc_id, "op_num:%s fu_num:%d sched_cycle:%s off_path:%d\n",
           unsstr64(op->op_num), op->fu_num, unsstr64(op->sched_cycle),
@@ -291,6 +301,9 @@ void update_exec_stage(Stage_Data* src_sd) {
       // non-memory ops will always distribute their results
       // after the op's latency
       op->wake_cycle = exec_cycle;
+      if(op->humza_flag) {
+          printf("[WAKE1] I found the op at cycle %lld\n", op->wake_cycle);
+        }
       wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
     } else if(op->table_info->mem_type == MEM_ST) {
       // stores have their addresses computed in this cycle and
@@ -298,6 +311,9 @@ void update_exec_stage(Stage_Data* src_sd) {
       if(op->exec_count == 0) {
         // only wake up if this is the first time this op executes
         op->wake_cycle = exec_cycle;
+        if(op->humza_flag) {
+          printf("[WAKE2] I found the op at cycle %lld\n", op->wake_cycle);
+        }
         wake_up_ops(op, MEM_ADDR_DEP, model->wake_hook);
         wake_up_ops(op, MEM_DATA_DEP, model->wake_hook);
       }
