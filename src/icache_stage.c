@@ -295,6 +295,7 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
+               curr->base_reg == op->inst_info->srcs[0].reg &&
                !curr->already_fused) {
  
                if (FUSION_DEBUG_ENABLED) {
@@ -305,15 +306,17 @@
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
 
-               unsigned int op1_byte_in_cacheline_offset = curr->instr_addr & (CACHELINE_SIZE - 1); // Assuming CACHELINE_SIZE is defined
-               unsigned int op2_byte_in_cacheline_offset = op->oracle_info.va & (CACHELINE_SIZE - 1);
+              //  unsigned int op1_byte_in_cacheline_offset = curr->instr_addr & (CACHELINE_SIZE - 1); // Assuming CACHELINE_SIZE is defined
+              //  unsigned int op2_byte_in_cacheline_offset = op->oracle_info.va & (CACHELINE_SIZE - 1);
 
-               printf("Op1 PC: %llx, Op2 PC: %llx, Op1 Cacheline: %llx, Op2 Cacheline: %llx, Op1 Mem size: %d, Op2 Mem size: %d, Op1 Base reg: %d, Op2 Base reg: %d, Op1 byte in block offset: %d, Op2 byte in block offset: %d\n", 
-                   curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, op->oracle_info.va, curr->mem_size, op->table_info->mem_size, curr->base_reg, op->inst_info->srcs[0].reg, op1_byte_in_cacheline_offset, op2_byte_in_cacheline_offset);
+              //  printf("Op1 PC: %llx, Op2 PC: %llx, Op1 Cacheline: %llx, Op2 Cacheline: %llx, Op1 Mem size: %d, Op2 Mem size: %d, Op1 Base reg: %d, Op2 Base reg: %d, Op1 byte in block offset: %d, Op2 byte in block offset: %d\n", 
+              //      curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, op->oracle_info.va, curr->mem_size, op->table_info->mem_size, curr->base_reg, op->inst_info->srcs[0].reg, op1_byte_in_cacheline_offset, op2_byte_in_cacheline_offset);
             
 
                return curr->op;
            }
+
+           printf("Base reg does not match, curr->base_reg: %d, op->base_reg: %d\n", curr->base_reg, op->inst_info->srcs[0].reg);
        }
        curr = curr->next;
    }
