@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCARAB_DIR="/users/DTRDNT/main/scarab/src"
-TRACE_ROOT="/users/DTRDNT/main/simpoint_traces"
+TRACE_ROOT="/users/DTRDNT/main/traces/clang"
 MAX_PARALLEL=2  # Change this as needed but I wouldn't recommend going above 2 unless you have terabytes of ram
 MY_DIR=$(pwd)
 RECORD_DIR="$MY_DIR/records"
@@ -38,7 +38,7 @@ run_scarab() {
     echo "python parsing $record_file to $parsed_output_name"
     python3 python_parser.py --record_file $record_file --output_file $parsed_output_name > /dev/null 2>&1
 
-    rm $record_file
+    # rm $record_file
 
     echo "Running Scarab again on $wname $(basename "$trace_zip") with $parsed_output_name"
     ./scarab $baseline_options --frontend memtrace --cbp_trace_r0="$trace_zip" --memtrace_modules_log="$bin_dir" \

@@ -672,6 +672,14 @@ static Flag use_ld1_addr_regs(const uns8 proc_id, const compressed_op* pi,
   }
 }
 
+static long set_bit(long long value, int offset) {
+  if (offset < 0 || offset >= 64) {
+      printf("Error: offset %d is out of bounds (0–63)\n", offset);
+      exit(1);
+  }
+  return value | ((long long)1 << offset);
+}
+
 static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
                          Trace_Uop** trace_uop) {
   /* Generating microinstructions for the trace instruction. The
@@ -703,13 +711,17 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
 
   static long counter = 0;
 
+  static long register_use_bitmask = 0l;
+
   if(RECORD && RUN) {
     printf("You can either record or run (not both)");
     exit(1);
   }
 
+  
+
   if(RUN) {
-    if(pi->num_ld == 1 && pi->cf_type == NOT_CF) {
+    if((pi->num_ld == 1 || pi->num_st == 1)) {
       static SB_HashTable* fentable = NULL;
       if(!fentable) {
         fentable = sb_create_table(256, sizeof(struct fusentry));
@@ -740,16 +752,20 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
         // printf("I found %s which should be %s\n", addressAndCounterAsString, (FP->type ? "DELETED" : "FUSED") );
         if(FP->type == 0) {
           // fused
-          pi->num_dst_regs = FP->num_dst;
-          for(int i = 0; i < 8; i++) {
-            pi->dst_regs[i] = FP->dst_regs[i];
-          }
+          // fusion does nothing due to register renaming
+          // pi->num_dst_regs = FP->num_dst;
+          // for(int i = 0; i < 8; i++) {
+          //   pi->dst_regs[i] = FP->dst_regs[i];
+          // }
+
+
         } else if(FP->type == 1) {
-          // delete
+          // delete/convert to nop
           pi->num_dst_regs = 0;
           pi->has_push = 0;
           pi->has_pop = 0;
           pi->num_st = 0;
+          pi->num_ld = 0;
           pi->is_move = 0;
           pi->num_src_regs = 0;
           if(pi->cf_type != NOT_CF) {
@@ -758,13 +774,12 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
           pi->cf_type = NOT_CF;
           has_control = 0;
           pi->op_type = OP_NOP;
-          pi->num_ld = 0;
 
         }
       }
     }
   } else if(RECORD) {
-    if(pi->num_ld == 1 && pi->cf_type == NOT_CF) { // TODO this is redundant since we are still copying all the addresses, will save space 
+    if((pi->num_ld == 1 || pi->num_st == 1)) { // TODO this is redundant since we are still copying all the addresses, will save space 
       
       struct Mementry M;
       M.counter = counter;
@@ -772,16 +787,35 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
       M.read_address = pi->ld_vaddr[0];
       M.num_l1d_regs = pi->num_ld1_addr_regs;
       for(int i = 0; i < 2; ++i) {
-        M.l1d_regs[i] = pi->ld1_addr_regs[i];
+        if(i < M.num_l1d_regs)
+          M.l1d_regs[i] = pi->ld1_addr_regs[i];
+        else
+          M.l1d_regs[i] = -1;
       }
       M.num_dst_regs = pi->num_dst_regs;
       for(int i = 0; i < 8; ++i) {
         M.dst_regs[i] = pi->dst_regs[i];
       }
+      for(int i = 0; i < pi->num_dst_regs; ++i) {
+        register_use_bitmask = set_bit(register_use_bitmask, pi->dst_regs[i]);
+      }
+      M.reg_use_mask = register_use_bitmask;
+      
+      if((pi->num_ld && pi->num_st) || pi->cf_type != NOT_CF) {
+        M.type = 2;
+      } else if (pi->num_ld) {
+        M.type = 1;
+      } else {
+        M.type = 0;
+      }
       save_struct(&M);
+      register_use_bitmask = 0l;
     }
     else {
       // ignore, we are only looking at instructions with one memory load for now
+      for(int i = 0; i < pi->num_dst_regs; ++i) {
+        register_use_bitmask = set_bit(register_use_bitmask, pi->dst_regs[i]);
+      }
     }
   }
   

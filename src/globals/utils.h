@@ -386,13 +386,15 @@ int compare_uns64(const void*, const void*);
 
 // yes all of these don't need to be long but I don't want to wrestle with the packing everytime I change something
 struct Mementry {
-    long counter;
-    long instruction_addr;
-    long read_address; 
-    long num_l1d_regs;
-    long l1d_regs[2];
-    long num_dst_regs;
-    uint8_t dst_regs[8];
+  long counter;
+  long instruction_addr;
+  long read_address; 
+  long num_l1d_regs;
+  long l1d_regs[2];
+  long num_dst_regs;
+  uint8_t dst_regs[8];
+  long reg_use_mask;
+  long type; // 0 is store, 1 is load, 2 is invalid that is accessing memory so be careful
     // long num_src_regs; // a memory load should not have src registers
     // long src_regs[8]; 
 };
