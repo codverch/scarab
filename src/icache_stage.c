@@ -200,6 +200,8 @@
    new_load->cacheline_addr = get_cacheline_addr(op->oracle_info.va);
    new_load->already_fused = false;
    new_load->pc_addr = op->inst_info->addr; // Store the PC address for debugging
+   new_load->mem_size = op->table_info->mem_size;
+    new_load->base_reg = op->inst_info->srcs[0].reg;
   //  new_load->never_fuse = false;
 
    
@@ -291,9 +293,8 @@
    while (curr) {
        if((curr->op != NULL) && (curr->op->inst_info != NULL)) {
            if (curr->cacheline_addr == cacheline_addr && 
-               !curr->already_fused && 
-               curr->op != op && 
-               curr->op->table_info->mem_type == MEM_LD) {
+               curr->base_reg == op->inst_info->srcs[0].reg &&
+               !curr->already_fused) {
  
                if (FUSION_DEBUG_ENABLED) {
                    printf("[find_same_cacheline_fusion_candidate] Found a candidate for fusion at PC address: %llx\n", curr->op->inst_info->addr);
@@ -302,7 +303,11 @@
                    printf("[find_same_cacheline_fusion_candidate] Its cacheline address is: %llx\n", curr->cacheline_addr);
                    printf("[find_same_cacheline_fusion_candidate] Returning this candidate for fusion\n");
                }
- 
+
+              //  printf("Op1 PC: %llx, Op2 PC: %llx, Op1 Cacheline: %llx, Op2 Cacheline: %llx, Op1 Mem size: %d, Op2 Mem size: %d, Op1 Base reg: %d, Op2 Base reg: %d\n",
+              //   curr->pc_addr, op->inst_info->addr, curr->cacheline_addr, cacheline_addr, curr->mem_size, op->table_info->mem_size, curr->base_reg, op->inst_info->srcs[0].reg);  
+            
+
                return curr->op;
            }
        }
