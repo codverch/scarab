@@ -2,7 +2,7 @@
 
 SCARAB_DIR="/users/DTRDNT/main/scarab/src"
 TRACE_ROOT="/users/DTRDNT/main/traces/clang"
-MAX_PARALLEL=2  # Change this as needed but I wouldn't recommend going above 2 unless you have terabytes of ram
+MAX_PARALLEL=4  # Change this as needed but I wouldn't recommend going above 2 unless you have terabytes of ram
 MY_DIR=$(pwd)
 RECORD_DIR="$MY_DIR/records"
 
@@ -35,16 +35,16 @@ run_scarab() {
     ./scarab $baseline_options --frontend memtrace --cbp_trace_r0="$trace_zip" --memtrace_modules_log="$bin_dir" \
             --record 1 --record_file "$record_file" > "$vanilla_output_name" 
     
-    echo "python parsing $record_file to $parsed_output_name"
-    python3 python_parser.py --record_file $record_file --output_file $parsed_output_name > /dev/null 2>&1
+    # echo "python parsing $record_file to $parsed_output_name"
+    # python3 python_parser.py --record_file $record_file --output_file $parsed_output_name > /dev/null 2>&1
 
     # rm $record_file
 
-    echo "Running Scarab again on $wname $(basename "$trace_zip") with $parsed_output_name"
-    ./scarab $baseline_options --frontend memtrace --cbp_trace_r0="$trace_zip" --memtrace_modules_log="$bin_dir" \
-            --run 1 --run_file "$parsed_output_name" > "$fused_output_name" 
+    # echo "Running Scarab again on $wname $(basename "$trace_zip") with $parsed_output_name"
+    # ./scarab $baseline_options --frontend memtrace --cbp_trace_r0="$trace_zip" --memtrace_modules_log="$bin_dir" \
+    #         --run 1 --run_file "$parsed_output_name" > "$fused_output_name" 
 
-    rm $parsed_output_name
+    # rm $parsed_output_name
     
 
 }
