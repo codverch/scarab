@@ -72,12 +72,14 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define IDEAL_FUSION_SAME_AND_NEXT_CACHELINE_LOADS FALSE
  #define IDEAL_FUSION_SAME_CACHELINE_LOADS TRUE
  #define FUSION_DEBUG_ENABLED FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
+
+ static unsigned int micro_op_number = 0; 
  
  /**************************************************************************************/
  /* Global Variables */
@@ -1298,6 +1300,15 @@
  
    for (uns ii = 0; ii < cur_data->op_count; ii++) {
      Op* op = cur_data->ops[ii];
+
+     micro_op_number++; 
+
+     // print micro-op PC addr, instruction addr, cacheblock addr, and micro-op number if they are memory load
+
+     if(op->table_info->mem_type == MEM_LD) {
+      printf("PC addr: %lld\t Inst addr: %lld\t Cacheblock addr: %lld\t Micro-op number: %d\n",
+             op->inst_info->addr, op->oracle_info.va, get_cacheline_addr(op->oracle_info.va), micro_op_number);
+    }
 
      if(FUSION_DEBUG_ENABLED) {
         printf("[In icache_process_ops] op_num:%s @ 0x%s\n",
