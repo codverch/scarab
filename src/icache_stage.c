@@ -1306,7 +1306,7 @@
      // print micro-op PC addr, instruction addr, cacheblock addr, and micro-op number if they are memory load
 
      if(op->table_info->mem_type == MEM_LD) {
-      printf("PC addr: %lld\t Inst addr: %lld\t Cacheblock addr: %lld\t Micro-op number: %d\n",
+      printf("PC addr: %llx\t Inst addr: %llx\t Cacheblock addr: %llx\t Micro-op number: %d\n",
              op->inst_info->addr, op->oracle_info.va, get_cacheline_addr(op->oracle_info.va), micro_op_number);
     }
 
