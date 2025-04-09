@@ -80,8 +80,12 @@
  static unsigned int global_micro_op_num = 0;
  static unsigned int all_micro_op_num = 0;
  static unsigned int total_load_micro_ops_fused = 0; 
+
  
-  /**************************************************************************************/
+/**************************************************************************************/
+/* Fusion log */
+
+static FILE* print_fused_pairs_file = NULL; 
  
  /**************************************************************************************/
  /* Global Variables */
@@ -158,6 +162,15 @@
   for (int i = 0; i < FUSION_HASH_SIZE; i++) {
       fusion_hash[i] = NULL;
   }
+
+  if(PRINT_FUSED_PAIRS && print_fused_pairs_file == NULL) {
+    print_fused_pairs_file = fopen("fused_pairs.txt", "w"); 
+    if(print_fused_pairs_file == NULL) {
+      fprintf(stderr, "Error opening fused_pairs.txt for writing\n");
+    }
+  }
+
+
   fusion_table_initialized = true;
   
 }
@@ -279,9 +292,9 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
           if (curr->cacheline_addr == cacheline_addr && 
               !curr->already_fused) {
               
-              if(PRINT_FUSED_PAIRS) {
+              if(PRINT_FUSED_PAIRS && print_fused_pairs_file != NULL) {
               
-                printf("Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
+                fprintf(print_fused_pairs_file, "Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
                   "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
                   "Block:0x%llx\n",
                   curr->pc_addr, curr->instr_addr, curr->mem_size, 
@@ -289,6 +302,8 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
                   op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size, 
                   op->inst_info->srcs[0].reg, global_micro_op_num,
                   cacheline_addr);
+
+                  fflush(print_fused_pairs_file); 
                 }
        
               /* Found a suitable candidate */
