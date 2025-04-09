@@ -72,9 +72,9 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define PRINT_FUSED_PAIRS FALSE
- #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
+ #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION TRUE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
  static unsigned int global_micro_op_num = 0;
@@ -86,6 +86,7 @@
 /* Fusion log */
 
 static FILE* print_fused_pairs_file = NULL; 
+static FILE* print_all_load_micro_ops_file = NULL; 
  
  /**************************************************************************************/
  /* Global Variables */
@@ -167,6 +168,13 @@ static FILE* print_fused_pairs_file = NULL;
     print_fused_pairs_file = fopen("fused_pairs.txt", "w"); 
     if(print_fused_pairs_file == NULL) {
       fprintf(stderr, "Error opening fused_pairs.txt for writing\n");
+    }
+  }
+
+  if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
+    print_all_load_micro_ops_file = fopen("all_mem_load_micro_ops.txt", "w"); 
+    if(print_all_load_micro_ops_file == NULL) {
+      fprintf(stderr, "Error opening all_mem_load_micro_ops.txt for writing\n"); 
     }
   }
 
@@ -1212,7 +1220,6 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
    last_icache_issue_time = cycle_count;
  
  
-
    if(DO_FUSION) {
      fuse_same_cacheline_loads(cur_data);
    }
@@ -1222,9 +1229,11 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
 
      all_micro_op_num++;
 
-     if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION) {
+     if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
       if(op->table_info->mem_type == MEM_LD){
-        printf("Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr);
+        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr);
+
+        fflush(print_all_load_micro_ops_file); 
       }
     }
 
