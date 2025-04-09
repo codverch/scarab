@@ -73,6 +73,7 @@
  /* Fusion Macros */
  
  #define DO_FUSION TRUE
+ #define PRINT_FUSED_PAIRS FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
  static unsigned int global_micro_op_num = 0;
@@ -276,6 +277,18 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
           if (curr->cacheline_addr == cacheline_addr && 
               !curr->already_fused) {
               
+              if(PRINT_FUSED_PAIRS) {
+              
+                printf("Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
+                  "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
+                  "Block:0x%llx\n",
+                  curr->pc_addr, curr->instr_addr, curr->mem_size, 
+                  curr->base_reg, curr->micro_op_num,
+                  op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size, 
+                  op->inst_info->srcs[0].reg, global_micro_op_num,
+                  cacheline_addr);
+                }
+       
               /* Found a suitable candidate */
               return curr;
           }
