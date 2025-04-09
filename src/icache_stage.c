@@ -72,12 +72,12 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION FALSE
+ #define DO_FUSION TRUE
  #define FUSION_DISTANCE_UNLIMITED TRUE
- #define FUSE_WINDOW TRUE
+ #define FUSE_WINDOW FALSE
  #define FUSION_DISTANCE 342
- #define PRINT_FUSED_PAIRS FALSE
- #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION TRUE
+ #define PRINT_FUSED_PAIRS TRUE
+ #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
  static unsigned int global_micro_op_num = 0;
@@ -160,7 +160,7 @@ static FILE* print_all_load_micro_ops_file = NULL;
  /* Get distance between micro-op pairs */
  
  static inline unsigned int get_micro_op_distance(unsigned int donor_micro_op_num, unsigned int recvr_micro_op_num) {
-  return (recvr_micro_op_num - donor_micro_op_num); 
+  return (donor_micro_op_num - recvr_micro_op_num); 
 }
 
  
@@ -314,7 +314,7 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
                       
                       fprintf(print_fused_pairs_file, "Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
                           "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
-                          "Block:0x%llx Distance:%u (Unlimited)\n",
+                          "Block:0x%llx Distance:%d (Unlimited)\n",
                           curr->pc_addr, curr->instr_addr, curr->mem_size,
                           curr->base_reg, curr->micro_op_num,
                           op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size,
@@ -335,7 +335,7 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
                       if (PRINT_FUSED_PAIRS && print_fused_pairs_file != NULL) {
                           fprintf(print_fused_pairs_file, "Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
                               "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
-                              "Block:0x%llx Distance:%u (Max:%u)\n",
+                              "Block:0x%llx Distance:%d (Max:%u)\n",
                               curr->pc_addr, curr->instr_addr, curr->mem_size,
                               curr->base_reg, curr->micro_op_num,
                               op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size,
