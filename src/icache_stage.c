@@ -73,6 +73,9 @@
  /* Fusion Macros */
  
  #define DO_FUSION FALSE
+ #define FUSION_DISTANCE_UNLIMITED TRUE
+ #define FUSE_WINDOW TRUE
+ #define FUSION_DISTANCE 342
  #define PRINT_FUSED_PAIRS FALSE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION TRUE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
@@ -117,7 +120,7 @@ static FILE* print_all_load_micro_ops_file = NULL;
  static inline void         log_stats_mshr_hit(Addr line_addr);
  static inline void         update_stats_bf_retired(void);
  static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
- static bool remove_load_from_bucket(Op* op, unsigned int hash_idx);
+ static bool                remove_load_from_bucket(Op* op, unsigned int hash_idx);
  
  /**************************************************************************************/
  /* set_icache_stage: */
@@ -152,6 +155,14 @@ static FILE* print_all_load_micro_ops_file = NULL;
    unsigned int hash_value = (unsigned int)(cacheline_addr & (FUSION_HASH_SIZE - 1));
    return hash_value;
  }
+
+  /**************************************************************************************/
+ /* Get distance between micro-op pairs */
+ 
+ static inline unsigned int get_micro_op_distance(unsigned int donor_micro_op_num, unsigned int recvr_micro_op_num) {
+  return (recvr_micro_op_num - donor_micro_op_num); 
+}
+
  
  
  /**************************************************************************************/
@@ -272,9 +283,7 @@ static FILE* print_all_load_micro_ops_file = NULL;
  * This function looks for an earlier load operation that:
  * 1. Accesses the same cacheline as the current operation
  * 2. Has not already been marked as fused with another operation
- * 
- * When two loads accessing the same cacheline are fused, we can eliminate
- * redundant memory accesses, reducing pipeline stalls and improving efficiency.
+ * 3. Is within the configured micro-op distance from the current operation (if enabled)
  * 
  * @param op The current load operation looking for a fusion partner
  * @return Pointer to a suitable fusion candidate, or NULL if none is found
@@ -293,31 +302,56 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
   while (curr) {
       /* Verify the current entry is valid */
       if ((curr->op != NULL) && (curr->op->inst_info != NULL)) {
-          /* Check if this load meets our fusion criteria:
-           * 1. Same cacheline address (same memory region)
-           * 2. Not already participating in a fusion
-           */
-          if (curr->cacheline_addr == cacheline_addr && 
-              !curr->already_fused) {
+          /* Check basic fusion criteria: same cacheline and not already fused */
+          if (curr->cacheline_addr == cacheline_addr && !curr->already_fused) {
               
-              if(PRINT_FUSED_PAIRS && print_fused_pairs_file != NULL) {
-              
-                fprintf(print_fused_pairs_file, "Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
-                  "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
-                  "Block:0x%llx\n",
-                  curr->pc_addr, curr->instr_addr, curr->mem_size, 
-                  curr->base_reg, curr->micro_op_num,
-                  op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size, 
-                  op->inst_info->srcs[0].reg, global_micro_op_num,
-                  cacheline_addr);
-
-                  fflush(print_fused_pairs_file); 
-                }
-       
-              /* Found a suitable candidate */
-              return curr;
+              /* Check if distance-based fusion is enabled */
+              if (FUSION_DISTANCE_UNLIMITED) {
+                  /* When distance is unlimited, accept the first valid candidate */
+                  if (PRINT_FUSED_PAIRS && print_fused_pairs_file != NULL) {
+                      /* Calculate distance for logging purposes */
+                      unsigned int distance = get_micro_op_distance(global_micro_op_num, curr->micro_op_num);
+                      
+                      fprintf(print_fused_pairs_file, "Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
+                          "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
+                          "Block:0x%llx Distance:%u (Unlimited)\n",
+                          curr->pc_addr, curr->instr_addr, curr->mem_size,
+                          curr->base_reg, curr->micro_op_num,
+                          op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size,
+                          op->inst_info->srcs[0].reg, global_micro_op_num,
+                          cacheline_addr, distance);
+                      
+                      fflush(print_fused_pairs_file);
+                  }
+                  
+                  /* Found a suitable candidate */
+                  return curr;
+              }
+              else if (FUSE_WINDOW) {
+                  /* Check if the operations are within the configured distance */
+                  unsigned int distance = get_micro_op_distance(global_micro_op_num, curr->micro_op_num);
+                  
+                  if (distance <= FUSION_DISTANCE) {
+                      if (PRINT_FUSED_PAIRS && print_fused_pairs_file != NULL) {
+                          fprintf(print_fused_pairs_file, "Rcvr[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] + "
+                              "Donor[PC: 0x%llx VA: 0x%llx Size: %d Reg: %d µOp: %u] "
+                              "Block:0x%llx Distance:%u (Max:%u)\n",
+                              curr->pc_addr, curr->instr_addr, curr->mem_size,
+                              curr->base_reg, curr->micro_op_num,
+                              op->inst_info->addr, op->oracle_info.va, op->table_info->mem_size,
+                              op->inst_info->srcs[0].reg, global_micro_op_num,
+                              cacheline_addr, distance, FUSION_DISTANCE);
+                          
+                          fflush(print_fused_pairs_file);
+                      }
+                      
+                      /* Found a suitable candidate within distance */
+                      return curr;
+                  }
+              }
           }
       }
+      
       curr = curr->next;
   }
   
