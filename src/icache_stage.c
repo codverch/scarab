@@ -74,9 +74,11 @@
  
  #define DO_FUSION TRUE
  #define PRINT_FUSED_PAIRS FALSE
+ #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
  static unsigned int global_micro_op_num = 0;
+ static unsigned int all_micro_op_num = 0;
  static unsigned int total_load_micro_ops_fused = 0; 
  
   /**************************************************************************************/
@@ -1202,6 +1204,14 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
  
    for (uns ii = 0; ii < cur_data->op_count; ii++) {
      Op* op = cur_data->ops[ii];
+
+     all_micro_op_num++;
+
+     if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION) {
+      if(op->table_info->mem_type == MEM_LD){
+        printf("Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr);
+      }
+    }
 
      ASSERTM(ic->proc_id, ic->off_path == op->off_path,
              "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
