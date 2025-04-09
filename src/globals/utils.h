@@ -388,11 +388,16 @@ int compare_uns64(const void*, const void*);
 #define FUSION_HASH_SIZE 4096  
 
 typedef struct FusionLoad {
-    Op* op;                    // The load operation
-    Addr cacheline_addr;       // Cache line address of this load
+    Op* op;                         // The load operation
     Addr pc_addr; 
-    struct FusionLoad* next;   // Pointer to next load in the hash bucket
-    bool already_fused;        // Flag to indicate if this load has been involved in fusion
+    Addr instr_addr;                // Virtual address of the instruction
+    Addr cacheline_addr;            // Cacheline address of this load
+    unsigned int mem_size;          // Memory size of the load i.e., how many bytes
+    unsigned int num_dest_regs;     // Number of destination registers
+    unsigned int base_reg;          // Base register for the load
+    unsigned int micro_op_num;      // Micro-op number: Tracking based on both memory loads and non-memory loads
+    bool already_fused;             // Flag to indicate if this load has been involved in fusion
+    struct FusionLoad* next;        // Pointer to next load in the hash bucket
 } FusionLoad;
 
 
