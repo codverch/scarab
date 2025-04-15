@@ -72,11 +72,11 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION FALSE
+ #define DO_FUSION TRUE
  #define FUSION_DISTANCE_UNLIMITED TRUE
  #define FUSE_WINDOW FALSE
  #define FUSION_DISTANCE 342
- #define PRINT_FUSED_PAIRS FALSE
+ #define PRINT_FUSED_PAIRS TRUE
  #define PRINT_INTERFERING_STORES TRUE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
@@ -466,6 +466,10 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
 
              /* Check for store interference - micro_op1 is curr, micro_op2 is op */
 
+             printf("Can fuse %llx (microp number %d) with %llx (microp number %u)\n",
+                    curr->pc_addr, curr->micro_op_num,
+                    op->inst_info->addr, global_micro_op_num);
+
              if (check_store_dependency(
               curr->micro_op_num,           // micro_op1 number
               global_micro_op_num,          // micro_op2 number
@@ -474,6 +478,7 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
           
               /* Skip this candidate if there's a store dependency */
                   curr = curr->next;
+                  printf("Skipping candidate due to store dependency\n");
                   continue;
               }
                       
@@ -611,10 +616,14 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
   /* Process each load operation in the current fetch group */
   for (int i = 0; i < cur_data->op_count; i++) {
       Op* op = cur_data->ops[i];
-      
+
       /* Track total micro-ops for profiling/statistics */
       global_micro_op_num++;
 
+      printf("Micro-op PC: %llx\t Micro-op Num: %u\t Mem load: %d\t Mem st: %d\t Cacheblock addr: %llx\n", 
+        op->inst_info->addr, global_micro_op_num, op->table_info->mem_type == MEM_LD, op->table_info->mem_type == MEM_ST, get_cacheline_addr(op->oracle_info.va));
+ 
+    
       /* If this is a store, add it to the interference tracking system */
       if (op->table_info->mem_type == MEM_ST) {
         add_store_to_interference_tracking(op, global_micro_op_num);
