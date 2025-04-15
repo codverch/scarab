@@ -286,6 +286,9 @@ static bool check_store_dependency(unsigned int micro_op1_num, unsigned int micr
                         curr_store->micro_op_num,
                         micro_op1_num,
                         micro_op2_addr, micro_op2_size, micro_op2_num);
+
+                        curr_store->has_dependent_load = true; 
+
                         fflush(print_store_micro_ops_file);
                     }
 
