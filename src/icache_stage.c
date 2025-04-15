@@ -72,14 +72,17 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define FUSION_DISTANCE_UNLIMITED TRUE
  #define FUSE_WINDOW FALSE
  #define FUSION_DISTANCE 342
- #define PRINT_FUSED_PAIRS TRUE
+ #define PRINT_FUSED_PAIRS FALSE
+ #define PRINT_INTERFERING_STORES TRUE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
- bool fusion_table_initialized = false;
+ InterferingStore* store_interference_hash[STORE_INTERFERENCE_HASH_SIZE] = {NULL}; 
+ static bool fusion_table_initialized = false;
+ static bool store_interference_table_initialized = false; 
  static unsigned int global_micro_op_num = 0;
  static unsigned int all_micro_op_num = 0;
  static unsigned int total_load_micro_ops_fused = 0; 
@@ -90,6 +93,7 @@
 
 static FILE* print_fused_pairs_file = NULL; 
 static FILE* print_all_load_micro_ops_file = NULL; 
+static FILE* print_store_micro_ops_file = NULL; 
  
  /**************************************************************************************/
  /* Global Variables */
@@ -158,7 +162,6 @@ static FILE* print_all_load_micro_ops_file = NULL;
 
   /**************************************************************************************/
  /* Get distance between micro-op pairs */
- 
  static inline unsigned int get_micro_op_distance(unsigned int donor_micro_op_num, unsigned int recvr_micro_op_num) {
   return (donor_micro_op_num - recvr_micro_op_num); 
 }
@@ -193,6 +196,159 @@ static FILE* print_all_load_micro_ops_file = NULL;
   fusion_table_initialized = true;
   
 }
+
+/**************************************************************************************/
+/* Check if memory addresses overlap within a cache block */
+
+static bool check_memory_overlap(Addr store_addr, int store_size, Addr load_addr, int load_size) {
+  /* Calculate byte offsets within the cache block */
+  static const Addr cacheline_size = 64; // Assuming a 64-byte cache line
+  unsigned int store_offset = store_addr & (cacheline_size - 1);
+  unsigned int load_offset = load_addr & (cacheline_size - 1);
+  
+  /* Determine the range of bytes accessed */
+  unsigned int store_end = store_offset + store_size - 1;
+  unsigned int load_end = load_offset + load_size - 1;
+  
+  /* Check if store access range overlaps with load access range */
+  return (store_offset <= load_end && load_offset <= store_end);
+}
+
+
+
+/**************************************************************************************/
+/* Initialize the store interference tracking system */
+
+static void init_store_interference_tracking() {
+  /* Initialize the hash table */
+  for (int i = 0; i < STORE_INTERFERENCE_HASH_SIZE; i++) {
+      store_interference_hash[i] = NULL;
+  }
+
+  /* Open log file if needed */
+  if (PRINT_INTERFERING_STORES && print_store_micro_ops_file == NULL) {
+      print_store_micro_ops_file = fopen("store_interference.txt", "w");
+      if (print_store_micro_ops_file == NULL) {
+          fprintf(stderr, "Error opening store_interference.txt for writing\n");
+      } else {
+          fprintf(print_store_micro_ops_file, 
+                  "Store Interference Tracking Log\n"
+                  "===============================\n"
+                  "This file tracks store instructions that interfere with potential load fusion candidates.\n\n");
+          fflush(print_store_micro_ops_file);
+      }
+  }
+
+  store_interference_table_initialized = true;
+}
+
+/**************************************************************************************/
+/* Check if a store has dependency with a load; here we check only true dependency i.e., RAW */
+
+static bool check_store_dependency(unsigned int micro_op1_num, unsigned int micro_op2_num, 
+                                  Addr micro_op2_addr, int micro_op2_size) {
+     
+      if (!store_interference_table_initialized) {
+        return false;
+      }
+
+      /* Get the cacheline address for micro_op2 */
+      Addr cacheline_addr = get_cacheline_addr(micro_op2_addr);
+
+      /* Use the hash function to find the appropriate bucket */
+      unsigned int hash_idx = hash_cacheline(cacheline_addr);
+
+      /* Search through stores in this cacheline's bucket */
+      InterferingStore* curr_store = store_interference_hash[hash_idx];
+
+      while (curr_store) {
+              /* Check if store accesses the same cacheline as micro_op2_laod */
+              
+              if (curr_store->cacheline_addr == cacheline_addr) {
+
+                /* Check if the store falls between micro_op1 and micro_op2 in program order */
+                if (curr_store->micro_op_num > micro_op1_num && 
+                curr_store->micro_op_num < micro_op2_num) {
+
+                /* Check for memory overlap between store and micro_op2 */
+                bool mem_overlap = check_memory_overlap(
+                                  curr_store->instr_addr, curr_store->mem_size,
+                                  micro_op2_addr, micro_op2_size);
+
+                if (mem_overlap) {
+                    if (PRINT_INTERFERING_STORES && print_store_micro_ops_file) {
+                        fprintf(print_store_micro_ops_file, 
+                        "Memory overlap detected - FUSION PREVENTED:\n"
+                        "  Store [PC:0x%llx VA:0x%llx Size:%d µOp:%u]\n"
+                        "  Load µOp1 [µOp:%u]\n"
+                        "  Load µOp2 [VA:0x%llx Size:%d µOp:%u]\n",
+                        curr_store->pc_addr, curr_store->instr_addr, curr_store->mem_size, 
+                        curr_store->micro_op_num,
+                        micro_op1_num,
+                        micro_op2_addr, micro_op2_size, micro_op2_num);
+                        fflush(print_store_micro_ops_file);
+                    }
+
+              return true;
+              }
+      }
+}
+
+    curr_store = curr_store->next;
+}
+
+/* No problematic store found */
+return false;
+}
+
+ /**************************************************************************************/
+ /* Add a store to the tracking system */
+
+ static void add_store_to_interference_tracking(Op* op, unsigned int store_micro_op_num) {
+  /* Track only stores */
+  if (op->table_info->mem_type != MEM_ST) {
+      return; 
+  }
+
+  /* Initialize if necessary */
+  if (!store_interference_table_initialized) {
+      init_store_interference_tracking(); 
+  }
+
+  /* Get cacheline address */
+  Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+  
+  /* Create a new store entry */
+  InterferingStore* new_store = (InterferingStore*)malloc(sizeof(InterferingStore)); 
+  if (!new_store) {
+      return; 
+  }
+
+  /* Initialize the store entry fields */
+  new_store->pc_addr = op->inst_info->addr;
+  new_store->instr_addr = op->oracle_info.va;
+  new_store->cacheline_addr = cacheline_addr;
+  new_store->mem_size = op->table_info->mem_size;
+  new_store->num_dest_regs = op->table_info->num_dest_regs;
+  new_store->base_reg = op->inst_info->srcs[0].reg;
+  new_store->micro_op_num = store_micro_op_num;
+  new_store->has_dependent_load = false;
+  
+  /* Add to the hash table */
+  unsigned int hash_idx = hash_cacheline(cacheline_addr);
+  new_store->next = store_interference_hash[hash_idx];
+  store_interference_hash[hash_idx] = new_store;
+  
+  /* Log the store if enabled */
+  if (PRINT_INTERFERING_STORES && print_store_micro_ops_file) {
+      fprintf(print_store_micro_ops_file, 
+              "Tracked store: PC:0x%llx VA:0x%llx Size:%d CL:0x%llx µOp:%u\n",
+              new_store->pc_addr, new_store->instr_addr, new_store->mem_size,
+              cacheline_addr, store_micro_op_num);
+      fflush(print_store_micro_ops_file);
+  }
+}
+
  
  /**************************************************************************************/
  /* Add a load to the fusion tracking system */
@@ -304,7 +460,20 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
       if ((curr->op != NULL) && (curr->op->inst_info != NULL)) {
           /* Check basic fusion criteria: same cacheline and not already fused */
           if (curr->cacheline_addr == cacheline_addr && !curr->already_fused) {
-              
+
+             /* Check for store interference - micro_op1 is curr, micro_op2 is op */
+
+             if (check_store_dependency(
+              curr->micro_op_num,           // micro_op1 number
+              global_micro_op_num,          // micro_op2 number
+              op->oracle_info.va,           // micro_op2 address
+              op->table_info->mem_size)) {  // micro_op2 size
+          
+              /* Skip this candidate if there's a store dependency */
+                  curr = curr->next;
+                  continue;
+              }
+                      
               /* Check if distance-based fusion is enabled */
               if (FUSION_DISTANCE_UNLIMITED) {
                   /* When distance is unlimited, accept the first valid candidate */
@@ -442,6 +611,12 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
       
       /* Track total micro-ops for profiling/statistics */
       global_micro_op_num++;
+
+      /* If this is a store, add it to the interference tracking system */
+      if (op->table_info->mem_type == MEM_ST) {
+        add_store_to_interference_tracking(op, global_micro_op_num);
+        continue;
+      }
       
       /* Skip operations that aren't loads or don't produce register results */
       if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
