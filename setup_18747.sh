@@ -147,15 +147,15 @@ execute_cmd "cd scarab/src && make PINPLAY_HOME=$PIN_ROOT PINPLAY_INCLUDE_HOME=$
 #------------------------------------------------------------------------------
 # Setting up simpoint traces
 #------------------------------------------------------------------------------
-print_section "Setting up simpoint traces"
+# print_section "Setting up simpoint traces"
 
-print_subsection "Creating directory and downloading traces"
-execute_cmd "mkdir -p simpoint_traces"
-execute_cmd "cd simpoint_traces"
-execute_cmd "~/.local/bin/gdown 1tfKL7wYK1mUqpCH8yPaPVvxk2UIAJrOX"
-execute_cmd "tar -xzvf simpoint_traces.tar.gz"
-execute_cmd "rm -rf pt_*"
-execute_cmd "cd .."
+# print_subsection "Creating directory and downloading traces"
+# execute_cmd "mkdir -p simpoint_traces"
+# execute_cmd "cd simpoint_traces"
+# execute_cmd "~/.local/bin/gdown 1tfKL7wYK1mUqpCH8yPaPVvxk2UIAJrOX"
+# execute_cmd "tar -xzvf simpoint_traces.tar.gz"
+# execute_cmd "rm -rf pt_*"
+# execute_cmd "cd .."
 
 #------------------------------------------------------------------------------
 # Setting up app traces
