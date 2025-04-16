@@ -73,10 +73,10 @@
  /* Fusion Macros */
  
  #define DO_FUSION TRUE
- #define FUSION_DISTANCE_UNLIMITED TRUE
- #define FUSE_WINDOW FALSE
- #define FUSION_DISTANCE 342
- #define PRINT_FUSED_PAIRS TRUE
+ #define FUSION_DISTANCE_UNLIMITED FALSE
+ #define FUSE_WINDOW TRUE
+ #define FUSION_DISTANCE 352
+ #define PRINT_FUSED_PAIRS FALSE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
