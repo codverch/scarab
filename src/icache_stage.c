@@ -73,19 +73,26 @@
  /* Fusion Macros */
  
  #define DO_FUSION TRUE
- #define FUSION_DISTANCE_UNLIMITED TRUE
- #define FUSE_WINDOW FALSE
- #define FUSION_DISTANCE 342
- #define PRINT_FUSED_PAIRS TRUE
+ #define FUSION_DISTANCE_UNLIMITED FALSE
+ #define FUSE_WINDOW TRUE
+ #define FUSION_DISTANCE 352
+ #define PRINT_FUSED_PAIRS FALSE
  #define PRINT_INTERFERING_STORES FALSE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
+ #define CHECK_STORE_DEPENDENCY_BEFORE_FUSION TRUE
+
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  InterferingStore* store_interference_hash[STORE_INTERFERENCE_HASH_SIZE] = {NULL}; 
+
  static bool fusion_table_initialized = false;
  static bool store_interference_table_initialized = false; 
  static unsigned int global_micro_op_num = 0;
  static unsigned int all_micro_op_num = 0;
  static unsigned int total_load_micro_ops_fused = 0; 
+
+ static unsigned int total_load_micro_ops_fused_with_store_dep = 0;
+ static unsigned int total_load_micro_ops_fused_without_store_dep = 0;
+ static unsigned int fusion_prevented_by_store_dep = 0;
 
  
 /**************************************************************************************/
@@ -220,6 +227,11 @@ static bool check_memory_overlap(Addr store_addr, int store_size, Addr load_addr
 /* Initialize the store interference tracking system */
 
 static void init_store_interference_tracking() {
+  if (!CHECK_STORE_DEPENDENCY_BEFORE_FUSION) {
+    store_interference_table_initialized = true;
+    return;
+  }
+
   /* Initialize the hash table */
   for (int i = 0; i < STORE_INTERFERENCE_HASH_SIZE; i++) {
       store_interference_hash[i] = NULL;
@@ -248,7 +260,8 @@ static void init_store_interference_tracking() {
 static bool check_store_dependency(unsigned int micro_op1_num, unsigned int micro_op2_num, 
                                   Addr micro_op2_addr, int micro_op2_size) {
      
-      if (!store_interference_table_initialized) {
+
+      if (!CHECK_STORE_DEPENDENCY_BEFORE_FUSION || !store_interference_table_initialized) {
         return false;
       }
 
@@ -308,6 +321,10 @@ return false;
  /* Add a store to the tracking system */
 
  static void add_store_to_interference_tracking(Op* op, unsigned int store_micro_op_num) {
+  if (!CHECK_STORE_DEPENDENCY_BEFORE_FUSION) {
+    return;
+  }
+
   /* Track only stores */
   if (op->table_info->mem_type != MEM_ST) {
       return; 
@@ -466,14 +483,15 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
 
              /* Check for store interference - micro_op1 is curr, micro_op2 is op */
 
-             if (check_store_dependency(
-              curr->micro_op_num,           // micro_op1 number
-              global_micro_op_num,          // micro_op2 number
-              op->oracle_info.va,           // micro_op2 address
-              op->table_info->mem_size)) {  // micro_op2 size
+             if (CHECK_STORE_DEPENDENCY_BEFORE_FUSION && check_store_dependency(
+                                  curr->micro_op_num,           // micro_op1 number
+                                  global_micro_op_num,          // micro_op2 number
+                                  op->oracle_info.va,           // micro_op2 address
+                                  op->table_info->mem_size)) {  // micro_op2 size
           
               /* Skip this candidate if there's a store dependency */
-                  curr = curr->next;
+              fusion_prevented_by_store_dep++;
+                 curr = curr->next;
                   continue;
               }
                       
@@ -592,6 +610,27 @@ static void mark_load_as_fused(Op* op) {
             op_pc, op_unique_num);
   }
 }
+
+/**************************************************************************************/
+/* print_fusion_statistics: print fusion stats at the end of execution */
+
+void print_fusion_statistics(void) {
+  printf("\n--------- Load Fusion Statistics ---------\n");
+  printf("Total load micro-ops fused: %u\n", total_load_micro_ops_fused);
+  printf("  With store dependency checking: %u\n", total_load_micro_ops_fused_with_store_dep);
+  printf("  Without store dependency checking: %u\n", total_load_micro_ops_fused_without_store_dep);
+  printf("Fusion opportunities prevented by store dependencies: %u\n", fusion_prevented_by_store_dep);
+  
+  /* Add percentage statistics if desired */
+  if (total_load_micro_ops_fused > 0) {
+      float with_dep_percent = (float)total_load_micro_ops_fused_with_store_dep / total_load_micro_ops_fused * 100.0f;
+      float without_dep_percent = (float)total_load_micro_ops_fused_without_store_dep / total_load_micro_ops_fused * 100.0f;
+      printf("  Percentage with store dependency checking: %.2f%%\n", with_dep_percent);
+      printf("  Percentage without store dependency checking: %.2f%%\n", without_dep_percent);
+  }
+  
+  printf("-----------------------------------------\n\n");
+}
  
  /**************************************************************************************/
  
@@ -638,6 +677,12 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
            * to the receiver op (which will handle all loads from this cacheline)
            */
           Op* receiver_op = receiver->op;
+
+          if (CHECK_STORE_DEPENDENCY_BEFORE_FUSION) {
+              total_load_micro_ops_fused_with_store_dep++;
+          } else {
+              total_load_micro_ops_fused_without_store_dep++;
+          }
 
           donate_operands(receiver_op, op->inst_info->dests, op->table_info->num_dest_regs);
           
