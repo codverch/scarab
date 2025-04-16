@@ -208,6 +208,7 @@ Scarab's source code is organized as follows:
 #include "globals/global_types.h"
 #include "globals/global_vars.h"
 #include "globals/utils.h"
+#include "icache_stage.h"
 
 #include "optimizer2.h"
 #include "param_parser.h"
@@ -282,6 +283,10 @@ int main(int argc, char* argv[], char* envp[]) {
   }
 
   /* all done --- print finish messages */
+
+  print_fusion_statistics();
+
+
   time(&cur_time);
   fprintf(mystdout, "Scarab finished at %s\n", ctime(&cur_time));
   WRITE_STATUS("FINISHED");
