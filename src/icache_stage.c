@@ -72,14 +72,14 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
- #define PRINT_FUSED_PAIRS FALSE
- #define PRINT_INTERFERING_STORES FALSE
- #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
- #define CHECK_STORE_DEPENDENCY_BEFORE_FUSION TRUE
+ #define PRINT_FUSED_PAIRS FDIP_ALT_PATH_PREFETCHES_UOC_EMITTED_ON_PATH
+ #define PRINT_INTERFERING_STORES TRUE
+ #define PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION TRUE
+ #define CHECK_STORE_DEPENDENCY_BEFORE_FUSION FALSE
 
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  InterferingStore* store_interference_hash[STORE_INTERFERENCE_HASH_SIZE] = {NULL}; 
@@ -192,7 +192,7 @@ static FILE* print_store_micro_ops_file = NULL;
     }
   }
 
-  if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
+  if(PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
     print_all_load_micro_ops_file = fopen("all_mem_load_micro_ops.txt", "w"); 
     if(print_all_load_micro_ops_file == NULL) {
       fprintf(stderr, "Error opening all_mem_load_micro_ops.txt for writing\n"); 
@@ -534,6 +534,7 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
                           
                           fflush(print_fused_pairs_file);
                       }
+
                       
                       /* Found a suitable candidate within distance */
                       return curr;
@@ -1486,13 +1487,14 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
 
      all_micro_op_num++;
 
-     if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
+     if(PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
       if(op->table_info->mem_type == MEM_LD){
-        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr);
-
+        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\t Cacheblock Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr, get_cacheline_addr(op->oracle_info.va));
         fflush(print_all_load_micro_ops_file); 
       }
     }
+
+    printf("Micro-op num: %d\t PC: %llx\t  Cacheblock Addr: %llx\t Num dests: %d\t Mem type: %d\n", all_micro_op_num, op->inst_info->addr, get_cacheline_addr(op->oracle_info.va), op->table_info->num_dest_regs, op->table_info->mem_type);
 
      ASSERTM(ic->proc_id, ic->off_path == op->off_path,
              "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
