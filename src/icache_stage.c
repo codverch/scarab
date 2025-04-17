@@ -72,14 +72,14 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION FALSE
+ #define DO_FUSION TRUE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
- #define PRINT_FUSED_PAIRS FDIP_ALT_PATH_PREFETCHES_UOC_EMITTED_ON_PATH
+ #define PRINT_FUSED_PAIRS TRUE
  #define PRINT_INTERFERING_STORES TRUE
  #define PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION TRUE
- #define CHECK_STORE_DEPENDENCY_BEFORE_FUSION FALSE
+ #define CHECK_STORE_DEPENDENCY_BEFORE_FUSION TRUE
 
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  InterferingStore* store_interference_hash[STORE_INTERFERENCE_HASH_SIZE] = {NULL}; 
@@ -491,6 +491,8 @@ static FusionLoad* find_same_cacheline_fusion_candidate(Op* op) {
           
               /* Skip this candidate if there's a store dependency */
               fusion_prevented_by_store_dep++;
+              // printf("Micro-op 1:%d\tMicro-op 2: %d\t intermediate store dependency\n", curr->micro_op_num, global_micro_op_num);
+             
                  curr = curr->next;
                   continue;
               }
@@ -1488,13 +1490,13 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
      all_micro_op_num++;
 
      if(PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
-      if(op->table_info->mem_type == MEM_LD){
-        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\t Cacheblock Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr, get_cacheline_addr(op->oracle_info.va));
+      if(op->table_info->mem_type == MEM_LD) {
+         
+        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\t Cacheblock Addr: %llx\t Num dests: %d\t Mem type: %d\n", all_micro_op_num, op->inst_info->addr, op->oracle_info.va, get_cacheline_addr(op->oracle_info.va), op->table_info->num_dest_regs, op->table_info->mem_type);
         fflush(print_all_load_micro_ops_file); 
       }
     }
 
-    printf("Micro-op num: %d\t PC: %llx\t  Cacheblock Addr: %llx\t Num dests: %d\t Mem type: %d\n", all_micro_op_num, op->inst_info->addr, get_cacheline_addr(op->oracle_info.va), op->table_info->num_dest_regs, op->table_info->mem_type);
 
      ASSERTM(ic->proc_id, ic->off_path == op->off_path,
              "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
