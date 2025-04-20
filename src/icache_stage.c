@@ -944,7 +944,7 @@ static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor
   return -1;
 }
 
-#define MAX_HISTORY_LENGTH 64
+#define MAX_HISTORY_LENGTH 352
 
 static void update_history(Op* op)
 {
