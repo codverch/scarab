@@ -39,7 +39,7 @@
 
 /**************************************************************************************/
 // it is 6 in helios, don't use a really large number 
-#define PREDICTOR_SIZE 6 
+#define PREDICTOR_SIZE 352
 
 
 typedef struct {
