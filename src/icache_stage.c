@@ -102,8 +102,6 @@ static inline void         log_stats_ic_hit(void);
 static inline void         log_stats_mshr_hit(Addr line_addr);
 static inline void         update_stats_bf_retired(void);
 
-unsigned long micro_op_num = 0; 
-
 /**************************************************************************************/
 /* set_icache_stage: */
 
@@ -957,8 +955,6 @@ static void update_history(Op* op)
   static int op_num_in_inst[MAX_HISTORY_LENGTH] = {0};
   static short valid[MAX_HISTORY_LENGTH] = {0}; // a candidate load instruction
   static short donor_num_dests[MAX_HISTORY_LENGTH];
-  static long unique_microop_nums[MAX_HISTORY_LENGTH] = {0}; 
-  unique_microop_nums[cursor] = micro_op_num;
 
   if(op->table_info->mem_type != MEM_LD)
   {
@@ -974,29 +970,14 @@ static void update_history(Op* op)
   // donor_regs[cursor] = op->inst_info->dests; // probably seg faults
   copy_reg_info(donor_regs[cursor], op->inst_info->dests);
   donor_num_dests[cursor] = op->table_info->num_dest_regs;
-  long donor_unique_num = op->unique_op_number;         
-  long donor_unique_microop_num = micro_op_num;
-  
+  long donor_unique_num = op->unique_op_number;
 
+  
   for(short i = 0; i < MAX_HISTORY_LENGTH; i++)
   {
     if(i == cursor || !valid[i])
       continue;
-
-     // Get the potential receiver's unique microop number
-     long receiver_unique_microop_num = unique_microop_nums[i];
     
-    // Check that microop distance is within limits
-    long microop_distance = donor_unique_microop_num - receiver_unique_microop_num;
-    
-     // Skip if microop distance exceeds the limit
-     if (microop_distance > 352 || microop_distance < 0) 
-     {
-      // printf("FUSION REJECTED DUE TO DISTANCE: donor=%ld, receiver=%ld, distance=%ld\n", 
-      //   donor_unique_microop_num, receiver_unique_microop_num, microop_distance);
-        continue;
-     }
-
     long donor_addr = op->oracle_info.va;
     long rcvr_addr = MemAddr[i];
     long donor_op_num = op_num_in_inst[cursor];
@@ -1076,9 +1057,6 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
 
     ASSERTM(ic->proc_id, ic->off_path == op->off_path,
             "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
-
-    // Increment the global micro-op number counter for each processed op
-    micro_op_num++;
 
     if (!op->off_path) {
       STAT_EVENT(ic->proc_id, UOPS_SERVED_BY_ICACHE_ON_PATH + op->fetched_from_uop_cache);
