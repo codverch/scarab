@@ -199,10 +199,11 @@ static FILE* print_all_load_micro_ops_file = NULL;
  
  static void add_load_to_fusion_tracking(Op* op) {
    // Track valid loads: only those that are memory loads with destination registers
+   static int i = 0;
    if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
        return;  
    }
- 
+  printf("Added %d loads %llx\n", i++, op->inst_info->addr);
   
    FusionLoad* new_load = (FusionLoad*)malloc(sizeof(FusionLoad));
    if (!new_load) {
@@ -220,13 +221,31 @@ static FILE* print_all_load_micro_ops_file = NULL;
    new_load->base_reg = op->inst_info->srcs[0].reg;
    new_load->micro_op_num = global_micro_op_num; 
    new_load->already_fused = false;
+   new_load->prev = NULL;
   
   
    // hash_idx is computed based on the cacheline address
    unsigned int hash_idx = hash_cacheline(new_load->cacheline_addr);
    
    // Insert the new load into the hash table
-   new_load->next = fusion_hash[hash_idx];
+    FusionLoad* next = fusion_hash[hash_idx];
+    if (next != NULL){
+      new_load->next = next;
+      new_load->tail = next;
+      new_load->count = next->count+1;
+      next->prev = new_load;
+    } else {
+      new_load->next = NULL;
+      new_load->tail = new_load;
+      new_load->count = 1;
+      new_load->prev = NULL;
+    }
+    if (new_load->count >= 100) {
+      FusionLoad* new_tail = new_load->tail->prev;
+      free(new_load->tail);
+      new_tail->next = NULL;
+    }   
+
    fusion_hash[hash_idx] = new_load;
    
  }
@@ -455,6 +474,8 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
       FusionLoad* receiver = find_same_cacheline_fusion_candidate(op);
       
       if (receiver) {
+        // static int curr_count = 0;
+        // printf("fused %d\n", curr_count++);
           /* 
            * Fusion found - transfer the destination registers from this op
            * to the receiver op (which will handle all loads from this cacheline)

@@ -398,6 +398,9 @@ typedef struct FusionLoad {
     unsigned int micro_op_num;      // Micro-op number: Tracking based on both memory loads and non-memory loads
     bool already_fused;             // Flag to indicate if this load has been involved in fusion
     struct FusionLoad* next;        // Pointer to next load in the hash bucket
+    struct FusionLoad* prev;
+    struct FusionLoad* tail;
+    unsigned int count;
 } FusionLoad;
 
 
