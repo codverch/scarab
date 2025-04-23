@@ -72,11 +72,11 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
- #define PRINT_FUSED_PAIRS FALSE
+ #define PRINT_FUSED_PAIRS TRUE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
@@ -199,11 +199,11 @@ static FILE* print_all_load_micro_ops_file = NULL;
  
  static void add_load_to_fusion_tracking(Op* op) {
    // Track valid loads: only those that are memory loads with destination registers
-   static int i = 0;
+  //  static int i = 0;
    if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
        return;  
    }
-  printf("Added %d loads %llx\n", i++, op->inst_info->addr);
+  // printf("Added %d loads %llx\n", i++, op->inst_info->addr);
   
    FusionLoad* new_load = (FusionLoad*)malloc(sizeof(FusionLoad));
    if (!new_load) {
