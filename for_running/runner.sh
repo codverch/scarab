@@ -1,12 +1,12 @@
 #!/bin/bash
 
 SCARAB_DIR="/users/DTRDNT/main/scarab/src"
-TRACE_ROOT="/users/DTRDNT/main/completed_traces/"
-MAX_PARALLEL=10 
+TRACE_ROOT="/users/DTRDNT/main/simpoint_traces"
+MAX_PARALLEL=8 
 MY_DIR=$(pwd)
 RECORD_DIR="$MY_DIR/records"
 
-baseline_options="--inst_limit 100000000 --uop_cache_enable 0"
+baseline_options="--uop_cache_enable 0"
 
 mkdir -p "$RECORD_DIR"
 cd "$SCARAB_DIR" || exit 1
@@ -16,7 +16,7 @@ run_scarab() {
     local bin_dir="$2"
     # Extract the workload name from the parent directory
 
-    wname=$(basename $(realpath $(dirname $bin_dir/../..))) #ASSUMPTION: the workload name is two dirs above the trace folder -- it can be three as in simpoint traces
+    wname=$(basename $(realpath $(dirname $bin_dir/../../..))) #ASSUMPTION: the workload name is two dirs above the trace folder -- it can be three as in simpoint traces
     local workload_name="$wname"
     # Generate a record file name in the format: workload_number.record (e.g., clang_62.record)
     local record_file="$RECORD_DIR/${workload_name}_$(basename "$trace_zip" .zip).record"

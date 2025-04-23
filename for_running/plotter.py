@@ -8,16 +8,62 @@ import sys
 
 from termcolor import colored
 
+# unfortunately, this is hardcoded to work with the simpoint traces
+
 # --- argument parsing ---
 parser = argparse.ArgumentParser()
-parser.add_argument("--record-dir", default="records", help="Directory containing result .txt files")
+parser.add_argument("--record-dir",    default="records", help="Directory containing result .txt files")
+parser.add_argument("--sim-root",      default="/users/DTRDNT/main/simpoint_traces",
+                                         help="Root of simpoint_traces/<app>/simpoints")
 args = parser.parse_args()
 record_dir = args.record_dir
+sim_root   = args.sim_root
 
 # --- prepare regex and containers ---
-ipc_pattern = re.compile(r"--\s*([\d.]+)\s*IPC")
-vanilla_ipcs = defaultdict(list)
-fused_ipcs = defaultdict(list)
+ipc_pattern   = re.compile(r"--\s*([\d.]+)\s*IPC")
+# Now store lists of (ipc, weight)
+vanilla_data  = defaultdict(list)   # app -> [ (ipc, w), ... ]
+fused_data    = defaultdict(list)
+
+# cache per-app trace→weight maps
+trace_weight = {}  # app -> { traceIndex(str) : weight(float), ... }
+
+def load_weights_for(app):
+    """Load opt.p and opt.w for this app, build trace→weight map."""
+    d = {}
+    pfile = os.path.join(sim_root, app, "simpoints", "opt.p")
+    wfile = os.path.join(sim_root, app, "simpoints", "opt.w")
+    if not os.path.exists(pfile):
+        print(f"Error: missing mapping file {pfile}", file=sys.stderr)
+        sys.exit(1)
+    if not os.path.exists(wfile):
+        print(f"Error: missing weight file  {wfile}", file=sys.stderr)
+        sys.exit(1)
+
+    # traceIndex → simIndex
+    trace2sim = {}
+    with open(pfile) as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) != 2: continue
+            trace2sim[parts[0]] = parts[1]
+
+    # simIndex → weight
+    sim2w = {}
+    with open(wfile) as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) != 2: continue
+            sim2w[parts[1]] = float(parts[0])
+
+    # build traceIndex → weight
+    for t, s in trace2sim.items():
+        if s not in sim2w:
+            print(f"Warning: no weight for simIndex {s} in {wfile}", file=sys.stderr)
+            continue
+        d[t] = sim2w[s]
+
+    trace_weight[app] = d
 
 # --- gather IPC data ---
 if not os.path.isdir(record_dir):
@@ -28,46 +74,75 @@ files_found = False
 for fname in os.listdir(record_dir):
     if not fname.endswith('.txt'):
         continue
-    fullpath = os.path.join(record_dir, fname)
     files_found = True
-    if '_vanilla.txt' in fname:
-        app = fname.split('_vanilla.txt')[0]
-        target = vanilla_ipcs
-    elif '_fused.txt' in fname:
-        app = fname.split('_fused.txt')[0]
-        target = fused_ipcs
+    full = os.path.join(record_dir, fname)
+
+    # determine app and traceIndex
+    if fname.endswith('_vanilla.txt'):
+        base = fname[:-len('_vanilla.txt')]   # e.g. "clang_62"
+        target = vanilla_data
+    elif fname.endswith('_fused.txt'):
+        base = fname[:-len('_fused.txt')]
+        target = fused_data
     else:
         print(f"Warning: Unrecognized file pattern '{fname}'", file=sys.stderr)
         continue
-    with open(fullpath, 'r') as f:
-        matches = ipc_pattern.findall(f.read())
-        if not matches:
-            print(f"Warning: No IPC found in '{fname}'", file=sys.stderr)
-        for val in matches:
-            target[app].append(float(val))
+
+    parts = base.split('_', 1)
+    if len(parts) != 2:
+        print(f"Warning: can't extract traceIndex from '{base}'", file=sys.stderr)
+        continue
+    app, trace = parts[0], parts[1]
+
+    # load weights for this app on first sight
+    if app not in trace_weight:
+        load_weights_for(app)
+
+    wmap = trace_weight[app]
+    if trace not in wmap:
+        print(f"Warning: no weight for trace {trace} of app {app}", file=sys.stderr)
+        continue
+    w = wmap[trace]
+
+    # extract IPC
+    text = open(full).read()
+    m = ipc_pattern.search(text)
+    if not m:
+        print(f"Warning: No IPC found in '{fname}'", file=sys.stderr)
+        continue
+    ipc = float(m.group(1))
+
+    # store (ipc, weight)
+    target[app].append((ipc, w))
 
 if not files_found:
     print("Error: No .txt files found.", file=sys.stderr)
     sys.exit(1)
 
-apps = sorted(set(vanilla_ipcs) & set(fused_ipcs))
+apps = sorted(set(vanilla_data) & set(fused_data))
 if not apps:
     print("Error: No apps with both vanilla and fused data.", file=sys.stderr)
     sys.exit(1)
 
-vanilla_avg = [sum(vanilla_ipcs[a]) / len(vanilla_ipcs[a]) for a in apps]
-fused_avg = [sum(fused_ipcs[a]) / len(fused_ipcs[a]) for a in apps]
+# --- compute weighted averages ---
+def weighted_avg(pairs):
+    total_w = sum(w for (_, w) in pairs)
+    if total_w == 0:
+        return 0.0
+    return sum(ipc * w for (ipc, w) in pairs) / total_w
 
-# --- add geometric means ---
+vanilla_avg = [weighted_avg(vanilla_data[a]) for a in apps]
+fused_avg   = [weighted_avg(fused_data[a])   for a in apps]
+
+# --- add geometric means of the weighted averages ---
 vanilla_gm = geometric_mean(vanilla_avg)
-fused_gm = geometric_mean(fused_avg)
-
+fused_gm   = geometric_mean(fused_avg)
 apps.append("GEOMEAN")
 vanilla_avg.append(vanilla_gm)
 fused_avg.append(fused_gm)
 
 # --- print summary ---
-print("\nSummary of Average IPCs:\n")
+print("\nSummary of Weighted Average IPCs:\n")
 print(f"{'App':<20} {'Vanilla':>10} {'Fused':>10} {'Change':>10}")
 print("-" * 45)
 for app, v, f in zip(apps, vanilla_avg, fused_avg):
@@ -92,11 +167,11 @@ for i, (v, f) in enumerate(zip(vanilla_avg, fused_avg)):
     plt.text(i + width/2, f + 0.01, label, ha='center', va='bottom', color=color, fontsize=9)
 
 plt.xticks(x, apps, rotation=45, ha='right')
-plt.ylabel('Average IPC')
-plt.title('Vanilla vs Fused IPC per App')
+plt.ylabel('Weighted Average IPC')
+plt.title('Vanilla vs Fused Weighted IPC per App')
 plt.legend()
 plt.tight_layout()
 
-outpath = os.path.join(record_dir, 'ipc_comparison_histogram.png')
+outpath = os.path.join(record_dir, 'ipc_comparison_weighted_histogram.png')
 plt.savefig(outpath)
 plt.show()
