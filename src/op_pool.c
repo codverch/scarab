@@ -28,6 +28,8 @@ Ops, thus eliminating dynamic allocation all over the place.  Basically, it
 allocates them once and then hands out pointers every time 'alloc_op' is called.
 ***************************************************************************************/
 
+#include "libs/cpp_hash_lib_wrapper.h"
+
 #include "debug/debug_macros.h"
 #include "globals/assert.h"
 #include "globals/global_defs.h"
@@ -144,6 +146,7 @@ void free_op(Op* op) {
   if(PIPEVIEW)
     pipeview_print_op(op);
 
+    
   op->op_pool_valid = FALSE;
   op_pool_active_ops--;
   ASSERTM(0, op_pool_active_ops >= 0, "op_pool_active_ops:%u\n",
@@ -162,6 +165,11 @@ void free_op(Op* op) {
     //we no longer allocate memory for fake nops
     //free(op->inst_info->table_info);
     free(op->inst_info);
+    op->inst_info = NULL;
+  } else if(op->inst_info) {
+    free(op->inst_info->table_info);
+    op->inst_info->table_info = NULL;
+    cpp_delete_info(op->inst_info);
     op->inst_info = NULL;
   }
 

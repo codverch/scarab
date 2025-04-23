@@ -1,12 +1,13 @@
 --mode full
 --model cmp
 --frontend memtrace
+--inst_limit 100000000
 --sim_limit none
 --dump_params 1
 --dump_stats 1
 --dump_trace 0
---run 1
---run_file /users/DTRDNT/main/scarab/for_running/records/clang_2054.out
+--record 1
+--record_file /users/DTRDNT/main/scarab/for_running/records/tsp_trace.record
 --mlc_present 1
 --mlc_size 524288
 --mlc_assoc 8
@@ -96,8 +97,8 @@
 --fetch_off_path_ops 1
 --stores_do_not_block_window 1
 --prefs_do_not_block_window 1
---cbp_trace_r0 /users/DTRDNT/main/traces/clang/traces_simp/trace/2054.zip
---memtrace_modules_log /users/DTRDNT/main/traces/clang/traces_simp/trace/../bin
+--cbp_trace_r0 /users/DTRDNT/main/completed_traces/tsp/trace/trace.zip
+--memtrace_modules_log /users/DTRDNT/main/completed_traces/tsp/trace/../bin
 --debug_cycle_start 0
 --debug_cycle_stop -1
 --debug_inst_start 0
@@ -146,7 +147,7 @@ Parameter status at compile time and values supplied on the command line:
 SIM_MODE                                 0                               full
 SIM_MODEL                                0                               cmp
 FRONTEND                                 FE_PIN_EXEC_DRIVEN              memtrace
-INST_LIMIT                               NULL                            
+INST_LIMIT                               NULL                            100000000
 SIM_LIMIT                                "none"                          none
 FORWARD_PROGRESS_LIMIT                   100000000                       
 FORWARD_PROGRESS_INTERVAL                10000                           
@@ -192,10 +193,10 @@ IGNORE_BAR_FETCH                         FALSE
 TRACE_BBV_OUTPUT                         NULL                            
 TRACE_FOOTPRINT_OUTPUT                   ""                              
 SEGMENT_INSTR_COUNT                      0                               
-RECORD                                   0                               
-RECORD_FILE                              "record.log.bin"                
-RUN                                      0                               1
-RUN_FILE                                 "record.out.bin"                /users/DTRDNT/main/scarab/for_running/records/clang_2054.out
+RECORD                                   0                               1
+RECORD_FILE                              "record.log.bin"                /users/DTRDNT/main/scarab/for_running/records/tsp_trace.record
+RUN                                      0                               
+RUN_FILE                                 "record.out.bin"                
 ENABLE_SWPRF                             FALSE                           
 MLC_PRESENT                              FALSE                           1
 MLC_SIZE                                 (512 * 1024)                    524288
@@ -567,7 +568,7 @@ OBEY_REG_DEP                             TRUE
 OLDEST_FIRST_SCHED                       FALSE                           
 FIND_EMPTIEST_RS                         FALSE                           
 TRACK_L1_MISS_DEPS                       FALSE                           
-CBP_TRACE_R0                             NULL                            /users/DTRDNT/main/traces/clang/traces_simp/trace/2054.zip
+CBP_TRACE_R0                             NULL                            /users/DTRDNT/main/completed_traces/tsp/trace/trace.zip
 CBP_TRACE_R1                             NULL                            
 CBP_TRACE_R2                             NULL                            
 CBP_TRACE_R3                             NULL                            
@@ -631,7 +632,7 @@ CBP_TRACE_R60                            NULL
 CBP_TRACE_R61                            NULL                            
 CBP_TRACE_R62                            NULL                            
 CBP_TRACE_R63                            NULL                            
-MEMTRACE_MODULES_LOG                     NULL                            /users/DTRDNT/main/traces/clang/traces_simp/trace/../bin
+MEMTRACE_MODULES_LOG                     NULL                            /users/DTRDNT/main/completed_traces/tsp/trace/../bin
 FE_FTQ_BLOCK_NUM                         32                              
 FE_FTQ_TAKEN_CFS_PER_CYCLE               2                               
 FE_FTQ_BYTES_PER_CYCLE                   128                             

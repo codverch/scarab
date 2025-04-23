@@ -50,3 +50,7 @@ std::unordered_map<key, Inst_Info*, hash_fn> hash_map;
     // }
   }
 
+  void cpp_delete_info(Inst_Info* inst) {
+    delete inst;
+    return;
+  }
