@@ -72,11 +72,11 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
- #define FUSION_DRY_RUN TRUE
+ #define FUSION_DRY_RUN FALSE
  #define PRINT_FUSED_PAIRS TRUE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
@@ -524,6 +524,11 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
   }
   
   int added_regs = 0;
+  // rcvr->oracle_info.was_fused = TRUE;
+  if (FUSION_DRY_RUN){
+    return;
+  }
+
   for (short i = 0; i < num_dests; i++) {
       bool already_present = false;
       
@@ -564,7 +569,7 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
     op->table_info->num_src_regs = 0;
     op->table_info->mem_size = 0;
     op->inst_info->latency = 1;
-    op->inst_info->extra_ld_latency = -DCACHE_CYCLES+1;
+    op->inst_info->extra_ld_latency = 0;
     op->oracle_info.mem_size = 0;
   }
   op->oracle_info.was_fused = TRUE;

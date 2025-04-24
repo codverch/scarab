@@ -178,6 +178,21 @@ void update_dcache_stage(Stage_Data* src_sd) {
       ASSERT(dc->proc_id, dc->sd.op_count >= 0);
     }
 
+    // if(op && op->inst_info && op->inst_info->extra_ld_latency < 0 && op->table_info->mem_size == 0) {
+    //   // sentinel match
+    //   if (cycle_count < op->exec_cycle) {
+    //     continue;
+    //   }
+    //   op->state=OS_DONE;
+    //   op->done_cycle=cycle_count;
+    //   src_sd->ops[ii] = NULL;
+    //   src_sd->op_count--;
+    //   op->wake_cycle = op->done_cycle;
+    //   wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
+
+    //   continue;
+    // }
+
     if(op && cycle_count < op->rdy_cycle) {
       ASSERTM(dc->proc_id, op->replay, "o:%s  rdy:%s", unsstr64(op->op_num),
               unsstr64(op->rdy_cycle));
@@ -187,9 +202,16 @@ void update_dcache_stage(Stage_Data* src_sd) {
       ASSERT(dc->proc_id, src_sd->op_count >= 0);
       op = NULL;
     }
+ 
+    // if (op && op->oracle_info.mem_size == 0){
+    //   printf("%llx\n", op->inst_info->addr);
+    // }
+
 
     if(dc->sd.ops[ii])
+    {
       op = dc->sd.ops[ii];
+    }
     else if(!op)
       continue;
     else if(cycle_count < op->exec_cycle &&
@@ -204,7 +226,7 @@ void update_dcache_stage(Stage_Data* src_sd) {
          cycle before normal, so the wake up happens in the same
          cycle as execute */
       continue;
-    else if(op->table_info->mem_type == NOT_MEM) {
+    else if(op->table_info->mem_type == NOT_MEM || op->oracle_info.was_fused) {
       /* just squish non-memory ops */
       src_sd->ops[ii] = NULL;
       src_sd->op_count--;
@@ -267,7 +289,7 @@ void update_dcache_stage(Stage_Data* src_sd) {
     DEBUG(dc->proc_id,
           "check_read and write port availiabilty mem_type:%s bank:%d \n",
           (op->table_info->mem_type == MEM_ST) ? "ST" : "LD", bank);
-    if(!PERFECT_DCACHE && ((op->table_info->mem_type == MEM_ST &&
+    if(!(PERFECT_DCACHE) && ((op->table_info->mem_type == MEM_ST &&
                             !get_write_port(&dc->ports[bank])) ||
                            (op->table_info->mem_type != MEM_ST &&
                             !get_read_port(&dc->ports[bank])))) {

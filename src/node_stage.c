@@ -263,7 +263,7 @@ void flush_window() {
         ASSERT(op->proc_id, node->rs[op->rs_id].rs_op_count > 0);
         node->rs[op->rs_id].rs_op_count--;
       }
-      if(get_mem_ld(op)) {
+      if(get_mem_ld(op) && !op->oracle_info.was_fused) {
         node->num_loads--;
         if(node->node_lq_head==op) {
           node->node_lq_head = NULL;
@@ -299,7 +299,7 @@ void flush_window() {
       keep_ops++;
       last            = &op->next_node;
       node->node_tail = op;
-      if(get_mem_ld(op)) node->node_lq_tail = op;
+      if(get_mem_ld(op) && !op->oracle_info.was_fused) node->node_lq_tail = op;
       if(get_mem_st(op)) node->node_sq_tail = op;
     }
   }
@@ -478,7 +478,7 @@ void node_issue(Stage_Data* src_sd) {
       rob_block_issue_reason = ROB_BLOCK_ISSUE_FULL;
       return;
     }
-    else if(get_mem_ld(op) && is_lq_full())
+    else if(get_mem_ld(op) && !op->oracle_info.was_fused && is_lq_full())
     {
       collect_lsq_full_stats(node->node_lq_head);
       rob_block_issue_reason = ROB_BLOCK_ISSUE_FULL;
@@ -519,7 +519,7 @@ void node_issue(Stage_Data* src_sd) {
     node->node_tail  = op;
 
     // Add mem ops to load and store queues
-    if(get_mem_ld(op))
+    if(get_mem_ld(op) && !op->oracle_info.was_fused)
     {
       ASSERT(0, !((node->node_lq_head!=NULL) ^ (node->node_lq_tail!=NULL)));
       node->num_loads++;
@@ -909,7 +909,7 @@ void node_retire() {
 
     node->ret_op++;
 
-    if(get_mem_ld(op))
+    if(get_mem_ld(op) && ! op->oracle_info.was_fused)
     {
       node->num_loads--;
       ASSERT(0, node->num_loads>=0);

@@ -292,7 +292,11 @@ void update_exec_stage(Stage_Data* src_sd) {
       // after the op's latency
       op->wake_cycle = exec_cycle;
       wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
-    } else if(op->table_info->mem_type == MEM_ST) {
+    } else if (op->oracle_info.was_fused) {
+      op->wake_cycle = exec_cycle;
+      wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
+    } 
+    else if(op->table_info->mem_type == MEM_ST) {
       // stores have their addresses computed in this cycle and
       // also write their data into the store buffer
       if(op->exec_count == 0) {
@@ -331,6 +335,7 @@ void update_exec_stage(Stage_Data* src_sd) {
       STAT_EVENT(exec->proc_id, FUS_BUSY_ON_PATH + fop->off_path);
       if(fop->table_info->mem_type) {
         fu->held_by_mem = TRUE;
+        // printf("%llx\t%llx\n", fop->inst_info->addr, fop->oracle_info.va);
         STAT_EVENT(exec->proc_id, FU_BUSY_MEM_STALL);
       }
       continue;
@@ -363,7 +368,7 @@ void update_exec_stage(Stage_Data* src_sd) {
     fu->idle_cycle  = cycle_count + (latency < 0 ? -latency : latency);
 
     // set the op's state to reflect it's execution
-    if(op->table_info->mem_type == NOT_MEM || STALL_ON_WAIT_MEM) {
+    if(op->table_info->mem_type == NOT_MEM || STALL_ON_WAIT_MEM || op->oracle_info.was_fused) {
       op->state = OS_SCHEDULED;
     } else {
       op->state = OS_TENTATIVE;  // mem op may fail if it misses and can't get a
@@ -372,7 +377,7 @@ void update_exec_stage(Stage_Data* src_sd) {
     op->exec_cycle = cycle_count + MAX2(latency, -latency);
     op->exec_count++;
 
-    if(op->table_info->mem_type == NOT_MEM)
+    if(op->table_info->mem_type == NOT_MEM || op->oracle_info.was_fused)
       op->done_cycle = op->exec_cycle;
 
     STAT_EVENT(op->proc_id, EXEC_ON_PATH_INST + op->off_path);
