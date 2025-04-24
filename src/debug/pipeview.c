@@ -81,7 +81,8 @@ void pipeview_init(void) {
 void pipeview_print_op(struct Op_struct* op) {
   if(!DEBUG_RANGE_COND(op->proc_id))
     return;
-
+  if(!op->oracle_info.was_fused) 
+    return;
   FILE* file = files[op->proc_id];
   print_header(file, op);
   if(op->off_path) {

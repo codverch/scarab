@@ -72,10 +72,11 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION FALSE
+ #define DO_FUSION TRUE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
+ #define FUSION_DRY_RUN TRUE
  #define PRINT_FUSED_PAIRS TRUE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
@@ -558,12 +559,15 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
   }
   
   /* Convert to minimal no-op but preserve essential properties */
-  op->table_info->num_dest_regs = 0;
-  op->table_info->num_src_regs = 0;
-  op->table_info->mem_size = 0;
-  op->inst_info->latency = 1;
-  op->inst_info->extra_ld_latency = 0;
-  op->oracle_info.mem_size = 0;
+  if (!FUSION_DRY_RUN) {
+    op->table_info->num_dest_regs = 0;
+    op->table_info->num_src_regs = 0;
+    op->table_info->mem_size = 0;
+    op->inst_info->latency = 1;
+    op->inst_info->extra_ld_latency = -DCACHE_CYCLES+1;
+    op->oracle_info.mem_size = 0;
+  }
+  op->oracle_info.was_fused = TRUE;
 }
  
  /**************************************************************************************/

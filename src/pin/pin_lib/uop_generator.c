@@ -372,6 +372,7 @@ void uop_generator_get_uop(uns proc_id, Op* op, ctype_pin_inst* inst) {
   op->in_rdy_list              = FALSE;
   op->in_node_list             = FALSE;
   op->oracle_info.recovery_sch = FALSE;
+  op->oracle_info.was_fused = FALSE;
 
   op->req    = NULL;
   op->marked = FALSE;

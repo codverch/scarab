@@ -27,6 +27,7 @@
 Ops, thus eliminating dynamic allocation all over the place.  Basically, it
 allocates them once and then hands out pointers every time 'alloc_op' is called.
 ***************************************************************************************/
+#include "libs/cpp_hash_lib_wrapper.h"
 
 #include "debug/debug_macros.h"
 #include "globals/assert.h"
@@ -163,6 +164,11 @@ void free_op(Op* op) {
     //free(op->inst_info->table_info);
     free(op->inst_info);
     op->inst_info = NULL;
+  } else if (op->inst_info) {
+    free(op->inst_info->table_info);
+    op->inst_info->table_info = NULL;
+    cpp_delete_info(op->inst_info);
+    op->inst_info=NULL;
   }
 
   op->op_pool_next  = op_pool_free_head;
