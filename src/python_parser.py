@@ -1,12 +1,15 @@
 import struct
 import argparse
 from tqdm import tqdm
+import mmap
 
 addr_to_counter_dict = {}
 fusable = []
 nopable = []
 mapping = {}
 mask = 0
+
+distance = 362
 
 def increment_counter_per_instaddr(addr : int) -> int:
     global addr_to_counter_dict
@@ -33,6 +36,7 @@ def get_bit(mask: int, offset: int) -> int:
 
 class outentry:
     def __init__(self):
+        self.uop_number = -1;
         self.counter = -1
         self.addr = -1
         self.dsts = set()
@@ -51,6 +55,8 @@ def register_instruction(M):
     global nopable
     global mask
 
+    uop_number = M['counter']
+
     cacheline_being_hit = get_cacheline(M)
     instruction_addr = M['instruction_addr']
     my_counter = increment_counter_per_instaddr(instruction_addr) 
@@ -59,17 +65,19 @@ def register_instruction(M):
     if cacheline_being_hit in mapping:
         prev_entry = mapping[cacheline_being_hit]
         del mapping[cacheline_being_hit] # delete it
-        if prev_entry.type == 0 and M['type'] == 0: # we are both memory loads accessing the same cacheline
+        if prev_entry.type == 0 and M['type'] == 0 and ((uop_number - prev_entry.uop_number) <= distance): # we are both memory loads accessing the same cacheline
             fusable.append(prev_entry) # append old as a fusable type
             nopable_inst = outentry() #
             nopable_inst.counter = my_counter
             nopable_inst.addr = instruction_addr
+            nopable_inst.uop_number = uop_number
             nopable.append(nopable_inst) # and myself as a nopable type
-        elif prev_entry.type == 1 and M['type'] == 1 and prev_entry.bregs == M['l1d_regs']: # we are both stores with matching base registers
+        elif prev_entry.type == 1 and M['type'] == 1 and prev_entry.bregs == M['l1d_regs'] and ((uop_number - prev_entry.uop_number) <= distance): # we are both stores with matching base registers
             fusable.append(prev_entry) # append old as a fusable type
             nopable_inst = outentry() #
             nopable_inst.counter = my_counter
             nopable_inst.addr = instruction_addr
+            nopable_inst.uop_number = uop_number
             nopable.append(nopable_inst) # and myself as a nopable type
         else: # something went wrong -- the previous entry is invalid and the current entry is the latest
             new_entry = outentry()
@@ -78,6 +86,8 @@ def register_instruction(M):
             new_entry.dsts = set() # TODO actually add regs
             new_entry.bregs = M['l1d_regs']
             new_entry.type = M['type']
+            new_entry.uop_number = uop_number
+            mapping[cacheline_being_hit] = new_entry
     else: # the entry doesn't exist
         new_entry = outentry()
         new_entry.counter = my_counter
@@ -85,79 +95,60 @@ def register_instruction(M):
         new_entry.dsts = set() # TODO actually add regs
         new_entry.bregs = M['l1d_regs']
         new_entry.type = M['type']
+        new_entry.uop_number = uop_number
         mapping[cacheline_being_hit] = new_entry
     return
-# def register_instruction(M):
-#     global mapping
-#     global fusable
-#     global nopable
-#     global mask
 
-#     cacheline_being_hit = get_cacheline(M)
-#     instruction_addr = M['instruction_addr']
-#     my_counter = increment_counter_per_instaddr(instruction_addr) 
+def read_struct_from_file(file_name, batch_size=4096):
+    """
+    Batch-loads and unpacks struct records from a binary file using mmap and struct.iter_unpack,
+    calling register_instruction in the original order.
+    """
+    global fusable, nopable
 
-#     if cacheline_being_hit in mapping: # trivial to modify to include l1d regs as the key to ensure same base reg as well or within a distance of 10
-#         fusable_old_inst = mapping[cacheline_being_hit]
-#         del mapping[cacheline_being_hit]
-#         for i in range(M['num_dst_regs']):
-#             fusable_old_inst.dsts.add(M['dst_regs'][i])
-#         fusable.append(fusable_old_inst)
-#         nopable_inst = outentry()
-#         nopable_inst.counter = my_counter
-#         nopable_inst.addr = instruction_addr
-#         nopable.append(nopable_inst)
-#     else: # a memory load is hitting this cacheline for the first time
-#         new_inst = outentry()
-#         new_inst.counter = my_counter
-#         new_inst.addr = instruction_addr
-#         for i in range(M['num_dst_regs']):
-#             new_inst.dsts.add(M['dst_regs'][i])
-#         mapping[cacheline_being_hit] = new_inst
-#     return
+    struct_fmt = 'q q q q 2q q 8B q q'
+    rec_size = struct.calcsize(struct_fmt)
 
-# store pairs have single base register
-# load pairs can have whatever
-# register renaming handles everything but we don't want to introduce a new stall 
-#     to prevent this, in scarab, rename everything dependent on the tail in the catalyst 
-#     to instead depend 
-# we don't want a store and a load to hit the same cacheline, interfering with each other
+    with open(file_name, 'rb') as f:
+        # Memory-map entire file for fast, zero-copy access
+        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        total_bytes = mm.size()
+        total_recs = total_bytes // rec_size
 
-def read_struct_from_file(file_name):
-    global fusable
-    global mapping
-    global mapping
-    struct_format = 'q q q q 2q q 8B q q'  # Corresponds to your struct
-    with open(file_name, 'rb') as file:
-        file_size = len(file.read())
-        file.seek(0)  # Reset the pointer to the beginning of the file
-        
-        with tqdm(total=file_size, unit='B', unit_scale=True, desc="Reading struct data") as pbar:
-            while True:
-                data = file.read(struct.calcsize(struct_format))
-                if not data:
-                    break  # Stop if no more data to read
+        # Iterator that unpacks all records in one C-level loop
+        unpack_iter = struct.iter_unpack(struct_fmt, mm)
 
-                unpacked_data = struct.unpack(struct_format, data)
-                # print(unpacked_data)
+        with tqdm(total=total_recs, unit='rec', desc="Reading struct data") as pbar:
+            buffer = []
+            for fields in unpack_iter:
                 M = {
-                    'counter': unpacked_data[0],
-                    'instruction_addr': unpacked_data[1],
-                    'read_address': unpacked_data[2],
-                    'num_l1d_regs': unpacked_data[3],
-                    'l1d_regs': unpacked_data[4:6],  # 2 L1D registers
-                    'num_dst_regs': unpacked_data[6],
-                    'dst_regs': unpacked_data[7:15],  # 8 destination registers
-                    'reg_use_mask': unpacked_data[15],
-                    'type': unpacked_data[16]
+                    'counter':        fields[0],
+                    'instruction_addr': fields[1],
+                    'read_address':   fields[2],
+                    'num_l1d_regs':   fields[3],
+                    'l1d_regs':       fields[4:6],
+                    'num_dst_regs':   fields[6],
+                    'dst_regs':       fields[7:15],
+                    'reg_use_mask':   fields[15],
+                    'type':           fields[16]
                 }
-                # print(M)
-                register_instruction(M)
-                
-                pbar.update(struct.calcsize(struct_format))  
+                buffer.append(M)
 
+                # Process in batches to reduce Python overhead
+                if len(buffer) >= batch_size:
+                    for rec in buffer:
+                        register_instruction(rec)
+                    buffer.clear()
+                    pbar.update(batch_size)
+
+            # Flush any remaining records
+            if buffer:
+                for rec in buffer:
+                    register_instruction(rec)
+                pbar.update(len(buffer))
+
+        mm.close()
     print(len(fusable), len(nopable))
-
     return fusable, nopable
 
         # for fusable_inst in fusable:

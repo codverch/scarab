@@ -673,9 +673,10 @@ static Flag use_ld1_addr_regs(const uns8 proc_id, const compressed_op* pi,
 }
 
 static long set_bit(long long value, int offset) {
+  return 0;
   if (offset < 0 || offset >= 64) {
-      printf("Error: offset %d is out of bounds (0–63)\n", offset);
-      exit(1);
+      // TODO convert to multi value stuff
+      return 0;
   }
   return value | ((long long)1 << offset);
 }
@@ -718,7 +719,8 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
     exit(1);
   }
 
-  
+  int deleted = 0;
+  // static int del_counter = 0;
 
   if(RUN) {
     if((pi->num_ld == 1 || pi->num_st == 1)) {
@@ -774,6 +776,12 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
           pi->cf_type = NOT_CF;
           has_control = 0;
           pi->op_type = OP_NOP;
+          
+          // if(del_counter == 10)
+          //   deleted = 1;
+          // else
+          //   deleted = 0;
+          // del_counter++;
 
         }
       }
@@ -831,6 +839,10 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
     uop->op_type      = (pi->is_fp || pi->is_simd) ? OP_FLD : OP_ILD;
     uop->mem_size     = pi->ld_size;
     uop->load_seq_num = i;
+
+
+    
+
 
     for(uns j = 0; j < pi->num_ld1_addr_regs; ++j) {
       Reg_Id reg = (use_ld1_addr_regs(proc_id, pi, uop->load_seq_num) ?
@@ -984,6 +996,9 @@ static uns generate_uops(uns8 proc_id, ctype_pin_inst* pi,
 
     uop->op_type = OP_NOP;
     STAT_EVENT(0, STATIC_PIN_NOP);
+
+    if(deleted)
+      uop->humza_flag = deleted;
 
   }
 

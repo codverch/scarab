@@ -79,6 +79,8 @@ void pipeview_init(void) {
 /* pipeview_print_op: */
 
 void pipeview_print_op(struct Op_struct* op) {
+  if(!op->humza_flag)
+    return;
   if(!DEBUG_RANGE_COND(op->proc_id))
     return;
 

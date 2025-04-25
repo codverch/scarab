@@ -168,7 +168,7 @@ for i, (v, f) in enumerate(zip(vanilla_avg, fused_avg)):
 
 plt.xticks(x, apps, rotation=45, ha='right')
 plt.ylabel('Weighted Average IPC')
-plt.title('Vanilla vs Fused Weighted IPC per App')
+plt.title('Vanilla vs Fused Weighted IPC per App for Datacenter applications')
 plt.legend()
 plt.tight_layout()
 

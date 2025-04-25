@@ -10,7 +10,7 @@ from termcolor import colored
 
 # --- argument parsing ---
 parser = argparse.ArgumentParser()
-parser.add_argument("--record-dir", default="records", help="Directory containing result .txt files")
+parser.add_argument("--record-dir", default="records_socjournal", help="Directory containing result .txt files")
 args = parser.parse_args()
 record_dir = args.record_dir
 
@@ -93,7 +93,7 @@ for i, (v, f) in enumerate(zip(vanilla_avg, fused_avg)):
 
 plt.xticks(x, apps, rotation=45, ha='right')
 plt.ylabel('Average IPC')
-plt.title('Vanilla vs Fused per App')
+plt.title('Vanilla vs Fused per App for CRONO')
 plt.legend()
 plt.tight_layout()
 
