@@ -5,7 +5,7 @@ import numpy as np
 
 # Directories containing IPC files
 baseline_dir = '/users/deepmish/scarab/src/baseline'
-ideal_fusion_dir = '/users/deepmish/scarab/src/ideal_fusion_without_stores'
+ideal_fusion_dir = '/users/deepmish/scarab/src/records_with_data'
 
 # Extract IPC value from a given file
 def extract_ipc(file_path):
@@ -71,7 +71,7 @@ ideal_bars = ax.bar(index + bar_width / 2, normalized_ideal, bar_width,
 # Axis labels and ticks
 ax.set_xlabel('Datacenter Applications', fontsize=12)
 ax.set_ylabel('Normalized IPC', fontsize=12)
-ax.set_title('Normalized IPC Comparison: Baseline vs Ideal Fusion (Distance = 352 + Store dependence checks)', fontsize=14)
+ax.set_title('Normalized IPC Comparison: Baseline vs Ideal Fusion (Distance = 352)', fontsize=14)
 ax.set_xticks(index)
 ax.set_xticklabels([display_names[app] for app in common_apps], rotation=45, ha='right')
 
