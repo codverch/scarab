@@ -71,8 +71,8 @@
  
  /**************************************************************************************/
  /* Fusion Macros */
- 
- #define DO_FUSION TRUE
+
+ #define DO_FUSION TRUE 
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
