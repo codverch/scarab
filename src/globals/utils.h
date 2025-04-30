@@ -403,6 +403,20 @@ typedef struct FusionLoad {
     unsigned int count;
 } FusionLoad;
 
+#define STORE_INTERFERENCE_HASH_SIZE 4096 
+ 
+typedef struct InterferingStore_struct {
+  Addr pc_addr;                /* PC address of the store */
+  Addr instr_addr;             /* Memory address of the store */
+  Addr cacheline_addr;         /* Cacheline address that this store accesses */
+  int mem_size;                /* Memory access size */
+  int num_dest_regs;           /* Number of destination registers */
+  int base_reg;                /* Base register used for addressing */
+  unsigned int micro_op_num;   /* Global micro-op number for this store */
+  bool has_dependent_load;     /* Flag to indicate if a dependent load exists */
+  struct InterferingStore_struct* next;  /* Linked list pointer */
+} InterferingStore;
+
 
 
 #ifdef __cplusplus
