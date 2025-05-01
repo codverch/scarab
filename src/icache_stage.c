@@ -72,12 +72,12 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION TRUE
+ #define DO_FUSION FALSE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
  #define PRINT_FUSED_PAIRS FALSE
- #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION FALSE
+ #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION TRUE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
  static unsigned int global_micro_op_num = 0;
@@ -181,14 +181,6 @@ static FILE* print_all_load_micro_ops_file = NULL;
       fprintf(stderr, "Error opening fused_pairs.txt for writing\n");
     }
   }
-
-  if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
-    print_all_load_micro_ops_file = fopen("all_mem_load_micro_ops.txt", "w"); 
-    if(print_all_load_micro_ops_file == NULL) {
-      fprintf(stderr, "Error opening all_mem_load_micro_ops.txt for writing\n"); 
-    }
-  }
-
 
   fusion_table_initialized = true;
   
@@ -551,6 +543,14 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
  void init_icache_stage(uns8 proc_id, const char* name) {
    ASSERT(0, ic);
    DEBUG(proc_id, "Initializing %s stage\n", name);
+
+   if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
+    print_all_load_micro_ops_file = fopen("all_mem_load_micro_ops.txt", "w"); 
+    if(print_all_load_micro_ops_file == NULL) {
+      fprintf(stderr, "Error opening all_mem_load_micro_ops.txt for writing\n"); 
+    }
+  }
+
  
    memset(ic, 0, sizeof(Icache_Stage));
  
@@ -1263,9 +1263,12 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
 
      all_micro_op_num++;
 
+
      if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
       if(op->table_info->mem_type == MEM_LD){
-        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\n", all_micro_op_num, op->inst_info->addr, op->inst_info->addr);
+        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\t Cacheblock Addr: %llx\t Num of destinations: %d\n",
+                all_micro_op_num, op->inst_info->addr, op->oracle_info.va,
+                get_cacheline_addr(op->oracle_info.va), op->table_info->num_dest_regs);
 
         fflush(print_all_load_micro_ops_file); 
       }
