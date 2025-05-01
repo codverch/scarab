@@ -73,10 +73,10 @@
  /* Fusion Macros */
  
  #define DO_FUSION FALSE
- #define FUSION_DISTANCE_UNLIMITED FALSE
- #define FUSE_WINDOW TRUE
+ #define FUSION_DISTANCE_UNLIMITED TRUE
+ #define FUSE_WINDOW FALSE
  #define FUSION_DISTANCE 352
- #define PRINT_FUSED_PAIRS FALSE
+ #define PRINT_FUSED_PAIRS TRUE
  #define PRINT_ALL_MICRO_OPS_WITHOUT_FUSION TRUE
  FusionLoad* fusion_hash[FUSION_HASH_SIZE] = {NULL};
  bool fusion_table_initialized = false;
@@ -1264,16 +1264,6 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
      all_micro_op_num++;
 
 
-     if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
-      if(op->table_info->mem_type == MEM_LD){
-        fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\t Cacheblock Addr: %llx\t Num of destinations: %d\n",
-                all_micro_op_num, op->inst_info->addr, op->oracle_info.va,
-                get_cacheline_addr(op->oracle_info.va), op->table_info->num_dest_regs);
-
-        fflush(print_all_load_micro_ops_file); 
-      }
-    }
-
      ASSERTM(ic->proc_id, ic->off_path == op->off_path,
              "Inconsistent off-path op PC: %llx ic:%i op:%i\n", op->inst_info->addr, ic->off_path, op->off_path);
  
@@ -1351,6 +1341,28 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
            hexstr64s(op->inst_info->addr), op->off_path, op->inst_info,
            hexstr64s(op->inst_info->addr), disasm_op(op, TRUE),
            unsstr64(op->op_num), unsstr64(op->unique_num));
+
+
+           if(PRINT_ALL_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file != NULL) {
+            // if(op->table_info->mem_type == MEM_LD){
+              bool is_mem_load = false; 
+      
+              if(op->table_info->mem_type == MEM_LD) {
+                is_mem_load = true; 
+              }
+      
+              if(is_mem_load) {
+                fprintf(print_all_load_micro_ops_file, "The below op is a mem load\n");
+                fflush(print_all_load_micro_ops_file);
+              }
+              fprintf(print_all_load_micro_ops_file, "Micro-op num: %d\t PC: %llx\t Instr Addr: %llx\t Cacheblock Addr: %llx\t Num of destinations: %d\n",
+                      all_micro_op_num, op->inst_info->addr, op->oracle_info.va,
+                      get_cacheline_addr(op->oracle_info.va), op->table_info->num_dest_regs);
+      
+              fflush(print_all_load_micro_ops_file); 
+            // }
+          }
+      
  
      if(op->table_info->cf_type) {
        //TODO: can we move this prefetch update to decoupled front-end or need it be here?
