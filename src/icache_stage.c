@@ -73,11 +73,11 @@
  /* Fusion Macros */
 
  #define DO_FUSION TRUE 
- #define FUSION_DISTANCE_UNLIMITED FALSE
- #define FUSE_WINDOW TRUE
+ #define FUSION_DISTANCE_UNLIMITED TRUE
+ #define FUSE_WINDOW FALSE
  #define FUSION_DISTANCE 352
- #define PRINT_FUSED_PAIRS FALSE
- #define PRINT_INTERFERING_STORES FALSE
+ #define PRINT_FUSED_PAIRS TRUE
+ #define PRINT_INTERFERING_STORES TRUE
  #define PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION FALSE
  #define CHECK_STORE_DEPENDENCY_BEFORE_FUSION TRUE
 
@@ -189,13 +189,6 @@ static FILE* print_store_micro_ops_file = NULL;
     print_fused_pairs_file = fopen("fused_pairs.txt", "w"); 
     if(print_fused_pairs_file == NULL) {
       fprintf(stderr, "Error opening fused_pairs.txt for writing\n");
-    }
-  }
-
-  if(PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
-    print_all_load_micro_ops_file = fopen("all_mem_load_micro_ops.txt", "w"); 
-    if(print_all_load_micro_ops_file == NULL) {
-      fprintf(stderr, "Error opening all_mem_load_micro_ops.txt for writing\n"); 
     }
   }
 
@@ -814,6 +807,13 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
      init_cache(&ic->icache_line_info, "IC LI", ICACHE_SIZE, ICACHE_ASSOC,
                 ICACHE_LINE_SIZE, sizeof(Icache_Data), REPL_TRUE_LRU);
    }
+
+   if(PRINT_ALL_MEM_LD_MICRO_OPS_WITHOUT_FUSION && print_all_load_micro_ops_file == NULL) {
+    print_all_load_micro_ops_file = fopen("all_mem_load_micro_ops.txt", "w"); 
+    if(print_all_load_micro_ops_file == NULL) {
+      fprintf(stderr, "Error opening all_mem_load_micro_ops.txt for writing\n"); 
+    }
+  }
  
    // moved the init code from here to reset
    reset_icache_stage();
