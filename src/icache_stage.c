@@ -72,7 +72,7 @@
  /**************************************************************************************/
  /* Fusion Macros */
  
- #define DO_FUSION FALSE
+ #define DO_FUSION TRUE
  #define FUSION_DISTANCE_UNLIMITED FALSE
  #define FUSE_WINDOW TRUE
  #define FUSION_DISTANCE 352
@@ -122,7 +122,8 @@ static FILE* print_all_load_micro_ops_file = NULL;
  static inline void         update_stats_bf_retired(void);
  static inline void         fuse_same_cacheline_loads(Stage_Data* cur_data);
  static bool                remove_load_from_bucket(Op* op, unsigned int hash_idx);
- 
+ static bool                kill_old_candidates(Op* op);
+
  /**************************************************************************************/
  /* set_icache_stage: */
  
@@ -464,7 +465,11 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
       global_micro_op_num++;
       
       /* Skip operations that aren't loads or don't produce register results */
-      if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0) {
+      if (op->table_info->mem_type == MEM_ST) {
+        kill_old_candidates(op);
+        continue;
+      }
+      if (op->table_info->mem_type != MEM_LD || op->table_info->num_dest_regs == 0 || op->off_path) {
           continue;
       }
       
@@ -568,6 +573,10 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
     op->table_info->num_dest_regs = 0;
     op->table_info->num_src_regs = 0;
     op->table_info->mem_size = 0;
+    op->table_info->op_type = OP_NOP;
+    op->table_info->mem_type = NOT_MEM;
+    op->oracle_info.num_srcs = 0;
+
     op->inst_info->latency = 1;
     op->inst_info->extra_ld_latency = 0;
     op->oracle_info.mem_size = 0;
@@ -575,6 +584,68 @@ static inline void fuse_same_cacheline_loads(Stage_Data* cur_data) {
   op->oracle_info.was_fused = TRUE;
 }
  
+// static bool check_memory_overlap(Addr store_addr, int store_size, Addr load_addr, int load_size) {
+//   /* Calculate byte offsets within the cache block */
+//   static const Addr cacheline_size = 64; // Assuming a 64-byte cache line
+//   unsigned int store_offset = store_addr & (cacheline_size - 1);
+//   unsigned int load_offset = load_addr & (cacheline_size - 1);
+  
+//   /* Determine the range of bytes accessed */
+//   unsigned int store_end = store_offset + store_size - 1;
+//   unsigned int load_end = load_offset + load_size - 1;
+  
+//   /* Check if store access range overlaps with load access range */
+//   return (store_offset <= load_end && load_offset <= store_end);
+// }
+
+
+bool kill_old_candidates(Op* op) {
+  // Check the linked list corresponding to the Op's VA
+  // Look for overlap in mem region -- if it exists, remove that op
+  // We would have fused it already if we could
+  // Only do this for on-path ops?
+  if (op->off_path) {
+    return false;
+  }
+  Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+  
+  /* Use the hash function to find the appropriate bucket */
+  unsigned int hash_idx = hash_cacheline(cacheline_addr);
+  
+  /* Search through the bucket for a suitable fusion candidate */
+  FusionLoad* curr = fusion_hash[hash_idx];
+  bool found = false;
+  while (curr) {
+      FusionLoad* next = curr->next;
+      /* Verify the current entry is valid */
+      if ((curr->op != NULL) && (curr->op->inst_info != NULL)) {
+          /* Check basic fusion criteria: same cacheline and not already fused */
+          if (curr->cacheline_addr == cacheline_addr && !curr->already_fused) {                  
+                  /* Found a suitable candidate */
+              // This op is no longer viable, kill it
+              if(curr->prev) {
+                curr->prev->next = curr->next;
+              }  else {
+                fusion_hash[hash_idx] = curr->next;
+
+              }
+              if (curr->next) {
+                curr->next->prev = curr->prev;
+              }
+              else if(fusion_hash[hash_idx]) {
+                fusion_hash[hash_idx]->tail = curr->prev;
+              }
+              free(curr);
+              found = true;
+          }
+      }
+      curr = next;
+  }
+  return found;
+
+}
+
+
  /**************************************************************************************/
  /* init_icache_stage: */
  
