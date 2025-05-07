@@ -5,7 +5,7 @@ CRONO_INIT_DIR="/mnt/fusion_tmpfs/dc1_crono_init"
 CRONO_SOCLIVJ_DIR="/mnt/fusion_tmpfs/dc2_crono_soclivj"
 SPEC_DIR="/mnt/fusion_tmpfs/spec_post_init"
 OLD_DC_DIR="/mnt/fusion_tmpfs/old_dc_post_init"
-RESULTS_BASE_DIR="/users/deepmish/ipc_ideal_fusion"
+RESULTS_BASE_DIR="/users/deepmish/ipc_helios_fusion"
 MAX_PARALLEL=3 # Maximum number of parallel jobs
 
 # Create the category subdirectories
@@ -45,7 +45,7 @@ process_single_trace_dir() {
             if [ -d "$trace_dir" ]; then
                 # Check if trace.zip exists in the trace directory
                 if [ -f "$trace_dir/trace.zip" ]; then
-                    result_file="$result_dir/${app_name}_ipc_ideal_fusion.txt"
+                    result_file="$result_dir/${app_name}_ipc_helios_fusion.txt"
                     run_scarab "$trace_dir/trace.zip" "$bin_dir" "$result_file" &
                     
                     # Limit the number of parallel jobs
@@ -89,7 +89,7 @@ for app_dir in "$OLD_DC_DIR"/*; do
             for zip_file in "$trace_dir"/*.zip; do
                 if [ -f "$zip_file" ]; then
                     zip_name=$(basename "$zip_file" .zip)
-                    result_file="$result_dir/${app_name}_${zip_name}_ipc_ideal_fusion.txt"
+                    result_file="$result_dir/${app_name}_${zip_name}_ipc_helios_fusion.txt"
                     run_scarab "$zip_file" "$bin_dir" "$result_file" &
                     
                     # Limit the number of parallel jobs
