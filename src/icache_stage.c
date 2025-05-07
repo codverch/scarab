@@ -1763,10 +1763,10 @@ Flag instr_fill_line(Mem_Req* req) {
 
 void donate_operands(Op* rcvr, Reg_Info dest_regs[], short num_dests)
 {
-  if(rcvr->table_info->mem_type != MEM_LD)
-  {
-    printf("Warning, one of the operands is not a memory load\n");
-  }
+  // if(rcvr->table_info->mem_type != MEM_LD)
+  // {
+  //   printf("Warning, one of the operands is not a memory load\n");
+  // }
 
   for(short i = 0; i < num_dests; i++)
   {
