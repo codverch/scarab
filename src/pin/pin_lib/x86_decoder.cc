@@ -775,6 +775,8 @@ void init_reg_compress_map(void) {
 void init_pin_opcode_convert(void) {
   assert(OP_INV == 0);
 
+  iclass_to_scarab_map[XED_ICLASS_VPCMPUB] = {OP_ICMP, 1, -1, NONE};
+  iclass_to_scarab_map[XED_ICLASS_VPTESTMB] = {OP_LOGIC, -1, 1, NONE}; 
   iclass_to_scarab_map[XED_ICLASS_VPTESTMB] = {OP_LOGIC, 16, -1, NONE};
   iclass_to_scarab_map[XED_ICLASS_VPCMPUB] = {OP_ICMP, 1, -1, NONE};
   iclass_to_scarab_map[XED_ICLASS_BZHI]            = {OP_LOGIC, -1, 1, NONE};
