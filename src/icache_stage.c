@@ -1809,8 +1809,8 @@ void delete_ld_uop(Op* op)
       op->inst_info->extra_ld_latency = 0;
       op->oracle_info.mem_size = 0;
     }
-    else
-    {
-      printf("WARNING, %ld is not a mem_ld\n", op->unique_op_number);
-    }
+    // else
+    // {
+    //   printf("WARNING, %ld is not a mem_ld\n", op->unique_op_number);
+    // }
 }
