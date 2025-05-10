@@ -784,121 +784,6 @@ void update_icache_stage() {
 }
 
 
-
-
-static short is_same_cacheline(long addrA, long addrB)
-{
-  // return 1;
-  static const long CACHELINE_SIZE = 64;
-
-  if ((addrA / CACHELINE_SIZE) == (addrB / CACHELINE_SIZE)) {
-      return 1;  // Same cacheline
-  } else {
-      return 0;  // Different cachelines
-  }
-}
-
-static void update_LRU(void)
-{
-  for(short i = 0; i < PREDICTOR_SIZE; i++)
-  {
-    predictor_table[i].LRUcounter--;
-    if(predictor_table[i].LRUcounter < 0)
-      predictor_table[i].LRUcounter = 0;
-  }
-}
-
-static void copy_reg_info(Reg_Info* dest, Reg_Info* src)
-{
-  static const int NUM_DEST = 6;
-  for(short i = 0; i < NUM_DEST; i++)
-  {
-    dest[i] = src[i];
-  }
-}
-
-static void train_predictor( long donor_pc, int donor_op_num, long rcvr_pc, int rcvr_op_num, bool success, Reg_Info RI[], int num_dests, long donor_unique_num)
-{
-  static const long maxLRU = 0x0eadbeefdeadbeefl;
-  if(success)
-  {
-    long minLRU = 0x999999999999l;
-    // is it already present?
-    for(short i = 0; i < PREDICTOR_SIZE; i++)
-    {
-      if(predictor_table[i].PCrcvr == rcvr_pc && predictor_table[i].PCdonor == donor_pc && predictor_table[i].rcvr_opnum == rcvr_op_num && predictor_table[i].donor_opnum == donor_op_num)
-      {
-        predictor_table[i].confidence++;
-        if(predictor_table[i].confidence > 3)
-          predictor_table[i].confidence = 3;
-        // if(predictor_table[i].confidence == 3)
-        // {
-        //   predictor_table[i].just_fused = !predictor_table[i].just_fused;
-        // }
-        predictor_table[i].donor_unique_op_number = donor_unique_num;
-        // reg_infos[i] = RI;
-        copy_reg_info(reg_infos[i], RI);
-        donor_num_dests_global[i] = num_dests;
-        predictor_table[i].LRUcounter = maxLRU;
-        update_LRU();
-        return;
-      }   
-    }
-    long eviction_index = 0;
-
-    // we need to allocate a new entry
-    for(short i = 0; i < PREDICTOR_SIZE; i++)
-    {
-      if(predictor_table[i].LRUcounter < minLRU)
-      {
-        minLRU = predictor_table[i].LRUcounter;
-        eviction_index = i;
-      }
-    }
-    predictor_table[eviction_index].confidence = 1;
-    predictor_table[eviction_index].PCrcvr = rcvr_pc;
-    predictor_table[eviction_index].PCdonor = donor_pc;
-    predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
-    predictor_table[eviction_index].donor_opnum = donor_op_num;
-    predictor_table[eviction_index].donor_unique_op_number = donor_unique_num;
-    predictor_table[eviction_index].just_fused = 0;
-    predictor_table[eviction_index].just_modified = 0;
-    copy_reg_info(reg_infos[eviction_index], RI);
-    donor_num_dests_global[eviction_index] = num_dests;
-    update_LRU();
-    predictor_table[eviction_index].LRUcounter = maxLRU;
-    return;
-  }
-
-  // not a success
-  long minLRU = 0;
-  long eviction_index = 0;
-  for(short i = 0; i < PREDICTOR_SIZE; i++)
-  {
-    if(predictor_table[i].LRUcounter < minLRU)
-    {
-      minLRU = predictor_table[i].LRUcounter;
-      eviction_index = i;
-    }
-  }
-  predictor_table[eviction_index].confidence = 0;
-
-  predictor_table[eviction_index].PCrcvr = rcvr_pc;
-  predictor_table[eviction_index].PCdonor = donor_pc;
-  predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
-  predictor_table[eviction_index].donor_opnum = donor_op_num;
-  predictor_table[eviction_index].donor_unique_op_number = donor_unique_num;
-  // reg_infos[eviction_index] = RI;
-  copy_reg_info(reg_infos[eviction_index], RI);
-  predictor_table[eviction_index].just_fused = 0;
-  predictor_table[eviction_index].just_modified= 0;
-  donor_num_dests_global[eviction_index] = num_dests;
-  update_LRU();
-  predictor_table[eviction_index].LRUcounter = maxLRU;
-
-  return;
-}
-
 static short predict_fusable(Op* op)
 {
   // check predictor_table
@@ -932,92 +817,10 @@ static void print_predictor_table(void)
 
 }
 
-static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor_pc, long donor_opnum)
-{
-  for(short i = 0; i < PREDICTOR_SIZE; i++)
-  {
-    if(predictor_table[i].PCrcvr == rcvr_pc && predictor_table[i].rcvr_opnum == rcvr_opnum 
-      && predictor_table[i].PCdonor == donor_pc && predictor_table[i].donor_opnum == donor_opnum)
-        return i; 
-  }
-
-  return -1;
-}
 
 #define MAX_HISTORY_LENGTH 352
 
-static void update_history(Op* op)
-{
-  static long cursor = 0;
-  static long PCs[MAX_HISTORY_LENGTH] = {0};
-  static long MemAddr[MAX_HISTORY_LENGTH] = {0};
-  static Reg_Info donor_regs[MAX_HISTORY_LENGTH][6];
-  static int op_num_in_inst[MAX_HISTORY_LENGTH] = {0};
-  static short valid[MAX_HISTORY_LENGTH] = {0}; // a candidate load instruction
-  static short donor_num_dests[MAX_HISTORY_LENGTH];
 
-  if(op->table_info->mem_type != MEM_LD)
-  {
-    valid[cursor] = 0;
-    cursor = (cursor + 1) % MAX_HISTORY_LENGTH;
-    return;
-  }
-
-  valid[cursor] = 1;
-  PCs[cursor] = op->inst_info->addr;
-  MemAddr[cursor] = op->oracle_info.va;
-  op_num_in_inst[cursor] = op->op_number_per_inst;
-  // donor_regs[cursor] = op->inst_info->dests; // probably seg faults
-  copy_reg_info(donor_regs[cursor], op->inst_info->dests);
-  donor_num_dests[cursor] = op->table_info->num_dest_regs;
-  long donor_unique_num = op->unique_op_number;
-
-  
-  for(short i = 0; i < MAX_HISTORY_LENGTH; i++)
-  {
-    if(i == cursor || !valid[i])
-      continue;
-    
-    long donor_addr = op->oracle_info.va;
-    long rcvr_addr = MemAddr[i];
-    long donor_op_num = op_num_in_inst[cursor];
-    long rcvr_op_num = op_num_in_inst[i];
-    // Reg_Info donor_RI[] = donor_regs[cursor];
-    int donot_num_dest = donor_num_dests[cursor];
-    int entry_num = -1;
-    if((entry_num = is_already_in_history_table(rcvr_addr, rcvr_op_num, donor_addr, donor_op_num)) != -1)
-    {
-      // it is already in the table
-      if(is_same_cacheline(donor_addr, rcvr_addr))
-      {
-        train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true, donor_regs[cursor], donot_num_dest, donor_unique_num);
-        valid[cursor] = 0;
-        valid[i] = 0;
-        break;
-      }
-      else
-      {
-        train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, false, donor_regs[cursor], donot_num_dest, donor_unique_num);
-        valid[cursor] = 0;
-        valid[i] = 0;
-        break;
-      }
-    }
-    else
-    { // it is not already in the table
-      if(is_same_cacheline(donor_addr, rcvr_addr))
-      {
-        train_predictor(PCs[cursor], donor_op_num, PCs[i], rcvr_op_num, true, donor_regs[cursor], donot_num_dest, donor_unique_num);
-        valid[cursor] = 0;
-        valid[i] = 0;
-        break;
-      }
-    }
-    
-  }
-  cursor = (cursor + 1) % MAX_HISTORY_LENGTH;
-  return;
-}
 
 /**************************************************************************************/
 /* update_bf_uoc_stats: */
@@ -1139,8 +942,6 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
     if(DO_FUSION)
     {
 
-      
-
       if(unique_op_number_counter > print_count_uop_number && op->table_info->mem_type == MEM_LD)
       {
         printf("unique_op_number %ld with addr %llx has op_num %ld and reads %llx\n", unique_op_number_counter, op->inst_info->addr, op->op_number_per_inst, op->oracle_info.va);
@@ -1149,8 +950,6 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
       short prediction = predict_fusable(op);
 
       short prediction_rcvr = predict_rcvr(op);
-
-      update_history(op); // you could just move this to the node stage but that stupid not retiring business is confusing
       
       if(prediction >= 0)
       {
@@ -1189,9 +988,6 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
           predictor_table[prediction_rcvr].just_modified = 0;
         }
       }
-
-      
-
 
     }
 

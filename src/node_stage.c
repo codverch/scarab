@@ -66,6 +66,37 @@
 #define OP_IS_IN_RS(op) (op->state >= OS_IN_RS && op->state < OS_SCHEDULED)
 
 /**************************************************************************************/
+// Helios 
+
+// Declarations of predictor data structures from icache_stage.c
+
+extern predictor_entry predictor_table[PREDICTOR_SIZE]; 
+extern Reg_Info reg_infos[PREDICTOR_SIZE][6]; // MAX_DESTS
+extern int donor_num_dests_global[PREDICTOR_SIZE]; 
+
+static short is_same_cacheline(long addrA, long addrB);
+static void update_LRU(void);
+static void copy_reg_info(Reg_Info* dest, Reg_Info* src);
+static void train_predictor(long donor_pc, int donor_op_num, long rcvr_pc, int rcvr_op_num, bool success, Reg_Info RI[], int num_dests, long donor_unique_num);
+static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor_pc, long donor_opnum);
+void update_history_at_retire(Op* op);
+
+#define MAX_HISTORY_LENGTH 64
+
+typedef struct { 
+    long PCs[MAX_HISTORY_LENGTH];
+    long MemAddr[MAX_HISTORY_LENGTH];
+    Reg_Info donor_regs[MAX_HISTORY_LENGTH][6];
+    int op_num_in_inst[MAX_HISTORY_LENGTH];
+    short valid[MAX_HISTORY_LENGTH];
+    short donor_num_dests[MAX_HISTORY_LENGTH];
+    long cursor;
+} Retire_History; 
+
+static Retire_History retire_history = {0};
+
+
+/**************************************************************************************/
 /* Global Variables */
 
 Node_Stage*            node                   = NULL;
@@ -98,6 +129,194 @@ Flag is_sq_full(void);
 void collect_node_table_full_stats(Op* op);
 void collect_lsq_full_stats(Op* op);
 
+
+static short is_same_cacheline(long addrA, long addrB)
+{
+  static const long CACHELINE_SIZE = 64;
+
+  if ((addrA / CACHELINE_SIZE) == (addrB / CACHELINE_SIZE)) {
+      return 1;  // Same cacheline
+  } else {
+      return 0;  // Different cachelines
+  }
+}
+
+static void update_LRU(void)
+{
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    predictor_table[i].LRUcounter--;
+    if(predictor_table[i].LRUcounter < 0)
+      predictor_table[i].LRUcounter = 0;
+  }
+}
+
+static void copy_reg_info(Reg_Info* dest, Reg_Info* src)
+{
+  static const int NUM_DEST = 6;
+  for(short i = 0; i < NUM_DEST; i++)
+  {
+    dest[i] = src[i];
+  }
+}
+
+static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor_pc, long donor_opnum)
+{
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    if(predictor_table[i].PCrcvr == rcvr_pc && predictor_table[i].rcvr_opnum == rcvr_opnum 
+      && predictor_table[i].PCdonor == donor_pc && predictor_table[i].donor_opnum == donor_opnum)
+        return i; 
+  }
+
+  return -1;
+}
+
+
+
+
+static void train_predictor(long donor_pc, int donor_op_num, long rcvr_pc, int rcvr_op_num, bool success, Reg_Info RI[], int num_dests, long donor_unique_num)
+{
+  static const long maxLRU = 0x0eadbeefdeadbeefl;
+  if(success)
+  {
+    long minLRU = 0x999999999999l;
+    // is it already present?
+    for(short i = 0; i < PREDICTOR_SIZE; i++)
+    {
+      if(predictor_table[i].PCrcvr == rcvr_pc && predictor_table[i].PCdonor == donor_pc && predictor_table[i].rcvr_opnum == rcvr_op_num && predictor_table[i].donor_opnum == donor_op_num)
+      {
+        predictor_table[i].confidence++;
+        if(predictor_table[i].confidence > 3)
+          predictor_table[i].confidence = 3;
+        predictor_table[i].donor_unique_op_number = donor_unique_num;
+        copy_reg_info(reg_infos[i], RI);
+        donor_num_dests_global[i] = num_dests;
+        predictor_table[i].LRUcounter = maxLRU;
+        update_LRU();
+        return;
+      }   
+    }
+    long eviction_index = 0;
+
+    // we need to allocate a new entry
+    for(short i = 0; i < PREDICTOR_SIZE; i++)
+    {
+      if(predictor_table[i].LRUcounter < minLRU)
+      {
+        minLRU = predictor_table[i].LRUcounter;
+        eviction_index = i;
+      }
+    }
+    predictor_table[eviction_index].confidence = 1;
+    predictor_table[eviction_index].PCrcvr = rcvr_pc;
+    predictor_table[eviction_index].PCdonor = donor_pc;
+    predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
+    predictor_table[eviction_index].donor_opnum = donor_op_num;
+    predictor_table[eviction_index].donor_unique_op_number = donor_unique_num;
+    predictor_table[eviction_index].just_fused = 0;
+    predictor_table[eviction_index].just_modified = 0;
+    copy_reg_info(reg_infos[eviction_index], RI);
+    donor_num_dests_global[eviction_index] = num_dests;
+    update_LRU();
+    predictor_table[eviction_index].LRUcounter = maxLRU;
+    return;
+  }
+
+  // not a success
+  long minLRU = 0;
+  long eviction_index = 0;
+  for(short i = 0; i < PREDICTOR_SIZE; i++)
+  {
+    if(predictor_table[i].LRUcounter < minLRU)
+    {
+      minLRU = predictor_table[i].LRUcounter;
+      eviction_index = i;
+    }
+  }
+  predictor_table[eviction_index].confidence = 0;
+
+  predictor_table[eviction_index].PCrcvr = rcvr_pc;
+  predictor_table[eviction_index].PCdonor = donor_pc;
+  predictor_table[eviction_index].rcvr_opnum = rcvr_op_num;
+  predictor_table[eviction_index].donor_opnum = donor_op_num;
+  predictor_table[eviction_index].donor_unique_op_number = donor_unique_num;
+  copy_reg_info(reg_infos[eviction_index], RI);
+  predictor_table[eviction_index].just_fused = 0;
+  predictor_table[eviction_index].just_modified= 0;
+  donor_num_dests_global[eviction_index] = num_dests;
+  update_LRU();
+  predictor_table[eviction_index].LRUcounter = maxLRU;
+
+  return;
+}
+
+
+void update_history_at_retire(Op* op) {
+
+  if(op->table_info->mem_type != MEM_LD)
+  {
+    retire_history.valid[retire_history.cursor] = 0;
+    retire_history.cursor = (retire_history.cursor + 1) % MAX_HISTORY_LENGTH;
+    return;
+  }
+
+  retire_history.valid[retire_history.cursor] = 1;
+  retire_history.PCs[retire_history.cursor] = op->inst_info->addr;
+  retire_history.MemAddr[retire_history.cursor] = op->oracle_info.va;
+  retire_history.op_num_in_inst[retire_history.cursor] = op->op_number_per_inst;
+  copy_reg_info(retire_history.donor_regs[retire_history.cursor], op->inst_info->dests);
+  retire_history.donor_num_dests[retire_history.cursor] = op->table_info->num_dest_regs;
+  long donor_unique_num = op->unique_op_number;
+
+  for(short i = 0; i < MAX_HISTORY_LENGTH; i++)
+  {
+    if(i == retire_history.cursor || !retire_history.valid[i])
+      continue;
+    
+    long donor_addr = op->oracle_info.va;
+    long rcvr_addr = retire_history.MemAddr[i];
+    long donor_op_num = retire_history.op_num_in_inst[retire_history.cursor];
+    long rcvr_op_num = retire_history.op_num_in_inst[i];
+    int donot_num_dest = retire_history.donor_num_dests[retire_history.cursor];
+    int entry_num = -1;
+    if((entry_num = is_already_in_history_table(rcvr_addr, rcvr_op_num, donor_addr, donor_op_num)) != -1)
+    {
+      // it is already in the table
+      if(is_same_cacheline(donor_addr, rcvr_addr))
+      {
+        train_predictor(retire_history.PCs[retire_history.cursor], donor_op_num, retire_history.PCs[i], rcvr_op_num, true, retire_history.donor_regs[retire_history.cursor], donot_num_dest, donor_unique_num);
+        retire_history.valid[retire_history.cursor] = 0;
+        retire_history.valid[i] = 0;
+        break;
+      }
+      else
+      {
+        train_predictor(retire_history.PCs[retire_history.cursor], donor_op_num, retire_history.PCs[i], rcvr_op_num, false, retire_history.donor_regs[retire_history.cursor], donot_num_dest, donor_unique_num);
+        retire_history.valid[retire_history.cursor] = 0;
+        retire_history.valid[i] = 0;
+        break;
+      }
+    }
+    else
+    { // it is not already in the table
+      if(is_same_cacheline(donor_addr, rcvr_addr))
+      {
+        train_predictor(retire_history.PCs[retire_history.cursor], donor_op_num, retire_history.PCs[i], rcvr_op_num, true, retire_history.donor_regs[retire_history.cursor], donot_num_dest, donor_unique_num);
+        retire_history.valid[retire_history.cursor] = 0;
+        retire_history.valid[i] = 0;
+        break;
+      }
+    }
+  }
+  retire_history.cursor = (retire_history.cursor + 1) % MAX_HISTORY_LENGTH;
+  return;
+
+
+
+
+}
+
 /**************************************************************************************/
 /* set_node_stage:*/
 
@@ -118,6 +337,15 @@ void init_node_stage(uns8 proc_id, const char* name) {
   // allocate wires to functional units
   node->sd.max_op_count = NUM_FUS;  // Bandwidth between schedule and FUS
   node->sd.ops          = (Op**)malloc(sizeof(Op*) * node->sd.max_op_count);
+
+  // Initialize Helios history tracking
+  retire_history.cursor = 0;
+  memset(retire_history.PCs, 0, sizeof(retire_history.PCs));
+  memset(retire_history.MemAddr, 0, sizeof(retire_history.MemAddr));
+  memset(retire_history.valid, 0, sizeof(retire_history.valid));
+  memset(retire_history.op_num_in_inst, 0, sizeof(retire_history.op_num_in_inst));
+  memset(retire_history.donor_num_dests, 0, sizeof(retire_history.donor_num_dests));
+
 
   reset_node_stage();
 }
@@ -842,6 +1070,9 @@ void node_retire() {
     rob_stall_reason = ROB_STALL_NONE;
 
     /**op is ready to retire**/
+
+  
+
     ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n",
             op->op_num);
     ret_count++;
@@ -948,6 +1179,7 @@ void node_retire() {
     ASSERT(node->proc_id, node->num_stores >= 0);
 
     STAT_EVENT(op->proc_id, RET_ALL_INST);
+    update_history_at_retire(op);
 
     remove_from_seq_op_list(td, op);
 
@@ -971,6 +1203,8 @@ void node_retire() {
       STAT_EVENT(op->proc_id, LD_NO_DEPENDENTS + (op->wake_up_head ? 1 : 0));
     }
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
+
+    
 
     op->retire_cycle = cycle_count;
     // if(op->retire_cycle > 4777327l)
