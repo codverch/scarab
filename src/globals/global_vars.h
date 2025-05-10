@@ -41,19 +41,6 @@
 // it is 6 in helios, don't use a really large number 
 #define PREDICTOR_SIZE 352
 
-
-typedef struct {
-  long PCrcvr;
-  long PCdonor;
-  long LRUcounter;
-  long rcvr_opnum;
-  long donor_opnum;
-  long donor_unique_op_number;
-  int confidence;
-  short just_fused;
-  short just_modified;
-} predictor_entry;
-
 extern Counter  unique_count;
 extern Counter* unique_count_per_core;
 extern Counter* op_count;
@@ -93,6 +80,20 @@ extern Flag roi_dump_began;
 extern Counter roi_dump_ID;
 
 extern void* hashtable_for_loads;
+
+
+typedef struct {
+  long PCrcvr;
+  long PCdonor;
+  long LRUcounter;
+  long rcvr_opnum;
+  long donor_opnum;
+  long donor_unique_op_number;
+  int confidence;
+  short just_fused;
+  short just_modified;
+  unsigned long global_history;     // Global branch history
+} predictor_entry;
 
 /**************************************************************************************/
 

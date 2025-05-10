@@ -786,23 +786,37 @@ void update_icache_stage() {
 
 static short predict_fusable(Op* op)
 {
-  // check predictor_table
-  for(short i = 0; i < PREDICTOR_SIZE; i++)
-  {
-    if(predictor_table[i].PCdonor == op->inst_info->addr && predictor_table[i].confidence == 3 && op->op_number_per_inst == predictor_table[i].donor_opnum)
-      return i;
+
+  // Get current global branch history
+  unsigned long current_global_history = g_bp_data->global_hist;
+
+  // Check predictor table for matching entries
+  for(short i = 0; i < PREDICTOR_SIZE; i++) {
+    if(predictor_table[i].PCdonor == op->inst_info->addr && 
+       predictor_table[i].confidence == 3 && 
+       op->op_number_per_inst == predictor_table[i].donor_opnum &&
+       predictor_table[i].global_history == current_global_history) {
+        return i;
+    }
   }
+
   return -1; // sentinel value
 }
 
-static short predict_rcvr(Op* op) // one reason I stick to using "receiver" is because rcvr
-{
-  for(short i = 0; i < PREDICTOR_SIZE; i++)
-  {
-    if(predictor_table[i].PCrcvr== op->inst_info->addr && predictor_table[i].confidence == 3 && op->op_number_per_inst == predictor_table[i].rcvr_opnum)
-      return i;
+static short predict_rcvr(Op* op) {
+  // Get current global branch history
+  unsigned long current_global_history = g_bp_data->global_hist;
+  
+  // Check predictor table for matching entries
+  for(short i = 0; i < PREDICTOR_SIZE; i++) {
+      if(predictor_table[i].PCrcvr== op->inst_info->addr && 
+         predictor_table[i].confidence == 3 && 
+         op->op_number_per_inst == predictor_table[i].rcvr_opnum &&
+         predictor_table[i].global_history == current_global_history) {
+          return i;
+      }
   }
-  return -1; // sentinel value
+  return -1; 
 }
 
 static void print_predictor_table(void)
