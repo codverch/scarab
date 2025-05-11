@@ -81,6 +81,7 @@ static void train_predictor(long donor_pc, int donor_op_num, long rcvr_pc, int r
 static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor_pc, long donor_opnum);
 void update_history_at_retire(Op* op);
 
+
 #define MAX_HISTORY_LENGTH 352
 
 typedef struct { 
@@ -95,6 +96,7 @@ typedef struct {
 } Retire_History; 
 
 static Retire_History retire_history = {0};
+static FILE* print_mispredicted_uop_file = NULL;
 
 
 /**************************************************************************************/
@@ -257,6 +259,7 @@ static void train_predictor(long donor_pc, int donor_op_num, long rcvr_pc, int r
 
 
 void update_history_at_retire(Op* op) {
+
   if(op->table_info->mem_type != MEM_LD) {
       retire_history.valid[retire_history.cursor] = 0;
       retire_history.cursor = (retire_history.cursor + 1) % MAX_HISTORY_LENGTH;
@@ -290,6 +293,13 @@ void update_history_at_retire(Op* op) {
       if((entry_num = is_already_in_history_table(rcvr_addr, rcvr_op_num, donor_addr, donor_op_num)) != -1) {
           // It is already in the table
           if(is_same_cacheline(donor_addr, rcvr_addr)) {
+              
+             // print whether donor was a part of mispredicted path
+             if(op->oracle_info.mispred) {
+              fprintf(print_mispredicted_uop_file, "Donor PC: %llx Micro-op number: %ld\n", op->inst_info->addr, donor_op_num);
+              fflush(print_mispredicted_uop_file);
+              } 
+              
               train_predictor(retire_history.PCs[retire_history.cursor], 
                              donor_op_num, 
                              retire_history.PCs[i], 
@@ -304,6 +314,7 @@ void update_history_at_retire(Op* op) {
               retire_history.valid[i] = 0;
               break;
           } else {
+   
               train_predictor(retire_history.PCs[retire_history.cursor], 
                              donor_op_num, 
                              retire_history.PCs[i], 
@@ -321,6 +332,14 @@ void update_history_at_retire(Op* op) {
       } else { 
           // It is not already in the table
           if(is_same_cacheline(donor_addr, rcvr_addr)) {
+
+                // print whether donor was a part of mispredicted path
+                if(op->oracle_info.mispred) {
+                  fprintf(print_mispredicted_uop_file, "Donor PC: %llx Micro-op number: %ld\n", op->inst_info->addr, donor_op_num);
+                  } 
+
+                fflush(print_mispredicted_uop_file);
+              
               train_predictor(retire_history.PCs[retire_history.cursor], 
                              donor_op_num, 
                              retire_history.PCs[i], 
@@ -362,6 +381,13 @@ void init_node_stage(uns8 proc_id, const char* name) {
   // allocate wires to functional units
   node->sd.max_op_count = NUM_FUS;  // Bandwidth between schedule and FUS
   node->sd.ops          = (Op**)malloc(sizeof(Op*) * node->sd.max_op_count);
+
+  if(print_mispredicted_uop_file == NULL) {
+    print_mispredicted_uop_file = fopen("mispredicted_uops.txt", "w"); 
+    if(print_mispredicted_uop_file == NULL) {
+      fprintf(stderr, "Error opening fused_pairs.txt for writing\n");
+    }
+  }
 
   // Initialize Helios history tracking
   retire_history.cursor = 0;
