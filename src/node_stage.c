@@ -102,9 +102,6 @@ typedef struct {
 } Retire_History; 
 
 static Retire_History retire_history = {0};
-static FILE* print_mispredicted_uop_file = NULL;
-
-
 
 /**************************************************************************************/
 /* Global Variables */
@@ -112,8 +109,6 @@ static FILE* print_mispredicted_uop_file = NULL;
 Node_Stage*            node                   = NULL;
 Rob_Stall_Reason       rob_stall_reason       = ROB_STALL_NONE;
 Rob_Block_Issue_Reason rob_block_issue_reason = ROB_BLOCK_ISSUE_NONE;
-
-
 
 
 /**************************************************************************************/
@@ -160,7 +155,7 @@ static short is_same_cacheline(long addrA, long addrB)
 }
 
 static inline Addr get_cacheline_addr(Addr addr) {
-  static const Addr cacheline_size = 64; // Assuming a 64-byte cache line
+  static const Addr cacheline_size = 64; // Assuming a 64-byte cacheline
   return addr & ~(cacheline_size - 1);
 }
 
@@ -363,6 +358,7 @@ static void clear_store_entries(Addr addr) {
 
 void update_history_at_retire(Op* op) {
 
+
   if(op->table_info->mem_type == MEM_ST) {
       // Record the store operation
       record_store(op);
@@ -384,13 +380,18 @@ void update_history_at_retire(Op* op) {
   retire_history.global_micro_op_numbers[retire_history.cursor] = global_retire_micro_op_number;
   long donor_unique_num = op->unique_op_number;
 
+
   for(short i = 0; i < MAX_HISTORY_LENGTH; i++) {
       if(i == retire_history.cursor || !retire_history.valid[i])
           continue;
       
+       
       // Only consider entries with matching branch history
       if(retire_history.global_histories[i] != op->oracle_info.pred_global_hist)
-          continue;
+
+      {
+        continue;
+      }
           
       long donor_addr = op->oracle_info.va;
       long rcvr_addr = retire_history.MemAddr[i];
@@ -398,16 +399,15 @@ void update_history_at_retire(Op* op) {
       long rcvr_op_num = retire_history.op_num_in_inst[i];
       int donot_num_dest = retire_history.donor_num_dests[retire_history.cursor];
       int entry_num = -1;
+
       
       if((entry_num = is_already_in_history_table(rcvr_addr, rcvr_op_num, donor_addr, donor_op_num)) != -1) {
           // It is already in the table
           if(is_same_cacheline(donor_addr, rcvr_addr)) {
 
-             
               
              if(has_intervening_store(op->oracle_info.va, retire_history.global_micro_op_numbers[i], global_retire_micro_op_number)) {
-               // Skipping training if there is a store to the same cacheline
-               break; 
+               continue; 
             }
               
               train_predictor(retire_history.PCs[retire_history.cursor], 
@@ -419,7 +419,11 @@ void update_history_at_retire(Op* op) {
                              donot_num_dest, 
                              donor_unique_num,
                              op->oracle_info.pred_global_hist); 
-                             
+
+                            //  printf("Training predictor with donor PC: %lx \t receiver PC: %lx \t donor global micro op num: %d \t receiver global micro op num: %d \n", 
+                            //   retire_history.PCs[retire_history.cursor], retire_history.PCs[i], global_retire_micro_op_number, retire_history.global_micro_op_numbers[i]);
+                                          
+
               retire_history.valid[retire_history.cursor] = 0;
               retire_history.valid[i] = 0;
               break;
@@ -442,15 +446,18 @@ void update_history_at_retire(Op* op) {
       } else { 
           // It is not already in the table
           if(is_same_cacheline(donor_addr, rcvr_addr)) {
+        
 
-                if(op->table_info->mem_type == MEM_ST) {
+            if(has_intervening_store(op->oracle_info.va, retire_history.global_micro_op_numbers[i], global_retire_micro_op_number)) {
+
+                // printf("skipping training donor micro op num: %d \t receiver micro op num: %d \n",
+                  // global_retire_micro_op_number, retire_history.global_micro_op_numbers[i]);
                 
                   // Skipping training since there is a prior intervening load to the same 
                   // cacheblock as the current op 
-                  break; 
+                  continue; 
                 }
 
-                fflush(print_mispredicted_uop_file);
               
               train_predictor(retire_history.PCs[retire_history.cursor], 
                              donor_op_num, 
@@ -461,7 +468,10 @@ void update_history_at_retire(Op* op) {
                              donot_num_dest, 
                              donor_unique_num,
                              op->oracle_info.pred_global_hist); 
-                             
+                           
+                            //  printf("Training predictor with donor PC: %lx \t receiver PC: %lx \t donor global micro op num: %d \t receiver global micro op num: %d \n", 
+                            //   retire_history.PCs[retire_history.cursor], retire_history.PCs[i], global_retire_micro_op_number, retire_history.global_micro_op_numbers[i]);
+                                           
               retire_history.valid[retire_history.cursor] = 0;
               retire_history.valid[i] = 0;
               break;
@@ -496,12 +506,6 @@ void init_node_stage(uns8 proc_id, const char* name) {
   node->sd.max_op_count = NUM_FUS;  // Bandwidth between schedule and FUS
   node->sd.ops          = (Op**)malloc(sizeof(Op*) * node->sd.max_op_count);
 
-  if(print_mispredicted_uop_file == NULL) {
-    print_mispredicted_uop_file = fopen("mispredicted_uops.txt", "w"); 
-    if(print_mispredicted_uop_file == NULL) {
-      fprintf(stderr, "Error opening fused_pairs.txt for writing\n");
-    }
-  }
 
   // Initialize Helios history tracking
   retire_history.cursor = 0;
@@ -1244,6 +1248,13 @@ void node_retire() {
             op->op_num);
     ret_count++;
     global_retire_micro_op_number++;
+    // printf("RETIRED: Op #%u, PC: 0x%llx, Type: %d, MemType: %d, MemAddr: 0x%llx, Cacheblock Addr: %llx\n", 
+    //   global_retire_micro_op_number, 
+    //   op->inst_info->addr, 
+    //   op->table_info->op_type, 
+    //   op->table_info->mem_type, 
+    //   op->oracle_info.va, 
+    //   get_cacheline_addr(op->oracle_info.va));
     update_history_at_retire(op);
 
 

@@ -69,6 +69,8 @@
 #define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_ICACHE_STAGE, ##args)
 #define DEBUG_FDIP(proc_id, args...) _DEBUG(proc_id, DEBUG_FDIP, ##args)
 
+static unsigned int global_icache_micro_op_number = 0; 
+
 /**************************************************************************************/
 /* Global Variables */
 
@@ -101,6 +103,7 @@ static inline void         log_stats_ic_miss(void);
 static inline void         log_stats_ic_hit(void);
 static inline void         log_stats_mshr_hit(Addr line_addr);
 static inline void         update_stats_bf_retired(void);
+
 
 /**************************************************************************************/
 /* set_icache_stage: */
@@ -890,6 +893,15 @@ static inline void icache_process_ops(Stage_Data* cur_data) {
       print_func_op(op);
       FATAL_ERROR(ic->proc_id, "Access to 0x0\n");
     }
+
+    global_icache_micro_op_number++; 
+
+    // printf("FETCH: Op #%u, PC: 0x%llx, Type: %d, MemType: %d, MemAddr: 0x%llx\n", 
+    //   global_icache_micro_op_number, 
+    //   op->inst_info->addr, 
+    //   op->table_info->op_type, 
+    //   op->table_info->mem_type, 
+    //   op->oracle_info.va);
 
     if(DUMP_TRACE && DEBUG_RANGE_COND(ic->proc_id))
       print_func_op(op);
