@@ -416,19 +416,19 @@ void lhash_print_sorted(LHash* table);
    and appear the same cacheblock as the later load micro-op and thus preventing fusion
    for program correctness. */
 
-#define INTERVENING_STORE_TABLE 4096
+#define STORE_TABLE_SIZE 4096
 
-typedef struct InterveningStore_struct {
-  Addr pc_addr;                             /* PC address of the store */
-  Addr instr_addr;                          /* Memory address of the store */
-  Addr cacheblock_addr;                      /* Cacheline address that this store accesses */
-  int  mem_size;                             /* Memory access size */
-  int  num_dest_regs;                        /* Number of destination registers */
-  int  base_reg;                             /* Base register used for addressing */
-  unsigned int micro_op_num;                /* Global micro-op number for this store */
-  bool has_dependent_load;                  /* Flag to indicate if a dependent load exists */
-  struct InterveningStore_struct* next;     /* Linked list pointer */
-} InterferingStore;
+typedef struct StoreTracker {
+  Addr store_pc_addr;                              /* PC address of the store */
+  Addr store_instr_addr;                           /* Memory address of the store */
+  Addr store_cacheblock_addr;                      /* Cacheline address that this store accesses */
+  int  store_mem_size;                             /* Memory access size */
+  int  store_num_dest_regs;                        /* Number of destination registers */
+  int  store_base_reg;                             /* Base register used for addressing */
+  unsigned int store_micro_op_num;                 /* Global micro-op number for this store */
+  bool store_has_dependent_load;                   /* Flag to indicate if a dependent load exists */
+  struct StoreTracker* next;      /* Linked list pointer */
+} StoreTracker;
 
 
 #ifdef __cplusplus
