@@ -65,6 +65,7 @@
 #define DEBUG_NODE_WIDTH ISSUE_WIDTH
 #define OP_IS_IN_RS(op) (op->state >= OS_IN_RS && op->state < OS_SCHEDULED)
 
+
 /**************************************************************************************/
 // Helios 
 
@@ -73,6 +74,7 @@
 extern predictor_entry predictor_table[PREDICTOR_SIZE]; 
 extern Reg_Info reg_infos[PREDICTOR_SIZE][6]; // MAX_DESTS
 extern int donor_num_dests_global[PREDICTOR_SIZE]; 
+static unsigned int global_retire_micro_op_number = 0;
 
 static short is_same_cacheline(long addrA, long addrB);
 static void update_LRU(void);
@@ -81,6 +83,9 @@ static void train_predictor(long donor_pc, int donor_op_num, long rcvr_pc, int r
 static int is_already_in_history_table(long rcvr_pc, long rcvr_opnum, long donor_pc, long donor_opnum);
 void update_history_at_retire(Op* op);
 
+// Hash table for tracking stores - based on cachelines 
+static StoreTracker* store_hash[STORE_TABLE_SIZE] = {NULL}; 
+static bool store_tracking_initialized = false;
 
 #define MAX_HISTORY_LENGTH 352
 
@@ -93,10 +98,12 @@ typedef struct {
     short donor_num_dests[MAX_HISTORY_LENGTH];
     unsigned long global_histories[MAX_HISTORY_LENGTH];
     long cursor;
+    unsigned int global_micro_op_numbers[MAX_HISTORY_LENGTH];
 } Retire_History; 
 
 static Retire_History retire_history = {0};
 static FILE* print_mispredicted_uop_file = NULL;
+
 
 
 /**************************************************************************************/
@@ -133,6 +140,14 @@ void collect_node_table_full_stats(Op* op);
 void collect_lsq_full_stats(Op* op);
 
 
+static void init_store_tracking() {
+  for (int i = 0; i < STORE_TABLE_SIZE; i++) {
+    store_hash[i] = NULL;
+  }
+  store_tracking_initialized = true;
+}
+
+
 static short is_same_cacheline(long addrA, long addrB)
 {
   static const long CACHELINE_SIZE = 64;
@@ -143,6 +158,75 @@ static short is_same_cacheline(long addrA, long addrB)
       return 0;  // Different cachelines
   }
 }
+
+static inline Addr get_cacheline_addr(Addr addr) {
+  static const Addr cacheline_size = 64; // Assuming a 64-byte cache line
+  return addr & ~(cacheline_size - 1);
+}
+
+static inline unsigned int hash_cacheline(Addr cacheline_addr) {
+  return (unsigned int)(cacheline_addr & (STORE_TABLE_SIZE - 1));
+}
+
+/**
+ * Record a store operation in the tracking system
+ */
+static void record_store(Op* op) {
+  if (!store_tracking_initialized) {
+      init_store_tracking();
+  }
+  
+  Addr cacheline_addr = get_cacheline_addr(op->oracle_info.va);
+  unsigned int hash_idx = hash_cacheline(cacheline_addr);
+  
+  // Create new store tracker entry
+  StoreTracker* new_store = (StoreTracker*)malloc(sizeof(StoreTracker));
+  if (!new_store) {
+    
+      return;
+  }
+  
+  // Initialize the new store entry
+  new_store->store_pc_addr = op->inst_info->addr;
+  new_store->store_instr_addr = op->oracle_info.va;
+  new_store->store_cacheblock_addr = cacheline_addr;
+  new_store->store_mem_size = op->table_info->mem_size;
+  new_store->store_num_dest_regs = op->table_info->num_dest_regs;
+  new_store->store_base_reg = op->inst_info->srcs[0].reg;
+  new_store->store_micro_op_num = global_retire_micro_op_number;
+  new_store->store_has_dependent_load = false;
+  
+  // Insert at the beginning of the list
+  new_store->next = store_hash[hash_idx];
+  store_hash[hash_idx] = new_store;                                                                                                                                                    
+}
+
+/**
+ * Check if there's any store to the cacheline between the two global retire numbers 
+ * Returns true if an intervening store is found
+ */
+static bool has_intervening_store(Addr load_addr, int receiver_num, int donor_num) {
+  if (!store_tracking_initialized) {
+      return false;
+  }
+  
+  Addr cacheline_addr = get_cacheline_addr(load_addr);
+  unsigned int hash_idx = hash_cacheline(cacheline_addr);
+  
+  // Check all stores to this cacheline
+  StoreTracker* current = store_hash[hash_idx];
+  while (current) {
+      // Check if the store is between the two load micro-ops 
+      if (current->store_micro_op_num > receiver_num && 
+          current->store_micro_op_num < donor_num) {
+          return true; // Found an intervening store
+      }
+      current = current->next;
+  }
+  
+  return false; // No intervening store found
+}
+
 
 static void update_LRU(void)
 {
@@ -257,8 +341,32 @@ static void train_predictor(long donor_pc, int donor_op_num, long rcvr_pc, int r
     return;
 }
 
+static void clear_store_entries(Addr addr) {
+  if (!store_tracking_initialized) {
+    return;
+  }
+  
+  Addr cacheline_addr = get_cacheline_addr(addr);
+  unsigned int hash_idx = hash_cacheline(cacheline_addr);
+  
+  // Free all entries in this bucket
+  StoreTracker* current = store_hash[hash_idx];
+  while (current) {
+    StoreTracker* next = current->next;
+    free(current);
+    current = next;
+  }
+  
+  store_hash[hash_idx] = NULL;
+}
+
 
 void update_history_at_retire(Op* op) {
+
+  if(op->table_info->mem_type == MEM_ST) {
+      // Record the store operation
+      record_store(op);
+  }
 
   if(op->table_info->mem_type != MEM_LD) {
       retire_history.valid[retire_history.cursor] = 0;
@@ -273,6 +381,7 @@ void update_history_at_retire(Op* op) {
   copy_reg_info(retire_history.donor_regs[retire_history.cursor], op->inst_info->dests);
   retire_history.donor_num_dests[retire_history.cursor] = op->table_info->num_dest_regs;
   retire_history.global_histories[retire_history.cursor] = op->oracle_info.pred_global_hist; 
+  retire_history.global_micro_op_numbers[retire_history.cursor] = global_retire_micro_op_number;
   long donor_unique_num = op->unique_op_number;
 
   for(short i = 0; i < MAX_HISTORY_LENGTH; i++) {
@@ -293,12 +402,13 @@ void update_history_at_retire(Op* op) {
       if((entry_num = is_already_in_history_table(rcvr_addr, rcvr_op_num, donor_addr, donor_op_num)) != -1) {
           // It is already in the table
           if(is_same_cacheline(donor_addr, rcvr_addr)) {
+
+             
               
-             // print whether donor was a part of mispredicted path
-             if(op->oracle_info.mispred) {
-              fprintf(print_mispredicted_uop_file, "Donor PC: %llx Micro-op number: %ld\n", op->inst_info->addr, donor_op_num);
-              fflush(print_mispredicted_uop_file);
-              } 
+             if(has_intervening_store(op->oracle_info.va, retire_history.global_micro_op_numbers[i], global_retire_micro_op_number)) {
+               // Skipping training if there is a store to the same cacheline
+               break; 
+            }
               
               train_predictor(retire_history.PCs[retire_history.cursor], 
                              donor_op_num, 
@@ -333,10 +443,12 @@ void update_history_at_retire(Op* op) {
           // It is not already in the table
           if(is_same_cacheline(donor_addr, rcvr_addr)) {
 
-                // print whether donor was a part of mispredicted path
-                if(op->oracle_info.mispred) {
-                  fprintf(print_mispredicted_uop_file, "Donor PC: %llx Micro-op number: %ld\n", op->inst_info->addr, donor_op_num);
-                  } 
+                if(op->table_info->mem_type == MEM_ST) {
+                
+                  // Skipping training since there is a prior intervening load to the same 
+                  // cacheblock as the current op 
+                  break; 
+                }
 
                 fflush(print_mispredicted_uop_file);
               
@@ -357,6 +469,8 @@ void update_history_at_retire(Op* op) {
       }
   }
   
+  clear_store_entries(op->oracle_info.va);
+
   retire_history.cursor = (retire_history.cursor + 1) % MAX_HISTORY_LENGTH;
   return;
 }
@@ -397,6 +511,7 @@ void init_node_stage(uns8 proc_id, const char* name) {
   memset(retire_history.op_num_in_inst, 0, sizeof(retire_history.op_num_in_inst));
   memset(retire_history.donor_num_dests, 0, sizeof(retire_history.donor_num_dests));
   memset(retire_history.global_histories, 0, sizeof(retire_history.global_histories));
+  memset(retire_history.global_micro_op_numbers, 0, sizeof(retire_history.global_micro_op_numbers));
 
 
   reset_node_stage();
@@ -1128,6 +1243,10 @@ void node_retire() {
     ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n",
             op->op_num);
     ret_count++;
+    global_retire_micro_op_number++;
+    update_history_at_retire(op);
+
+
     DEBUG(node->proc_id, "Retiring op:%llu\n", op->op_num);
 
     // Debug prints mainly used for testing the uop generation of PIN frontend
@@ -1231,8 +1350,6 @@ void node_retire() {
     ASSERT(node->proc_id, node->num_stores >= 0);
 
     STAT_EVENT(op->proc_id, RET_ALL_INST);
-    update_history_at_retire(op);
-
     remove_from_seq_op_list(td, op);
 
     if(op->table_info->cf_type) {

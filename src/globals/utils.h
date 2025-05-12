@@ -40,6 +40,7 @@
 #include "statistics.h"
 #include <string.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -409,8 +410,25 @@ void lhash_free(LHash* table);
 int compare_nodes(const void* a, const void* b);
 void lhash_print_sorted(LHash* table);
 
+/**************************************************************************************/
+/* Intervening store table */
+/* This is used to track stores that appear between two loads 
+   and appear the same cacheblock as the later load micro-op and thus preventing fusion
+   for program correctness. */
 
+#define INTERVENING_STORE_TABLE 4096
 
+typedef struct InterveningStore_struct {
+  Addr pc_addr;                             /* PC address of the store */
+  Addr instr_addr;                          /* Memory address of the store */
+  Addr cacheblock_addr;                      /* Cacheline address that this store accesses */
+  int  mem_size;                             /* Memory access size */
+  int  num_dest_regs;                        /* Number of destination registers */
+  int  base_reg;                             /* Base register used for addressing */
+  unsigned int micro_op_num;                /* Global micro-op number for this store */
+  bool has_dependent_load;                  /* Flag to indicate if a dependent load exists */
+  struct InterveningStore_struct* next;     /* Linked list pointer */
+} InterferingStore;
 
 
 #ifdef __cplusplus
