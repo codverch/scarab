@@ -1,0 +1,304 @@
+// STD headers
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Custom headers
+#include "ifuse_apt.h"
+#include "ifuse_aci.h"
+#include "ifuse_ideal_alloc.h"
+#include "ifuse_ideal_limits.h"
+#include "../general.param.h"
+#include "../statistics.h"
+#include "ifuse.param.h"
+
+/**
+ * Ideal Active Pair Table (APT)
+ * =============================
+ * The APT is a live prediction queue. LD1 inserts an entry when it predicts a
+ * future LD2; LD2 probes by PC and claims one unmatched prediction for that
+ * LD2 PC.
+ *
+ * Multiple dynamic LD1s may wait for the same LD2 PC. The match policy is a
+ * logical experiment knob, not a capacity model:
+ *
+ *   IFUSE_APT_MATCH_POLICY = 0: claim the first inserted unmatched LD1.
+ *   IFUSE_APT_MATCH_POLICY = 1: claim the most recently inserted unmatched LD1.
+ *
+ * This ideal baseline has no hardware capacity model. It stores entries in
+ * hash buckets for software speed, but the buckets do not imply set conflicts
+ * or replacement. The ACI entry created with each APT entry is invalidated
+ * when its owner leaves the APT.
+ */
+
+#define APT_NUM_BUCKETS 4096U
+
+// Internal table node
+typedef struct APT_Node {
+    APT_Entry      entry;
+    struct APT_Node* next;
+} APT_Node;
+
+// Module state
+static APT_Node* apt_table[APT_NUM_BUCKETS];
+static bool      apt_initialized = false;
+static uint64_t  apt_next_timestamp = 0;
+static uint64_t  apt_live_ld2_prediction_count = 0;
+static uint64_t  apt_live_ld2_prediction_peak = 0;
+static IfuseIdealAlloc apt_node_alloc;
+
+// Internal helper methods
+static unsigned int apt_bucket(Addr ld2_pc_addr);
+static APT_Node* apt_find_matching_node(Addr ld2_pc_addr);
+static void apt_note_prediction_inserted(void);
+static void apt_note_prediction_removed(void);
+static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry);
+static void apt_remove_node(unsigned int bucket, APT_Node* prev,
+                            APT_Node* node);
+
+/**
+ * Initializes the ideal Active Pair Table.
+ */
+void apt_init(void) {
+    if (apt_initialized) {
+        return;
+    }
+
+    memset(apt_table, 0, sizeof(apt_table));
+    apt_next_timestamp = 0;
+    apt_live_ld2_prediction_count = 0;
+    apt_live_ld2_prediction_peak = 0;
+    if (!ifuse_ideal_alloc_init_fixed(&apt_node_alloc, sizeof(APT_Node),
+                                      IFUSE_IDEAL_APT_MAX_NODES)) {
+        fprintf(stderr, "APT: fixed pool alloc failed (%u nodes)\n",
+                IFUSE_IDEAL_APT_MAX_NODES);
+        exit(1);
+    }
+    apt_initialized = true;
+}
+
+/**
+ * Returns the software bucket for ld2_pc_addr.
+ *
+ * The bucket exists only to make simulator lookup efficient. It is not a
+ * modeled hardware set index.
+ */
+static unsigned int apt_bucket(Addr ld2_pc_addr) {
+    uint64_t h = (uint64_t)ld2_pc_addr;
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33;
+    return (unsigned int)(h & (APT_NUM_BUCKETS - 1U));
+}
+
+/**
+ * Returns the unmatched node selected by the active APT match policy.
+ */
+static APT_Node* apt_find_matching_node(Addr ld2_pc_addr) {
+    unsigned int bucket = apt_bucket(ld2_pc_addr);
+    APT_Node* best_node = NULL;
+
+    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
+        if (node->entry.valid &&
+            !node->entry.matched &&
+            node->entry.ld2_pc_addr == ld2_pc_addr) {
+            if (!best_node) {
+                best_node = node;
+                continue;
+            }
+
+            if (IFUSE_APT_MATCH_POLICY == 1) {
+                if (node->entry.timestamp > best_node->entry.timestamp) {
+                    best_node = node;
+                }
+            } else {
+                if (node->entry.timestamp < best_node->entry.timestamp) {
+                    best_node = node;
+                }
+            }
+        }
+    }
+
+    return best_node;
+}
+
+/**
+ * Records that one live APT LD2 prediction was inserted.
+ */
+static void apt_note_prediction_inserted(void) {
+    apt_live_ld2_prediction_count++;
+    if (apt_live_ld2_prediction_count > apt_live_ld2_prediction_peak) {
+        INC_STAT_EVENT(0, APT_LIVE_LD2_PREDICTION_PEAK,
+                       apt_live_ld2_prediction_count -
+                       apt_live_ld2_prediction_peak);
+        apt_live_ld2_prediction_peak = apt_live_ld2_prediction_count;
+    }
+}
+
+/**
+ * Records that one live APT LD2 prediction was removed.
+ */
+static void apt_note_prediction_removed(void) {
+    if (apt_live_ld2_prediction_count > 0) {
+        apt_live_ld2_prediction_count--;
+    }
+}
+
+/**
+ * Observes the current number of live APT LD2 predictions.
+ */
+void apt_observe_live_ld2_predictions(void) {
+    if (!apt_initialized) {
+        return;
+    }
+
+    STAT_EVENT(0, APT_LIVE_LD2_PREDICTION_OBSERVATIONS);
+    INC_STAT_EVENT(0, APT_LIVE_LD2_PREDICTION_TOTAL,
+                   apt_live_ld2_prediction_count);
+}
+
+/**
+ * Invalidates the ACI prediction owned by this APT entry.
+ *
+ * LD1 creates both an APT entry and an ACI entry. Once LD2 claims the APT entry,
+ * ACI validation owns the ACI entry: a correct prediction consumes it, and an
+ * ACI failure explicitly invalidates it. APT cleanup only invalidates ACI for
+ * predictions that were never claimed by LD2.
+ */
+static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry) {
+    if (!entry || !entry->valid || entry->matched) {
+        return;
+    }
+
+    aci_invalidate_prediction(entry->predicted_ld2_effective_addr,
+                              entry->ld1_micro_op_num);
+}
+
+/**
+ * Removes node from bucket and releases its allocator slot.
+ */
+static void apt_remove_node(unsigned int bucket, APT_Node* prev,
+                            APT_Node* node) {
+    if (!node) {
+        return;
+    }
+
+    apt_invalidate_pending_aci_prediction(&node->entry);
+    if (prev) {
+        prev->next = node->next;
+    } else {
+        apt_table[bucket] = node->next;
+    }
+    apt_note_prediction_removed();
+    ifuse_ideal_alloc_put(&apt_node_alloc, node);
+}
+
+/**
+ * Returns and claims the unmatched entry waiting for ld2_pc_addr.
+ */
+APT_Entry* apt_lookup(Addr ld2_pc_addr) {
+    if (!apt_initialized) {
+        apt_init();
+    }
+    if (ld2_pc_addr == 0) {
+        return NULL;
+    }
+
+    APT_Node* node = apt_find_matching_node(ld2_pc_addr);
+    if (!node) {
+        return NULL;
+    }
+
+    node->entry.matched = true;
+    return &node->entry;
+}
+
+/**
+ * Inserts a live LD1 prediction for a future LD2.
+ */
+APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
+                            Addr ld1_effective_addr,
+                            unsigned int ld1_micro_op_num,
+                            unsigned int predicted_ld2_memory_access_size,
+                            Addr ld2_pc_addr,
+                            Addr predicted_ld2_effective_addr) {
+    if (!apt_initialized) {
+        apt_init();
+    }
+    if (ld2_pc_addr == 0) {
+        return NULL;
+    }
+
+    APT_Node* node = (APT_Node*)ifuse_ideal_alloc_get(&apt_node_alloc);
+    if (!node) {
+        fprintf(stderr, "APT: alloc failed for ld2_pc=0x%llx\n",
+                (unsigned long long)ld2_pc_addr);
+        return NULL;
+    }
+
+    node->entry.ld2_pc_addr                      = ld2_pc_addr;
+    node->entry.ld1_pc_addr                      = ld1_pc_addr;
+    node->entry.ld1_effective_addr               = ld1_effective_addr;
+    node->entry.ld1_micro_op_num                 = ld1_micro_op_num;
+    node->entry.predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
+    node->entry.predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
+    node->entry.valid                            = true;
+    node->entry.matched                          = false;
+    node->entry.timestamp                        = ++apt_next_timestamp;
+
+    unsigned int bucket = apt_bucket(ld2_pc_addr);
+    node->next = apt_table[bucket];
+    apt_table[bucket] = node;
+    apt_note_prediction_inserted();
+    return &node->entry;
+}
+
+/**
+ * Removes the entry for a dynamic LD1 after rename-stage bookkeeping completes.
+ */
+void apt_remove_entry_by_ld1_micro_op(Addr ld2_pc_addr,
+                                      unsigned int ld1_micro_op_num) {
+    if (!apt_initialized || ld2_pc_addr == 0) {
+        return;
+    }
+
+    unsigned int bucket = apt_bucket(ld2_pc_addr);
+    APT_Node* prev = NULL;
+    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
+        if (node->entry.valid &&
+            node->entry.ld2_pc_addr == ld2_pc_addr &&
+            node->entry.ld1_micro_op_num == ld1_micro_op_num) {
+            apt_remove_node(bucket, prev, node);
+            return;
+        }
+        prev = node;
+    }
+}
+
+/**
+ * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
+ */
+void apt_cleanup_stale(unsigned int current_op_num) {
+    if (!apt_initialized) {
+        return;
+    }
+
+    for (unsigned int bucket = 0; bucket < APT_NUM_BUCKETS; ++bucket) {
+        APT_Node* prev = NULL;
+        APT_Node* node = apt_table[bucket];
+
+        while (node) {
+            APT_Node* next = node->next;
+            if (node->entry.valid &&
+                current_op_num - node->entry.ld1_micro_op_num >
+                IFUSE_FUSION_DISTANCE) {
+                apt_remove_node(bucket, prev, node);
+            } else {
+                prev = node;
+            }
+            node = next;
+        }
+    }
+}
