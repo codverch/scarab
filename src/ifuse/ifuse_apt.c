@@ -8,8 +8,10 @@
 // Custom headers
 #include "ifuse_apt.h"
 #include "ifuse_aci.h"
+#include "ifuse_exec_pair.h"
 #include "ifuse_ideal_alloc.h"
 #include "ifuse_ideal_limits.h"
+#include "ifuse_rename.h"
 #include "../general.param.h"
 #include "../statistics.h"
 #include "ifuse.param.h"
@@ -56,7 +58,7 @@ static void apt_note_prediction_inserted(void);
 static void apt_note_prediction_removed(void);
 static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry);
 static void apt_remove_node(unsigned int bucket, APT_Node* prev,
-                            APT_Node* node);
+                            APT_Node* node, bool preserve_exec_pair);
 
 /**
  * Initializes the ideal Active Pair Table.
@@ -180,7 +182,7 @@ static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry) {
  * Removes node from bucket and releases its allocator slot.
  */
 static void apt_remove_node(unsigned int bucket, APT_Node* prev,
-                            APT_Node* node) {
+                            APT_Node* node, bool preserve_exec_pair) {
     if (!node) {
         return;
     }
@@ -192,6 +194,16 @@ static void apt_remove_node(unsigned int bucket, APT_Node* prev,
         apt_table[bucket] = node->next;
     }
     apt_note_prediction_removed();
+
+    // An unmatched LOAD1 owns its extra physical register through this APT
+    // entry. A matching LOAD2 must take ownership before removing the entry.
+    // Stale cleanup reaches this path when the predicted LOAD2 never arrives.
+    ifuse_free_ld2_physical_reg(node->entry.ld2_physical_reg_id);
+    if (!preserve_exec_pair) {
+        ifuse_exec_pair_forget_ld1_prediction(
+            node->entry.ld1_micro_op_num);
+    }
+
     ifuse_ideal_alloc_put(&apt_node_alloc, node);
 }
 
@@ -221,6 +233,7 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr) {
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
+                            uint64_t ld1_load_num,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
                             Addr predicted_ld2_effective_addr) {
@@ -242,6 +255,8 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
     node->entry.ld1_pc_addr                      = ld1_pc_addr;
     node->entry.ld1_effective_addr               = ld1_effective_addr;
     node->entry.ld1_micro_op_num                 = ld1_micro_op_num;
+    node->entry.ld1_load_num                     = ld1_load_num;
+    node->entry.ld2_physical_reg_id              = 0xFFFF;
     node->entry.predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
     node->entry.predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
     node->entry.valid                            = true;
@@ -270,17 +285,109 @@ void apt_remove_entry_by_ld1_micro_op(Addr ld2_pc_addr,
         if (node->entry.valid &&
             node->entry.ld2_pc_addr == ld2_pc_addr &&
             node->entry.ld1_micro_op_num == ld1_micro_op_num) {
-            apt_remove_node(bucket, prev, node);
+            apt_remove_node(bucket, prev, node, false);
             return;
         }
         prev = node;
     }
 }
 
+void apt_remove_entry_by_ld1_micro_op_any_pc(unsigned int ld1_micro_op_num) {
+    if (!apt_initialized) {
+        return;
+    }
+
+    for (unsigned int bucket = 0; bucket < APT_NUM_BUCKETS; bucket++) {
+        APT_Node* prev = NULL;
+        for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
+            if (node->entry.valid &&
+                node->entry.ld1_micro_op_num == ld1_micro_op_num) {
+                apt_remove_node(bucket, prev, node, false);
+                return;
+            }
+            prev = node;
+        }
+    }
+}
+
+bool apt_reopen_matched_entry(Addr ld2_pc_addr,
+                              unsigned int ld1_micro_op_num) {
+    if (!apt_initialized || ld2_pc_addr == 0) {
+        return false;
+    }
+
+    unsigned int bucket = apt_bucket(ld2_pc_addr);
+    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
+        if (node->entry.valid &&
+            node->entry.matched &&
+            node->entry.ld2_pc_addr == ld2_pc_addr &&
+            node->entry.ld1_micro_op_num == ld1_micro_op_num) {
+            /*
+             * Fetch-time validation may have consumed or invalidated ACI.
+             * Recreate the prediction so the re-fetched LOAD2 performs the
+             * same validation before it reaches rename.
+             */
+            node->entry.matched = false;
+            aci_insert_prediction(node->entry.predicted_ld2_effective_addr,
+                                  node->entry.ld1_micro_op_num,
+                                  node->entry.ld1_load_num);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool apt_set_ld2_physical_reg_id(unsigned int ld1_micro_op_num,
+                                 unsigned int ld2_physical_reg_id) {
+    if (!apt_initialized || ld2_physical_reg_id == 0xFFFF) {
+        return false;
+    }
+
+    for (unsigned int bucket = 0; bucket < APT_NUM_BUCKETS; bucket++) {
+        for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
+            if (node->entry.valid &&
+                node->entry.ld1_micro_op_num == ld1_micro_op_num) {
+                node->entry.ld2_physical_reg_id = ld2_physical_reg_id;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
+                                  unsigned int ld1_micro_op_num,
+                                  unsigned int* ld2_physical_reg_id) {
+    if (!apt_initialized || ld2_pc_addr == 0 || !ld2_physical_reg_id) {
+        return false;
+    }
+
+    unsigned int bucket = apt_bucket(ld2_pc_addr);
+    APT_Node* prev = NULL;
+    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
+        if (node->entry.valid &&
+            node->entry.ld2_pc_addr == ld2_pc_addr &&
+            node->entry.ld1_micro_op_num == ld1_micro_op_num &&
+            node->entry.ld2_physical_reg_id != 0xFFFF) {
+            // LOAD2 now owns the register. Clear APT ownership before removing
+            // the entry so apt_remove_node() does not return it to the free list.
+            *ld2_physical_reg_id = node->entry.ld2_physical_reg_id;
+            node->entry.ld2_physical_reg_id = 0xFFFF;
+            apt_remove_node(bucket, prev, node, true);
+            return true;
+        }
+        prev = node;
+    }
+
+    return false;
+}
+
 /**
  * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
  */
-void apt_cleanup_stale(unsigned int current_op_num) {
+void apt_cleanup_stale(uint64_t current_load_num) {
     if (!apt_initialized) {
         return;
     }
@@ -291,10 +398,13 @@ void apt_cleanup_stale(unsigned int current_op_num) {
 
         while (node) {
             APT_Node* next = node->next;
-            if (node->entry.valid &&
-                current_op_num - node->entry.ld1_micro_op_num >
+            // A matched entry remains live until LOAD2 reaches rename and
+            // consumes its speculative register. Unmatched entries expire
+            // after the configured number of subsequently fetched loads.
+            if (node->entry.valid && !node->entry.matched &&
+                current_load_num - node->entry.ld1_load_num >
                 IFUSE_FUSION_DISTANCE) {
-                apt_remove_node(bucket, prev, node);
+                apt_remove_node(bucket, prev, node, false);
             } else {
                 prev = node;
             }

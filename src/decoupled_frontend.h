@@ -352,6 +352,7 @@ struct Decoupled_FE {
  protected:
   void set_conf_off_path() { conf_off_path = true; }
   void dfe_recover_op();
+  void reset_ftq_iterators();
   bool is_off_path_state() const { return state == SERVING_OFF_PATH; }
   void check_consecutivity_and_push_to_ftq();
   void redirect_to_off_path(FT_PredictResult result);

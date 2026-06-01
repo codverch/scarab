@@ -534,7 +534,7 @@ void IssueQueue::reject(uns16 entry_id) {
 void IssueQueue::recover() {
   for (IssueQueueEntry& entry : entries) {
     Op* op = entry.op;
-    if (op == nullptr || !op->off_path) {
+    if (op == nullptr || (!op->off_path && !bp_recovery_info->ifuse_recovery)) {
       continue;
     }
 

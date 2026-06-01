@@ -30,6 +30,7 @@ typedef struct ACI_Node {
     uint64_t predicted_ld2_effective_addr;
     uint64_t timestamp;
     uint64_t ld1_micro_op_num;
+    uint64_t ld1_load_num;
     struct ACI_Node* next;
 } ACI_Node;
 
@@ -133,7 +134,8 @@ static ACI_Node* aci_find_prediction(uint64_t cacheblock_addr,
  * Inserts the cache block predicted for a live LD1.
  */
 void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
-                           uint64_t ld1_micro_op_num) {
+                           uint64_t ld1_micro_op_num,
+                           uint64_t ld1_load_num) {
     if (!aci_initialized) {
         aci_init();
     }
@@ -159,6 +161,7 @@ void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
     }
 
     if (replayed_prediction) {
+        replayed_prediction->ld1_load_num = ld1_load_num;
         replayed_prediction->timestamp = ++aci_next_timestamp;
         STAT_EVENT(0, ACI_REPLAYED_INSERTS);
         return;
@@ -172,6 +175,7 @@ void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
 
     node->predicted_ld2_effective_addr = predicted_ld2_effective_addr;
     node->ld1_micro_op_num             = ld1_micro_op_num;
+    node->ld1_load_num                 = ld1_load_num;
     node->timestamp                    = ++aci_next_timestamp;
     node->next                         = aci_buckets[bucket_idx];
     aci_buckets[bucket_idx]            = node;
@@ -261,7 +265,7 @@ void aci_invalidate_prediction(uint64_t predicted_ld2_effective_addr,
 /**
  * Removes predictions whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
  */
-void aci_cleanup_stale(unsigned int current_op_num) {
+void aci_cleanup_stale(uint64_t current_load_num) {
     if (!aci_initialized) {
         return;
     }
@@ -272,7 +276,7 @@ void aci_cleanup_stale(unsigned int current_op_num) {
 
         while (node) {
             ACI_Node* next = node->next;
-            if (current_op_num - (unsigned int)node->ld1_micro_op_num >
+            if (current_load_num - node->ld1_load_num >
                 IFUSE_FUSION_DISTANCE) {
                 aci_remove_node(bucket_idx, prev, node);
                 STAT_EVENT(0, ACI_STALE_PREDICTION_REMOVALS);

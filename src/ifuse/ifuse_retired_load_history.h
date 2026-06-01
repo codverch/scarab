@@ -1,5 +1,6 @@
 // STD headers
 #include <stdbool.h>
+#include <stdint.h>
 
 // Custom headers
 #include "globals/global_types.h"
@@ -13,7 +14,7 @@
  * Tracks recently retired loads so the runtime trainer can identify LD1/LD2
  * pairs in the same cache block.
  *
- * The table is a circular buffer sized for the default 512 micro-op fusion
+ * The table is a circular buffer sized for the default 512-load fusion
  * distance. Entries are also indexed by cache block, so matching a retiring LD2
  * only scans older LD1 candidates that touched the same block.
  */
@@ -37,23 +38,27 @@ void retired_load_history_clear(void);
  * @param load_effective_addr The effective memory address accessed by the load.
  * @param load_memory_access_size The memory access size of the retired load.
  * @param load_micro_op_num The dynamic micro-op number of the retired load.
+ * @param load_num The dynamic retired on-path load number.
  */
 void retired_load_history_insert(Addr load_pc_addr,
                                  Addr load_effective_addr,
                                  unsigned int load_memory_access_size,
-                                 unsigned int load_micro_op_num);
+                                 unsigned int load_micro_op_num,
+                                 uint64_t load_num);
 
 /**
  * Finds and removes the most recent older load that can pair with current LD2.
  *
  * @param current_load_effective_addr The effective memory address of LD2.
  * @param current_load_micro_op_num The dynamic micro-op number of LD2.
+ * @param current_load_num The dynamic retired on-path load number of LD2.
  * @param matched_load Filled with the matching older load on success.
  * @return TRUE if a matching older load was found, FALSE otherwise.
  */
 bool retired_load_history_find_and_remove_match(
     Addr current_load_effective_addr,
     unsigned int current_load_micro_op_num,
+    uint64_t current_load_num,
     RetiredLoadHistoryEntry* matched_load);
 
 /**

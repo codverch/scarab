@@ -27,6 +27,7 @@
 
 #include "ft.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <functional>
 #include <iostream>
@@ -38,9 +39,15 @@
 #include "memory/memory.param.h"
 
 extern "C" {
-#include "bp/bp_targ_mech.h"
-#include "frontend/frontend.h"
-}
+  #include "bp/bp_targ_mech.h"
+  #include "frontend/frontend.h"
+  #include "ifuse/ifuse_aci.h"
+  #include "ifuse/ifuse_apt.h"
+  #include "ifuse/ifuse_fct.h"
+  #include "ifuse/ifuse_load_tracker.h"
+  #include "ifuse/ifuse.param.h"
+  }
+
 #include "frontend/frontend_intf.h"
 #include "isa/isa_macros.h"
 
@@ -64,9 +71,13 @@ FT::~FT() {
       ft_op->parent_FT = nullptr;
       free_op(ft_op);
     }
-    if (ft_op->parent_FT_off_path) {
+    /*
+     * Recovery can split a saved FT again before an older secondary FT
+     * retires. In that case the op's secondary owner points at the newer FT;
+     * deleting the older FT must not clear the newer ownership link.
+     */
+    if (ft_op->parent_FT_off_path == this) {
       ASSERT(proc_id, !ft_op->off_path);
-      ASSERT(proc_id, ft_op->parent_FT_off_path == this);
       ft_op->parent_FT_off_path = nullptr;
     }
   }
@@ -140,7 +151,8 @@ void FT::remove_op_after_exec_recover() {
 }
 
 FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::function<bool(uns8, uns8, Op*)> fetch_op_fn,
-                   bool off_path, bool conf_off_path, std::function<uint64_t()> get_next_op_id_fn) {
+                   bool off_path, bool conf_off_path, std::function<uint64_t()> get_next_op_id_fn,
+                   Addr required_start_addr) {
   FT_Event event = FT_EVENT_NONE;
   do {
     if (!can_fetch_op_fn(proc_id, bp_id)) {
@@ -150,13 +162,155 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     }
     Op* op = alloc_op(proc_id);
     fetch_op_fn(proc_id, bp_id, op);
+    if (required_start_addr && ops.empty() && op->inst_info->addr != required_start_addr) {
+      free_op(op);
+      continue;
+    }
     op->off_path = off_path;
     op->conf_off_path = conf_off_path;
     collect_op_stats(op);
     op->op_num = get_next_op_id_fn();
+
+    // Initialize IFuse per-op metadata.
+    op->ifuse_load_role = NOT_FUSION_CANDIDATE;
+    op->ifuse_partner_op_num = 0;
+    op->ifuse_partner_ld1_pc = 0;
+    op->ifuse_ld2_physical_reg_id = OP_REG_ID_INVALID;
+    op->ifuse_ld2_early_wake_signaled = FALSE;
+    op->ifuse_ld2_agu_completed = FALSE;
+    op->ifuse_ld2_prediction_failed = FALSE;
+
+    // IFuse load classification path.
+    //
+    // Only classify valid on-path loads. Stores and off-path instructions must not
+    // consume live APT entries.
+    if (!off_path && op->inst_info->table_info.mem_type == MEM_LD &&
+        op->oracle_info.va != 0 && op->oracle_info.mem_size != 0) {
+      // IFuse distance is measured in dynamic on-path loads, not in all fetched
+      // micro-ops. Periodically discard predictions whose LOAD2 never arrived.
+      uint64_t current_load_num = ifuse_next_load_num();
+      if (IFUSE_FUSION_DISTANCE != 0 &&
+          current_load_num % IFUSE_FUSION_DISTANCE == 0) {
+        apt_cleanup_stale(current_load_num);
+        aci_cleanup_stale(current_load_num);
+      }
+
+      // Check whether a prior LD1 expects this load PC to appear as LD2.
+      APT_Entry* waiting_pair = apt_lookup(op->inst_info->addr);
+
+      if (waiting_pair &&
+          waiting_pair->ld1_micro_op_num >= (unsigned int)op->op_num) {
+        /*
+         * IFuse replay can reuse dynamic op numbers while an older APT entry is
+         * still live. LOAD2 must be strictly younger than its LOAD1; otherwise
+         * this load could claim its own replayed prediction and wait forever
+         * for a completion event that cannot occur.
+         */
+        apt_remove_entry_by_ld1_micro_op(
+            op->inst_info->addr,
+            waiting_pair->ld1_micro_op_num);
+        waiting_pair = nullptr;
+      }
+
+      if (waiting_pair &&
+          current_load_num - waiting_pair->ld1_load_num >
+              IFUSE_FUSION_DISTANCE) {
+        // apt_lookup() claims the entry immediately. Reject a claim found just
+        // after its deadline and release LOAD1's unconsumed extra register.
+        aci_invalidate_prediction(
+            waiting_pair->predicted_ld2_effective_addr,
+            waiting_pair->ld1_micro_op_num);
+        apt_remove_entry_by_ld1_micro_op(
+            op->inst_info->addr,
+            waiting_pair->ld1_micro_op_num);
+        waiting_pair = nullptr;
+      }
+
+      if (waiting_pair) {
+        op->ifuse_load_role = LOAD2;
+        op->ifuse_partner_op_num = waiting_pair->ld1_micro_op_num;
+        op->ifuse_partner_ld1_pc = waiting_pair->ld1_pc_addr;
+
+        // ACI verifies that LD2 accessed the cache block predicted by LD1.
+        // The matching ACI entry is consumed when validation succeeds.
+        ACI_Result aci_result = aci_check_and_consume_prediction(
+            op->oracle_info.va,
+            waiting_pair->predicted_ld2_effective_addr,
+            waiting_pair->ld1_micro_op_num);
+
+        // ACI validates the cache block. The address and access-size checks ensure
+        // that the complete LD2 prediction is correct.
+        bool ld2_prediction_correct =
+            aci_result == ACI_LOOKUP_MATCH &&
+            op->oracle_info.va == waiting_pair->predicted_ld2_effective_addr &&
+            op->oracle_info.mem_size ==
+                waiting_pair->predicted_ld2_memory_access_size;
+
+        if (!ld2_prediction_correct) {
+          // ACI lookup consumes the entry only when the actual cache block
+          // matches. Remove any remaining prediction after a failure.
+          aci_invalidate_prediction(
+              waiting_pair->predicted_ld2_effective_addr,
+              waiting_pair->ld1_micro_op_num);
+
+          // Record the failed prediction. Execution models its late discovery
+          // by flushing younger consumers after this LOAD2 reaches its FU.
+          op->ifuse_load_role = PREDICTED_NOT_FUSED;
+          op->ifuse_ld2_prediction_failed = TRUE;
+          fct_update_confidence(waiting_pair->ld1_pc_addr, false);
+        } else {
+          // Reinforce accurate LD1-to-LD2 predictions.
+          fct_update_confidence(waiting_pair->ld1_pc_addr, true);
+        }
+
+      } else {
+        // If this load has a trained FCT entry, classify it as LD1 and predict LD2.
+        FCT_Row* candidate = fct_lookup(op->inst_info->addr);
+
+        if (candidate && candidate->confidence_score >= IFUSE_FCT_CONF_THRESHOLD) {
+          op->ifuse_load_role = LOAD1;
+
+          Addr predicted_ld2_effective_addr =
+              candidate->direction ?
+                  op->oracle_info.va + candidate->offset_delta :
+                  op->oracle_info.va - candidate->offset_delta;
+
+          // APT records the expected future LD2 PC.
+          APT_Entry* inserted_pair = apt_insert_entry(
+              op->inst_info->addr,
+              op->oracle_info.va,
+              (unsigned int)op->op_num,
+              current_load_num,
+              candidate->ld2_mem_size,
+              candidate->ld2_pc_addr,
+              predicted_ld2_effective_addr);
+
+          // ACI records the predicted LD2 cache block.
+          if (inserted_pair) {
+            aci_insert_prediction(predicted_ld2_effective_addr,
+                                  (unsigned int)op->op_num,
+                                  current_load_num);
+          }
+        }
+      }
+    }
+
     op->bp_pred_main.pred_npc = op->oracle_info.npc;
     op->bp_pred_main.pred = op->oracle_info.dir;  // for prebuilt, pred is same as dir
     add_op(op);
+    /*
+     * IFuse LOAD2 prediction failed: use Scarab's normal misprediction path
+     * (recover_at_exec + predict_ft + redirect_to_off_path). Stop extending
+     * this on-path FT; off-path fetch continues inside redirect_to_off_path.
+     */
+    if (!off_path && op->eom && op->ifuse_load_role == PREDICTED_NOT_FUSED &&
+        op->ifuse_ld2_prediction_failed) {
+      op->bp_pred_main.recover_at_exec = TRUE;
+      op->bp_pred_main.pred_npc =
+          ADDR_PLUS_OFFSET(op->inst_info->addr, op->inst_info->trace_info.inst_size);
+      op_select_bp_pred_info(op, BP_PRED_MAIN);
+      break;
+    }
     if (off_path) {
       bp_predict_btb(g_bp_data, op);
       if (bp_l0_enabled())
@@ -238,7 +392,7 @@ std::pair<FT*, FT*> FT::extract_off_path_ft(uns split_index) {
   ASSERT(proc_id, get_is_prebuilt());
 
   // if split at the last op and FT already ended, no need to create new FT, just update end condition
-  if (split_index == ops.size() - 1 && get_end_reason() != FT_NOT_ENDED) {
+  if (split_index == ops.size() - 1 && get_end_reason(false) != FT_NOT_ENDED) {
     generate_ft_info();
     return {this, nullptr};
   }
@@ -259,12 +413,14 @@ std::pair<FT*, FT*> FT::extract_off_path_ft(uns split_index) {
     ASSERT(0, (index_uns + 1 <= ops.size() - 1 && ops.size() - 1 < ops.size() && index_uns + 1 >= 0));
 
     generate_ft_info();
+    /* Trailing suffix may end with a latent IFuse-failed op after an earlier split. */
+    ft_info.dynamic_info.ended_by = get_end_reason(false);
 
     ASSERT(proc_id, ft_info.static_info.start && ft_info.static_info.length && ops.size());
     ASSERT(proc_id, ops.size() == (ops.size() - ops.size()) + ops.size());
     ASSERT(proc_id, ft_info.dynamic_info.first_op_off_path == 0);
     ASSERT(proc_id, ft_info.dynamic_info.ended_by != FT_NOT_ENDED);
-    ASSERT(proc_id, get_end_reason() != FT_NOT_ENDED);
+    ASSERT(proc_id, get_end_reason(false) != FT_NOT_ENDED);
   } else {
     off_path_ft->is_prebuilt = 1;
     this->is_prebuilt = 0;
@@ -325,10 +481,23 @@ FT_Event FT::predict_op_ft_event(Op* op, Bp_Pred_Level pred_level) {
     return FT_EVENT_FETCH_BARRIER;
   }
 
+  if (!op->off_path && op->eom && op->ifuse_ld2_prediction_failed && bp_pred_info->recover_at_exec)
+    return FT_EVENT_MISPREDICT;
+
   return FT_EVENT_NONE;
 }
 
 FT_PredictResult FT::predict_ft() {
+  /* IFuse failure wins over an earlier branch mispredict in the same FT. */
+  size_t ifuse_mispred_idx = ops.size();
+  for (size_t idx = op_pos; idx < ops.size(); idx++) {
+    Op* op = ops[idx];
+    if (!op->off_path && op->eom && op->ifuse_ld2_prediction_failed && op->bp_pred_main.recover_at_exec)
+      ifuse_mispred_idx = idx;
+  }
+
+  FT_PredictResult branch_mispred = {0, FT_EVENT_NONE, nullptr, 0};
+
   for (size_t idx = op_pos; idx < ops.size(); idx++) {
     Op* op = ops[idx];
     bp_predict_btb(g_bp_data, op);
@@ -400,10 +569,25 @@ FT_PredictResult FT::predict_ft() {
     if (event != FT_EVENT_NONE) {
       uint64_t return_idx = (event == FT_EVENT_MISPREDICT) ? (idx) : 0;
       Addr pred_addr = op->bp_pred_info->pred_npc;
-      if (!ended_by_exit())
+      if (!ended_by_exit()) {
+        if (event == FT_EVENT_MISPREDICT) {
+          if (branch_mispred.event == FT_EVENT_NONE)
+            branch_mispred = {return_idx, event, op, pred_addr};
+          if (ifuse_mispred_idx < ops.size())
+            continue;
+        }
         return {return_idx, event, op, pred_addr};
+      }
     }
   }
+
+  if (ifuse_mispred_idx < ops.size()) {
+    Op* op = ops[ifuse_mispred_idx];
+    op_select_bp_pred_info(op, BP_PRED_MAIN);
+    return {ifuse_mispred_idx, FT_EVENT_MISPREDICT, op, op->bp_pred_main.pred_npc};
+  }
+  if (branch_mispred.event != FT_EVENT_NONE)
+    return branch_mispred;
   return {0, FT_EVENT_NONE, nullptr, 0};
 }
 
@@ -457,7 +641,7 @@ bool FT::is_consecutive(const FT& previous_ft) const {
   return matches;
 }
 
-FT_Ended_By FT::get_end_reason() const {
+FT_Ended_By FT::get_end_reason(bool honor_ifuse_ft_end_suppress) const {
   if (ops.empty()) {
     return FT_NOT_ENDED;
   }
@@ -467,6 +651,11 @@ FT_Ended_By FT::get_end_reason() const {
   ASSERT(proc_id, op->op_pool_valid);
   ASSERT(proc_id, op->inst_info);
   if (op->eom) {
+    /* Match instruction-fusion flush_op: do not end the FT at a failed IFuse. */
+    if (honor_ifuse_ft_end_suppress && op->ifuse_load_role == PREDICTED_NOT_FUSED &&
+        op->ifuse_ld2_prediction_failed)
+      return FT_NOT_ENDED;
+
     const Bp_Pred_Info* bp_pred_info = ft_active_or_main_bp_pred_info(op);
     uns offset = ADDR_PLUS_OFFSET(op->inst_info->addr, op->inst_info->trace_info.inst_size) -
                  ROUND_DOWN(op->inst_info->addr, ICACHE_LINE_SIZE);
@@ -570,6 +759,28 @@ void ft_free_op(Op* op) {
   if (!op->parent_FT_off_path && op->parent_FT->get_last_op() == op) {
     FT* ft = op->parent_FT;
     std::vector<Op*>& ft_ops = ft->get_ops();
+
+    /*
+     * IFuse recovery keeps LOAD2 and flushes only younger ops. If the youngest
+     * flushed op owns the end of its FT, deleting the entire FT would also free
+     * the surviving prefix while backend structures still reference it.
+     */
+    const bool ifuse_ft_has_survivor =
+        std::any_of(ft_ops.begin(), ft_ops.end(),
+                    [](Op* ft_op) { return !FLUSH_OP(ft_op); });
+    if (bp_recovery_info->ifuse_recovery && FLUSH_OP(op) &&
+        ifuse_ft_has_survivor) {
+      while (!ft_ops.empty() && FLUSH_OP(ft_ops.back())) {
+        Op* tail = ft_ops.back();
+        ft_ops.pop_back();
+        tail->parent_FT = nullptr;
+        free_op(tail);
+      }
+      ft->op_pos = 0;
+      ft->generate_ft_info();
+      ft->op_pos = ft_ops.size();
+      return;
+    }
 
     Flag has_on_path = FALSE;
     Flag has_off_path = FALSE;

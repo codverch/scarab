@@ -55,6 +55,9 @@
 #include "exec_ports.h"
 #include "ft.h"
 #include "icache_stage.h"
+#include "ifuse/ifuse_exec_pair.h"
+#include "ifuse/ifuse_rename.h"
+#include "ifuse/ifuse_train_retire.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map.h"
@@ -171,6 +174,9 @@ void recover_node_stage() {
   flush_scheduling_buffer();
   flush_rs();
   flush_window();
+  // Younger precommitted ops may have been removed. Rebuild this cursor from
+  // the surviving ROB entries on the next node-stage update.
+  node->node_precommit = NULL;
 
   // recover last_scheduled_opnum
   if (node->last_scheduled_opnum >= bp_recovery_info->recovery_op_num)
@@ -188,7 +194,7 @@ void flush_scheduling_buffer() {
       DEBUG(node->proc_id, "Node sched-buffer flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, node->proc_id == op->proc_id);
-      ASSERT(node->proc_id, op->off_path);
+      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
       ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
 
       node->sd.ops[ii] = NULL;
@@ -205,7 +211,7 @@ void flush_rs() {
     DEBUG(node->proc_id, "Node RS-input flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
           op->off_path);
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
-    ASSERT(node->proc_id, op->off_path);
+    ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
     ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
     node->next_op_into_rs = NULL;  // all later ops will also be flushed
   }
@@ -221,14 +227,18 @@ void flush_window() {
   for (op = node->node_head, last = &node->node_head; op; op = *last) {
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
 
-    if (FLUSH_OP(op)) {
+    const Flag ifuse_flush_offpath =
+        bp_recovery_info->ifuse_recovery && op->off_path && !IS_FLUSHING_OP(op);
+
+    if (FLUSH_OP(op) || ifuse_flush_offpath) {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
-      ASSERT(node->proc_id, op->off_path);
+      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
       if (!op->macro_fused)
         flush_ops++;
-      ASSERT(node->proc_id, op->off_path);
-      ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
+      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
+      if (!ifuse_flush_offpath)
+        ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
       op->in_node_list = FALSE;
       *last = op->next_node;
       if (op->parent_FT)
@@ -364,7 +374,8 @@ void node_fill_rob(Stage_Data* src_sd) {
     if (!op)
       continue;
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+        !ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
       if (!lsq_available(op->inst_info->table_info.mem_type)) {
         DEBUG(node->proc_id, "Node fill stalled: LSQ full for op_num:%s mem_type:%s src_sd_op_count:%d node_count:%d\n",
               unsstr64(op->op_num), op->inst_info->table_info.mem_type == MEM_LD ? "LD" : "ST", src_sd->op_count,
@@ -548,12 +559,23 @@ void node_retire() {
 
     op->retire_cycle = cycle_count;
 
+    // Train IFuse from every ROB retirement. Decoupled frontend retirement is
+    // sampled for frontend bookkeeping, so it cannot own this update.
+    ifuse_train_retired_op(op);
+
+    // Count completed fusions, not speculative frontend classifications.
+    if (op->ifuse_load_role == LOAD2) {
+      STAT_EVENT(op->proc_id, IFUSE_FUSED_LOADS);
+    }
+
     // free the previous register entries with same architectural destination
     reg_file_commit(op);
+    ifuse_retire_op(op);
 
     node_precommit_retire(op);
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+        !ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
       lsq_commit(op);
     }
 

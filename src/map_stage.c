@@ -47,6 +47,7 @@
 #include "bp/bp.h"
 
 #include "ft.h"
+#include "ifuse/ifuse_exec_pair.h"
 #include "map.h"
 #include "map_rename.h"
 #include "model.h"
@@ -147,7 +148,7 @@ void recover_map_stage() {
           DEBUG(map->proc_id, "Map flushing op_num:%llu off_path:%u\n", (unsigned long long)cur->ops[jj]->op_num,
                 cur->ops[jj]->off_path);
           flushed = TRUE;
-          ASSERT(map->proc_id, cur->ops[jj]->off_path);
+          ASSERT(map->proc_id, cur->ops[jj]->off_path || bp_recovery_info->ifuse_recovery);
           if (cur->ops[jj]->parent_FT)
             ft_free_op(cur->ops[jj]);
           cur->ops[jj] = NULL;
@@ -264,6 +265,11 @@ static inline void stage_process_op(Op* op) {
 
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);
+
+  // Register LOAD1 and LOAD2 after LOAD2's ordinary dependency links exist.
+  // The IFuse pair buffer can then model the fused early-result wake-up for
+  // either ordering: LOAD1 completion first, or LOAD2 map first.
+  ifuse_exec_pair_track_mapped_load(op, model->wake_hook);
 }
 
 static inline void map_stage_collect_stat(Flag stall, Flag starved) {

@@ -14,6 +14,12 @@
 extern "C" {
 #include "bp/bp_targ_mech.h"
 #include "bp/cbp_to_scarab.h"
+
+#include "ifuse/ifuse_aci.h"
+#include "ifuse/ifuse_apt.h"
+#include "ifuse/ifuse_fct.h"
+#include "ifuse/ifuse_train_retire.h"
+#include "ifuse/ifuse_training_table.h"
 }
 #include "frontend/frontend_intf.h"
 #include "isa/isa_macros.h"
@@ -267,6 +273,13 @@ void Decoupled_FE::init(uns _proc_id, uns _bp_id, Bp_Data* _bp_data, uns _dfe_tr
   cur_op = nullptr;
   current_ft_to_push = nullptr;
   saved_recovery_ft = nullptr;
+  if (bp_id == MAIN_BP) {
+    fct_init();
+    apt_init();
+    aci_init();
+    training_table_init();
+    ifuse_train_retire_init();
+  }
 
   if (CONFIDENCE_ENABLE) {
     if (bp_id != MAIN_BP)
@@ -277,6 +290,14 @@ void Decoupled_FE::init(uns _proc_id, uns _bp_id, Bp_Data* _bp_data, uns _dfe_tr
 
   state = (bp_id != MAIN_BP) ? INACTIVE : SERVING_ON_PATH;
   next_state = state;
+}
+
+void Decoupled_FE::reset_ftq_iterators() {
+  for (auto& it : ftq_iterators) {
+    it->ft_pos = 0;
+    it->op_pos = 0;
+    it->flattened_op_pos = 0;
+  }
 }
 
 Op* Decoupled_FE::get_last_fetch_op() {
@@ -293,7 +314,17 @@ void Decoupled_FE::dfe_recover_op() {
   off_path = false;
   sched_off_path = false;
   cur_op = nullptr;
-  recovery_addr = bp_recovery_info->recovery_fetch_addr;
+  /* IFuse already redirected the FE at fetch; skip recovery_addr FTQ check. */
+  recovery_addr =
+      bp_recovery_info->ifuse_recovery ? 0 : bp_recovery_info->recovery_fetch_addr;
+  if (bp_recovery_info->ifuse_recovery) {
+    next_state = SERVING_ON_PATH;
+    state = SERVING_ON_PATH;
+    exit_on_off_path = false;
+    conf_off_path = false;
+    current_ft_to_push = nullptr;
+  }
+
   bool found_recovery_ft = false;
   FT* recovery_ft = nullptr;
   Op* recovery_ft_op = nullptr;
@@ -314,7 +345,8 @@ void Decoupled_FE::dfe_recover_op() {
         // FT layout is guaranteed to be an on-path prefix followed by an optional
         // off-path suffix, so a recovery op is the last on-path op iff it is the
         // literal last op or the FT ends with an off-path suffix.
-        recovery_op_is_last = (op_idx == ft->ops.size() - 1) || ft->ops.back()->off_path;
+        recovery_op_is_last =
+            (op_idx == ft->ops.size() - 1) || ft->ops.back()->off_path;
         if (recovery_op_is_last) {
           recovery_ft->trim_unread_tail([&](Op* op) {
             if (!FLUSH_OP(op))
@@ -425,7 +457,8 @@ void Decoupled_FE::dfe_recover_op() {
     INC_STAT_EVENT(proc_id, FTQ_OFFPATH_CYCLES, offpath_cycles);
 
     // FIXME always fetch off path ops? should we get rid of this parameter?
-    frontend_recover(proc_id, bp_id, bp_recovery_info->recovery_inst_uid);
+    frontend_recover(proc_id, bp_id, bp_recovery_info->recovery_inst_uid, bp_recovery_info->recovery_fetch_addr,
+                     bp_recovery_info->ifuse_recovery);
     if (CONFIDENCE_ENABLE)
       conf->recover(op);
   }
@@ -437,7 +470,9 @@ void Decoupled_FE::recover(Cf_Type cf_type, Recovery_Info* info) {
   // For CONTINUE_ON_RECOVERY, alt continues the off-path stream main was on by
   // resuming from this address (rather than restarting at the misprediction).
   Op* alt_op = per_core_dfe[proc_id][MAIN_BP]->get_last_fetch_op();
-  bp_recover_op(bp_data, cf_type, info);
+  /* IFuse recovery is a data-speculation flush, not a branch mispredict. */
+  if (!bp_recovery_info->ifuse_recovery)
+    bp_recover_op(bp_data, cf_type, info);
   dfe_recover_op();
   switch (dfe_trigger_policy) {
     case PRIMARY_DFE:
@@ -446,7 +481,10 @@ void Decoupled_FE::recover(Cf_Type cf_type, Recovery_Info* info) {
         stalled = false;
       }
       // In Pin-driven frontend, we could see exit on off-path
-      if (state != INACTIVE || (state == INACTIVE && exit_on_off_path)) {
+      // IFuse exec recovery already redirected the FE at fetch; do not resume
+      // a stale saved_recovery_ft from an earlier branch episode.
+      if (!bp_recovery_info->ifuse_recovery &&
+          (state != INACTIVE || (state == INACTIVE && exit_on_off_path))) {
         ASSERT(proc_id, saved_recovery_ft->has_unread_ops());
         ASSERTM(proc_id, bp_recovery_info->recovery_fetch_addr == saved_recovery_ft->get_ft_info().static_info.start,
                 "Scarab's recovery addr 0x%llx does not match save ft "
@@ -547,24 +585,18 @@ void Decoupled_FE::update() {
 
     if (bp_id == MAIN_BP)
       fwd_progress = 0;
-    // FSM-based FT build logic - states:
-    // INACTIVE: idle until triggered or stop when end of trace seen
-    // RECOVERING: handle recovery after misprediction
-    // SERVING_ON_PATH: normal execution mode
-    // SERVING_OFF_PATH: fetching off-path operations
+
     FT_PredictResult result = {};
     switch (state) {
       case INACTIVE:
         return;
       case RECOVERING: {
         ASSERT(proc_id, bp_id == MAIN_BP);
-        // After recovery, we expect to serve the saved recovery FT
         next_state = SERVING_ON_PATH;
         current_ft_to_push = saved_recovery_ft;
         saved_recovery_ft = nullptr;
         result = current_ft_to_push->predict_ft();
         if (current_ft_to_push->ended_by_exit()) {
-          // Ensure that the very last simulated FT does not cause a recovery
           current_ft_to_push->clear_recovery_info();
           check_consecutivity_and_push_to_ftq();
           next_state = INACTIVE;
@@ -582,13 +614,10 @@ void Decoupled_FE::update() {
       }
       // recover will fall through to on-path exec
       case SERVING_ON_PATH: {
-        // Only main BP should read from lookahead buffer in multi-BP setups.
-        // All other BPs use the same update() function, so this check is necessary here.
-        // The lookahead buffer is a simulation feature, not a typical CPU component.
-        // Its use is controlled by LOOKAHEAD_BUF_SIZE.
         ASSERT(proc_id, bp_id == MAIN_BP);
-        // Lookahead buffer always enabled
         if (LOOKAHEAD_BUF_SIZE) {
+          if (!lookahead_buffer_count(proc_id))
+            init_lookahead_buffer(proc_id);
           current_ft_to_push = lookahead_buffer_pop_ft(proc_id);
           ASSERT(proc_id, current_ft_to_push->get_is_prebuilt());
         } else {
@@ -608,7 +637,6 @@ void Decoupled_FE::update() {
         // if current FT is the exit one, skip mispredict handling and directly push
         // set state and early return
         if (current_ft_to_push->ended_by_exit()) {
-          // Ensure that the very last simulated FT does not cause a recovery
           current_ft_to_push->clear_recovery_info();
           check_consecutivity_and_push_to_ftq();
           next_state = INACTIVE;
@@ -624,7 +652,7 @@ void Decoupled_FE::update() {
       }
 
       case SERVING_OFF_PATH: {
-        // for off-path just build and. redirect
+        // for off-path just build and redirect
         // cf processed while building
         if (exit_on_off_path)
           return;
@@ -640,7 +668,6 @@ void Decoupled_FE::update() {
                                         true, conf_off_path, []() { return decoupled_fe_get_next_off_path_op_num(); });
           ASSERT(proc_id, build_event != FT_EVENT_BUILD_FAIL);
           if (current_ft_to_push->ended_by_exit()) {
-            // Ensure that the very last simulated FT does not cause a recovery
             current_ft_to_push->clear_recovery_info();
             check_consecutivity_and_push_to_ftq();
             next_state = INACTIVE;
@@ -663,6 +690,8 @@ void Decoupled_FE::update() {
                             (current_ft_to_push->get_end_reason() == FT_BAR_FETCH);
     ft_pushed_this_cycle++;
   }
+  if (bp_id == MAIN_BP && ft_pushed_this_cycle > 0)
+    fwd_progress = 0;
 }
 
 FT* Decoupled_FE::pop_ft() {
@@ -925,6 +954,8 @@ Off_Path_Reason Decoupled_FE::eval_off_path_reason(Op* op) {
   if (!(op->bp_pred_info->recover_at_fe || op->bp_pred_info->recover_at_decode || op->bp_pred_info->recover_at_exec)) {
     return REASON_NOT_IDENTIFIED;
   }
+  if (op->ifuse_ld2_prediction_failed && op->bp_pred_info->recover_at_exec)
+    return REASON_MISPRED;
   // mispred
   if (op->bp_pred_info->pred_orig != op->oracle_info.dir && !btb_pred_miss(op->btb_pred_info)) {
     return REASON_MISPRED;
@@ -977,7 +1008,12 @@ Off_Path_Reason Decoupled_FE::eval_off_path_reason(Op* op) {
 
 void Decoupled_FE::check_consecutivity_and_push_to_ftq() {
   if (ftq.size())
-    ASSERT(proc_id, current_ft_to_push->is_consecutive(*ftq.back()));
+    ASSERTM(proc_id, current_ft_to_push->is_consecutive(*ftq.back()),
+            "FT not consecutive after recovery: new_start:0x%llx prev_end_type:%d "
+            "prev_last_pc:0x%llx\n",
+            (unsigned long long)current_ft_to_push->get_start_addr(),
+            (int)ftq.back()->get_end_reason(),
+            (unsigned long long)ftq.back()->get_last_op()->inst_info->addr);
   if (CONFIDENCE_ENABLE && bp_id == MAIN_BP)
     conf->update(*current_ft_to_push);
   if (bp_id == MAIN_BP && recovery_addr) {
@@ -1035,12 +1071,13 @@ void Decoupled_FE::redirect_to_off_path(FT_PredictResult result) {
   redirect_cycle = cycle_count;
   next_state = SERVING_OFF_PATH;
   frontend_redirect(proc_id, bp_id, result.op->inst_uid, result.pred_addr);
-  if (bp_id == MAIN_BP) {
+  if (bp_id == MAIN_BP && result.op->inst_info->table_info.cf_type) {
     // Misprediction event: drive alt DFEs that subscribe to it. The
     // _ON_MISPREDICTION variants are oracle-aware (gating on simulator-known
     // misprediction at predict-stage) and not realistic in real hardware;
     // they're useful for upper-bound studies. Realistic _ON_PREDICTION
     // semantics are driven from main's update() per CF after predict_ft.
+    // IFuse failures reuse FT_EVENT_MISPREDICT but are not CFs — skip alt BP.
     drive_alt_on_misprediction(result.op);
   }
 

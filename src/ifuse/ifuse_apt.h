@@ -19,6 +19,8 @@ typedef struct APT_Entry {
     Addr         ld1_pc_addr;
     Addr         ld1_effective_addr;
     unsigned int ld1_micro_op_num;
+    uint64_t     ld1_load_num;
+    unsigned int ld2_physical_reg_id;
 
     // Predicted LD2 memory access
     Addr         predicted_ld2_effective_addr;
@@ -57,6 +59,7 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr);
  * @param ld1_pc_addr The PC address of the predicting LD1.
  * @param ld1_effective_addr The effective memory address accessed by LD1.
  * @param ld1_micro_op_num The dynamic micro-op number of LD1.
+ * @param ld1_load_num The dynamic on-path load number of LD1.
  * @param predicted_ld2_memory_access_size The predicted LD2 access size.
  * @param ld2_pc_addr The predicted LD2 PC address.
  * @param predicted_ld2_effective_addr The predicted LD2 effective address.
@@ -65,6 +68,7 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr);
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
+                            uint64_t ld1_load_num,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
                             Addr predicted_ld2_effective_addr);
@@ -79,6 +83,43 @@ void apt_remove_entry_by_ld1_micro_op(Addr ld2_pc_addr,
                                       unsigned int ld1_micro_op_num);
 
 /**
+ * Removes the live prediction owned by a dynamic LOAD1 regardless of LD2 PC.
+ *
+ * Used when recovery flushes LOAD1 before its pending APT prediction expires.
+ */
+void apt_remove_entry_by_ld1_micro_op_any_pc(unsigned int ld1_micro_op_num);
+
+/**
+ * Reopens an APT claim made by a LOAD2 that was flushed before rename.
+ *
+ * The matching LOAD1 survives recovery, so its APT and ACI prediction can be
+ * reused when LOAD2 is fetched again.
+ *
+ * @return TRUE if a matched APT entry was reopened.
+ */
+bool apt_reopen_matched_entry(Addr ld2_pc_addr,
+                              unsigned int ld1_micro_op_num);
+
+/**
+ * Records the speculative physical register allocated by LD1 for LD2's result.
+ *
+ * @return TRUE if the matching live LD1 entry was found.
+ */
+bool apt_set_ld2_physical_reg_id(unsigned int ld1_micro_op_num,
+                                 unsigned int ld2_physical_reg_id);
+
+/**
+ * Transfers LOAD1's speculative physical register from APT to LOAD2.
+ *
+ * The APT entry is removed after ownership transfers to LOAD2.
+ *
+ * @return TRUE if the matching entry owned a speculative register.
+ */
+bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
+                                  unsigned int ld1_micro_op_num,
+                                  unsigned int* ld2_physical_reg_id);
+
+/**
  * Observes the current number of live APT LD2 predictions.
  *
  * The average number of live APT LD2 predictions is:
@@ -89,8 +130,8 @@ void apt_observe_live_ld2_predictions(void);
 /**
  * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
  *
- * @param current_op_num The current dynamic micro-op number.
+ * @param current_load_num The current dynamic on-path load number.
  */
-void apt_cleanup_stale(unsigned int current_op_num);
+void apt_cleanup_stale(uint64_t current_load_num);
 
 #endif /* IFUSE_APT_H */

@@ -51,6 +51,7 @@
 
 #include "cmp_model.h"
 #include "exec_ports.h"
+#include "ifuse/ifuse_recovery.h"
 #include "issue_queue.h"
 #include "map.h"
 #include "map_rename.h"
@@ -81,7 +82,7 @@ static inline void exec_stage_clear_fu(int ii);
 
 static inline void exec_stage_dep_wakeup(Op* op);
 static inline void exec_stage_process_op(Op* op);
-static inline void exec_stage_bp_resolve(Op* op);
+static inline void exec_stage_bp_resolve(Op* op, Flag ifuse_exec_flush);
 
 /**************************************************************************************/
 /* set_exec_stage: */
@@ -155,12 +156,14 @@ void recover_exec_stage() {
     Op* op = exec->sd.ops[ii];
     if (op && IS_FLUSHING_OP(op)) {
       op_select_bp_pred_info(op, BP_PRED_MAIN);
+      op->recovery_scheduled = FALSE;
       DEBUG(exec->proc_id, "Recovery op found in Exec FU:%u op_num:%llu off_path:%u addr:0x%llx\n", ii,
             (unsigned long long)op->op_num, op->off_path, (unsigned long long)op->inst_info->addr);
     }
-    if (op && FLUSH_OP(op)) {
+    if (op && (FLUSH_OP(op) ||
+               (bp_recovery_info->ifuse_recovery && op->off_path && !IS_FLUSHING_OP(op)))) {
       DEBUG(exec->proc_id, "Exec flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num, op->off_path);
-      ASSERT(exec->proc_id, op->off_path);
+      ASSERT(exec->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
       exec->sd.ops[ii] = NULL;
       exec->sd.op_count--;
       fu->avail_cycle = cycle_count + 1;
@@ -329,19 +332,18 @@ void update_exec_stage(Stage_Data* src_sd) {
     /* update op status and execution metadata; increment PMU counters */
     exec_stage_process_op(op);
 
-    /* branch recovery/resolution */
+    /* branch recovery/resolution (and IFuse data-mispred flush at exec) */
     Flag is_replay = FALSE;  // TODO: check if this val is needed
-    if (op->inst_info->table_info.cf_type && !is_replay) {
+    const Flag ifuse_exec_flush = op->eom && op->ifuse_ld2_prediction_failed;
+    if ((op->inst_info->table_info.cf_type && !is_replay) || ifuse_exec_flush) {
       /*
        * branch recovery currently does not like to be done more than 1 time.
        * since we don't have any way to know if an op is going to be replayed,
        * we have to go with the first recovery (even though it is improper) for the time being
        */
-      exec_stage_bp_resolve(op);
+      exec_stage_bp_resolve(op, ifuse_exec_flush);
     }
 
-    /* value prediction recovery/resolution code  */
-    // if we know the value at this point if not ? then we need to wait.
   }
 
   if (!exec->is_issue_stall) {
@@ -551,8 +553,8 @@ static inline void exec_stage_process_op(Op* op) {
         op->fu_num, unsstr64(op->exec_cycle), unsstr64(op->done_cycle), op->off_path);
 }
 
-static inline void exec_stage_bp_resolve(Op* op) {
-  if (!BP_UPDATE_AT_RETIRE) {
+static inline void exec_stage_bp_resolve(Op* op, Flag ifuse_exec_flush) {
+  if (!BP_UPDATE_AT_RETIRE && !ifuse_exec_flush) {
     // this code updates the branch prediction structures
     if (op->inst_info->table_info.cf_type >= CF_IBR)
       bp_target_known_op(g_bp_data, op);
@@ -560,15 +562,24 @@ static inline void exec_stage_bp_resolve(Op* op) {
     bp_resolve_op(g_bp_data, op);
   }
 
-  if (op->bp_pred_info->recover_at_exec) {
-    DEBUG(exec->proc_id, "Exec schedules recovery for op_num:%llu at cycle:%llu\n", (unsigned long long)op->op_num,
-          (unsigned long long)op->exec_cycle);
+  if (ifuse_exec_flush) {
+    /*
+     * FE already redirected via recover_at_exec + redirect_to_off_path (branch
+     * machinery). At exec, use the IFuse-specific recovery scheduler so
+     * cmp_recover keeps LOAD2 and flushes only younger ops (not bp_sched_recovery).
+     */
+    DEBUG(exec->proc_id, "Exec schedules IFuse recovery for op_num:%llu at cycle:%llu\n",
+          (unsigned long long)op->op_num, (unsigned long long)op->exec_cycle);
+    ifuse_sched_recovery(op, op->exec_cycle);
+    op->bp_pred_main.recover_at_exec = FALSE;
+    STAT_EVENT(op->proc_id, RESTEER_RECOVER_AT_EXEC_NOT_CF + op->inst_info->table_info.cf_type);
+  } else if (op->bp_pred_info->recover_at_exec && !op->ifuse_ld2_prediction_failed) {
+    DEBUG(exec->proc_id, "Exec schedules recovery for op_num:%llu at cycle:%llu\n",
+          (unsigned long long)op->op_num, (unsigned long long)op->exec_cycle);
     bp_stat_main_branch_resolve_latency(op, op->exec_cycle, TRUE);
     bp_sched_recovery(bp_recovery_info, op, op->exec_cycle);
     if (!op->off_path)
       op->recovery_scheduled = TRUE;
-
-    // stats for the reason of resteer
     STAT_EVENT(op->proc_id, RESTEER_RECOVER_AT_EXEC_NOT_CF + op->inst_info->table_info.cf_type);
   }
 

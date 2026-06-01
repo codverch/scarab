@@ -29,6 +29,9 @@
 
 #include "map_rename.h"
 
+#include "bp/bp.h"
+#include "ifuse/ifuse_rename.h"
+
 #include "globals/assert.h"
 #include "globals/global_defs.h"
 #include "globals/global_types.h"
@@ -449,7 +452,7 @@ static inline void reg_file_produce_dst(Op *op, int *reg_table_types, int reg_ta
 }
 
 static inline void reg_file_flush_mispredict(Op *op, int *reg_table_types, int reg_table_num) {
-  ASSERT(op->proc_id, op->off_path);
+  ASSERT(op->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
 
   for (uns ii = 0; ii < op->inst_info->table_info.num_dest_regs; ii++) {
     int reg_type = reg_file_get_reg_type(op->dst_reg_id[ii][REG_TABLE_TYPE_ARCHITECTURAL]);
@@ -469,13 +472,54 @@ static inline void reg_file_flush_mispredict(Op *op, int *reg_table_types, int r
       ASSERT(op->proc_id, entry != NULL);
 
       entry->num_refs--;
-      ASSERT(op->proc_id, entry->off_path || entry->num_refs > 0);
+      ASSERT(op->proc_id, entry->off_path || bp_recovery_info->ifuse_recovery || entry->num_refs > 0);
       if (entry->num_refs > 0) {
         continue;
       }
 
       ASSERT(op->proc_id, entry->reg_state != REG_TABLE_ENTRY_STATE_FREE);
       reg_table->ops->free(reg_table, entry);
+    }
+  }
+}
+
+/*
+ * Branch recovery normally flushes off-path ops, whose source reads do not
+ * affect the on-path counters. IFuse instead flushes younger correct-path ops.
+ * Remove those source reads before freeing their destinations so a later
+ * commit does not wait for consumers that no longer exist.
+ */
+static inline void reg_file_undo_ifuse_src_metadata(Op *op, int *reg_table_types, int reg_table_num) {
+  if (op->off_path)
+    return;
+
+  ASSERT(op->proc_id, bp_recovery_info->ifuse_recovery);
+
+  for (uns ii = 0; ii < op->inst_info->table_info.num_src_regs; ++ii) {
+    int reg_type = reg_file_get_reg_type(op->src_reg_id[ii][REG_TABLE_TYPE_ARCHITECTURAL]);
+    if (reg_type == REG_FILE_REG_TYPE_OTHER)
+      continue;
+
+    for (uns jj = 0; jj < reg_table_num; ++jj) {
+      int table_type = reg_table_types[jj];
+      int reg_id = op->src_reg_id[ii][table_type];
+      if (reg_id == REG_TABLE_REG_ID_INVALID)
+        continue;
+
+      struct reg_table *reg_table = map_data->reg_file[reg_type]->reg_table[table_type];
+      struct reg_table_entry *entry = &reg_table->entries[reg_id];
+
+      ASSERT(op->proc_id, entry->onpath_consumers_num > 0);
+      entry->onpath_consumers_num--;
+
+      if (op->exec_count > 0) {
+        ASSERT(op->proc_id, entry->onpath_consumed_count > 0);
+        entry->onpath_consumed_count--;
+      } else if (entry->atomic_pending_consumed !=
+                 REG_RENAMING_SCHEME_EARLY_RELEASE_PENDING_CONSUMED_MAX) {
+        ASSERT(op->proc_id, entry->atomic_pending_consumed > 0);
+        entry->atomic_pending_consumed--;
+      }
     }
   }
 }
@@ -547,6 +591,7 @@ static inline void reg_file_init_checkpoint() {
     map_data->reg_file[ii]->reg_checkpoint->entries = (struct reg_table_entry *)malloc(
         sizeof(struct reg_table_entry) * map_data->reg_file[ii]->reg_table[REG_TABLE_TYPE_ARCHITECTURAL]->size);
     map_data->reg_file[ii]->reg_checkpoint->is_valid = FALSE;
+    map_data->reg_file[ii]->reg_checkpoint->owner_op_num = 0;
   }
 }
 
@@ -555,7 +600,7 @@ static inline void reg_file_init_checkpoint() {
   oldest mispredicted branch is resolved
   Therefore, only maintain one checkpoint of that mispredicted branch for recovering SRT
 */
-static inline void reg_file_snapshot_srt() {
+static inline void reg_file_snapshot_srt(Op *op) {
   for (uns ii = 0; ii < REG_FILE_REG_TYPE_NUM; ++ii) {
     struct reg_table *srt = map_data->reg_file[ii]->reg_table[REG_TABLE_TYPE_ARCHITECTURAL];
     struct reg_checkpoint *checkpoint = map_data->reg_file[ii]->reg_checkpoint;
@@ -563,6 +608,7 @@ static inline void reg_file_snapshot_srt() {
 
     ASSERT(map_data->proc_id, !checkpoint->is_valid);
     checkpoint->is_valid = TRUE;
+    checkpoint->owner_op_num = op->op_num;
   }
 }
 
@@ -580,6 +626,7 @@ static inline void reg_file_rollback_srt() {
 
     ASSERT(map_data->proc_id, checkpoint->is_valid);
     checkpoint->is_valid = FALSE;
+    checkpoint->owner_op_num = 0;
   }
 }
 
@@ -1007,7 +1054,7 @@ void reg_renaming_scheme_realistic_rename(Op *op) {
 
   // checkpoint the speculative register table for recovering
   if (!op->off_path && op->inst_info->table_info.cf_type && op->bp_pred_info->recover_at_exec)
-    reg_file_snapshot_srt();
+    reg_file_snapshot_srt(op);
 }
 
 // do not check the reg file when issuing
@@ -1046,6 +1093,7 @@ void reg_renaming_scheme_realistic_recover(Op *op) {
   for (Op **op_p = (Op **)list_start_tail_traversal(&td->seq_op_list); op_p && (*op_p)->op_num > op->op_num;
        op_p = (Op **)list_prev_element(&td->seq_op_list)) {
     reg_file_flush_mispredict(*op_p, reg_table_types, sizeof(reg_table_types) / sizeof(reg_table_types[0]));
+    ifuse_recover_op(*op_p);
   }
 }
 
@@ -1123,7 +1171,7 @@ void reg_renaming_scheme_late_allocation_rename(Op *op) {
 
   // checkpoint the speculative register table for recovering
   if (!op->off_path && op->inst_info->table_info.cf_type && op->bp_pred_info->recover_at_exec)
-    reg_file_snapshot_srt();
+    reg_file_snapshot_srt(op);
 }
 
 /*
@@ -1196,6 +1244,7 @@ void reg_renaming_scheme_late_allocation_recover(Op *op) {
   for (Op **op_p = (Op **)list_start_tail_traversal(&td->seq_op_list); op_p && (*op_p)->op_num > op->op_num;
        op_p = (Op **)list_prev_element(&td->seq_op_list)) {
     reg_file_flush_mispredict(*op_p, reg_table_types, sizeof(reg_table_types) / sizeof(reg_table_types[0]));
+    ifuse_recover_op(*op_p);
   }
 }
 
@@ -1853,6 +1902,8 @@ void reg_file_rename(Op *op) {
   // allocate physical registers
   reg_renaming_scheme_func_table[REG_RENAMING_SCHEME].rename(op);
 
+  ifuse_rename_op(op);
+
   reg_file_collect_rename_stat(op);
 }
 
@@ -1902,6 +1953,80 @@ void reg_file_recover(Op *op) {
   ASSERT(map_data->proc_id,
          REG_RENAMING_SCHEME >= REG_RENAMING_SCHEME_INFINITE && REG_RENAMING_SCHEME < REG_RENAMING_SCHEME_NUM);
   reg_renaming_scheme_func_table[REG_RENAMING_SCHEME].recover(op);
+}
+
+/*
+  IFuse LOAD2 failures differ from branch mispredictions:
+  --- LOAD2 itself remains valid
+  --- younger ops are control-flow-correct but must replay
+  --- branch checkpoints must remain untouched
+
+  Walk younger destinations from youngest to oldest. Restoring each previous
+  destination mapping in reverse program order reconstructs the architectural
+  map as it stood immediately after LOAD2 renamed.
+*/
+void reg_file_recover_ifuse(Op *op) {
+  if (REG_RENAMING_SCHEME == REG_RENAMING_SCHEME_INFINITE)
+    return;
+
+  for (uns ii = 0; ii < REG_FILE_REG_TYPE_NUM; ++ii) {
+    struct reg_checkpoint *checkpoint =
+        map_data->reg_file[ii]->reg_checkpoint;
+    if (checkpoint->is_valid && checkpoint->owner_op_num > op->op_num) {
+      checkpoint->is_valid = FALSE;
+      checkpoint->owner_op_num = 0;
+    }
+  }
+
+  int physical_table_types[] = {REG_TABLE_TYPE_PHYSICAL};
+  int late_allocation_table_types[] = {REG_TABLE_TYPE_VIRTUAL, REG_TABLE_TYPE_PHYSICAL};
+  int *reg_table_types = physical_table_types;
+  int reg_table_num = sizeof(physical_table_types) / sizeof(physical_table_types[0]);
+
+  if (REG_RENAMING_SCHEME == REG_RENAMING_SCHEME_LATE_ALLOCATION) {
+    reg_table_types = late_allocation_table_types;
+    reg_table_num = sizeof(late_allocation_table_types) / sizeof(late_allocation_table_types[0]);
+  }
+
+  for (Op **op_p = (Op **)list_start_tail_traversal(&td->seq_op_list);
+       op_p && (*op_p)->op_num > op->op_num;
+       op_p = (Op **)list_prev_element(&td->seq_op_list)) {
+    Op *younger_op = *op_p;
+
+    /*
+     * FT ownership can keep the discarded Op object pool-valid briefly. Mark
+     * it explicitly so an older memory completion cannot wake its stale
+     * dependency-list entry after the issue queue has released that entry.
+     */
+    younger_op->ifuse_recovery_squashed = TRUE;
+
+    for (uns ii = 0; ii < younger_op->inst_info->table_info.num_dest_regs; ++ii) {
+      int reg_type =
+          reg_file_get_reg_type(younger_op->dst_reg_id[ii][REG_TABLE_TYPE_ARCHITECTURAL]);
+      if (reg_type == REG_FILE_REG_TYPE_OTHER)
+        continue;
+
+      for (int jj = 0; jj < reg_table_num; ++jj) {
+        int table_type = reg_table_types[jj];
+        int current_reg_id = younger_op->dst_reg_id[ii][table_type];
+        int previous_reg_id = younger_op->prev_dst_reg_id[ii][table_type];
+        int parent_reg_id = younger_op->dst_reg_id[ii][table_type - 1];
+
+        if (current_reg_id != REG_TABLE_REG_ID_INVALID &&
+            parent_reg_id != REG_TABLE_REG_ID_INVALID) {
+          map_data->reg_file[reg_type]
+              ->reg_table[table_type]
+              ->parent_reg_table
+              ->entries[parent_reg_id]
+              .child_reg_id = previous_reg_id;
+        }
+      }
+    }
+
+    reg_file_undo_ifuse_src_metadata(younger_op, reg_table_types, reg_table_num);
+    reg_file_flush_mispredict(younger_op, reg_table_types, reg_table_num);
+    ifuse_recover_op(younger_op);
+  }
 }
 
 /*

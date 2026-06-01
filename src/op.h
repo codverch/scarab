@@ -77,6 +77,13 @@ typedef struct FT FT;
 DECLARE_ENUM(Op_State, OP_STATE_LIST, OS_);
 // clang-format on
 
+typedef enum Fusion_Candidate_Type {
+  NOT_FUSION_CANDIDATE,
+  LOAD1,
+  LOAD2,
+  PREDICTED_NOT_FUSED,
+} Fusion_Candidate_Type;
+
 /**************************************************************************************/
 
 typedef struct Wake_Up_Entry_struct {
@@ -239,6 +246,18 @@ struct Op_struct {
   uns16 dst_reg_id[MAX_DESTS][REG_TABLE_TYPE_NUM];       // the reg id of allocated reg file entries
   uns16 prev_dst_reg_id[MAX_DESTS][REG_TABLE_TYPE_NUM];  // the previous dst reg id with the same parent register id
   // }}}
+
+  // {{{ ifuse information
+  Fusion_Candidate_Type ifuse_load_role;
+  Counter               ifuse_partner_op_num;
+  Addr                  ifuse_partner_ld1_pc;
+  uns16                 ifuse_ld2_physical_reg_id;
+  Flag                  ifuse_ld2_early_wake_signaled;
+  Flag                  ifuse_ld2_agu_completed;
+  Flag                  ifuse_ld2_prediction_failed;
+  Flag                  ifuse_recovery_squashed;
+  // }}}
+
   FT* parent_FT;
   FT* parent_FT_off_path;
 };

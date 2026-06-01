@@ -58,6 +58,7 @@
 #include "freq.h"
 #include "ft.h"
 #include "idq_stage.h"
+#include "ifuse/ifuse_recovery.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map_rename.h"
@@ -371,19 +372,27 @@ void cmp_recover() {
   ASSERT(bp_recovery_info->proc_id, bp_recovery_info->proc_id == map_data->proc_id);
   bp_recovery_info->recovery_cycle = MAX_CTR;
   bp_recovery_info->redirect_cycle = MAX_CTR;
+  ifuse_recovery_begin_flush(bp_recovery_info->recovery_op_num);
   cmp_set_all_stages(bp_recovery_info->proc_id);
   for (int bp_id = NUM_BPS - 1; bp_id >= 0; --bp_id) {
     cmp_set_all_data(bp_recovery_info->proc_id, bp_id);
     recover_decoupled_fe(bp_recovery_info->proc_id, bp_id, bp_recovery_info->recovery_cf_type,
                          &bp_recovery_info->recovery_info);
-    recover_fdip(bp_recovery_info->proc_id, bp_id);
+    if (!bp_recovery_info->ifuse_recovery)
+      recover_fdip(bp_recovery_info->proc_id, bp_id);
   }
 
-  topdown_bp_recovery(bp_recovery_info->proc_id, bp_recovery_info->recovery_op);
+  if (!bp_recovery_info->ifuse_recovery)
+    topdown_bp_recovery(bp_recovery_info->proc_id, bp_recovery_info->recovery_op);
 
-  reg_file_recover(bp_recovery_info->recovery_op);
+  if (bp_recovery_info->ifuse_recovery)
+    reg_file_recover_ifuse(bp_recovery_info->recovery_op);
+  else
+    reg_file_recover(bp_recovery_info->recovery_op);
   recover_thread(td, bp_recovery_info->recovery_fetch_addr, bp_recovery_info->recovery_op_num,
                  bp_recovery_info->recovery_inst_uid, FALSE);
+  if (bp_recovery_info->ifuse_recovery)
+    recover_map_ifuse();
 
   recover_icache_stage();
   recover_decode_stage();
@@ -396,6 +405,12 @@ void cmp_recover() {
   recover_dcache_stage();
   recover_memory();
   recover_node_stage();
+  if (bp_recovery_info->ifuse_recovery && bp_recovery_info->recovery_op) {
+    bp_recovery_info->recovery_op->off_path = FALSE;
+    bp_recovery_info->recovery_op->recovery_scheduled = FALSE;
+  }
+  ifuse_recovery_end_flush();
+  bp_recovery_info->ifuse_recovery = FALSE;
 }
 
 /**************************************************************************************/

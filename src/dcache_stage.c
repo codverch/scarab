@@ -51,6 +51,7 @@
 #include "prefetcher/stream_pref.h"
 
 #include "cmp_model.h"
+#include "ifuse/ifuse_exec_pair.h"
 #include "map.h"
 #include "model.h"
 #include "statistics.h"
@@ -143,7 +144,7 @@ void recover_dcache_stage() {
     }
     if (op && op->op_num > bp_recovery_info->recovery_op_num) {
       DEBUG(dc->proc_id, "Dcache flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num, op->off_path);
-      ASSERT(dc->proc_id, op->off_path);
+      ASSERT(dc->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
       dc->sd.ops[ii] = NULL;
       dc->sd.op_count--;
     }
@@ -189,6 +190,15 @@ void update_dcache_stage(Stage_Data* src_sd) {
 
     // not ready due to address generation latency
     if (dcache_stage_addr_unready(op)) {
+      continue;
+    }
+
+    // A validated fused LOAD2 still used the load AGU, but LOAD1 already
+    // supplied its data. Complete AGU bookkeeping without issuing a redundant
+    // d-cache access or memory request.
+    if (ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
+      ifuse_exec_pair_complete_ld2_agu(op);
+      dcache_stage_remove_src_op(src_sd, ii);
       continue;
     }
 

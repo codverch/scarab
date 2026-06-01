@@ -15,6 +15,7 @@
 /* Live APT / ACI nodes (hash buckets are fixed; nodes come from these pools). */
 #define IFUSE_IDEAL_APT_MAX_NODES  (1U << 19) /* 524288 */
 #define IFUSE_IDEAL_ACI_MAX_NODES  (1U << 19)
+#define IFUSE_IDEAL_EXEC_PAIR_MAX_NODES (1U << 19)
 
 /* Retire-time training-table entries (distinct fusible pair patterns). */
 #define IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES (1U << 20) /* 1048576 */

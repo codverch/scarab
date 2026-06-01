@@ -124,13 +124,13 @@ void LSQ::recover(Counter flush_op_num) {
     auto& back_entry = entries.back();
 
     // Stop when reaching on-path ops earlier than the branch
-    if (back_entry.op_num < flush_op_num) {
+    if (back_entry.op_num <= flush_op_num) {
       break;
     }
 
     // Free this off-path mem op from the back
     ASSERT(proc_id, !entries.empty());
-    ASSERT(proc_id, back_entry.op->off_path);
+    ASSERT(proc_id, back_entry.op->off_path || bp_recovery_info->ifuse_recovery);
     ASSERT(proc_id, entries.back().op_num == back_entry.op->op_num);
     ASSERT(proc_id, back_entry.op->inst_info->table_info.mem_type == this->mem_type);
     entries.pop_back();

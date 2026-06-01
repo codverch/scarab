@@ -30,9 +30,11 @@ void aci_init(void);
  *
  * @param predicted_ld2_effective_addr The predicted effective address of LD2.
  * @param ld1_micro_op_num The dynamic micro-op number of LD1.
+ * @param ld1_load_num The dynamic on-path load number of LD1.
  */
 void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
-                           uint64_t ld1_micro_op_num);
+                           uint64_t ld1_micro_op_num,
+                           uint64_t ld1_load_num);
 
 /**
  * Checks the actual LD2 cache block and consumes the matching LD1 entry.
@@ -59,8 +61,8 @@ void aci_invalidate_prediction(uint64_t predicted_ld2_effective_addr,
 /**
  * Removes predictions whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
  *
- * @param current_op_num The current dynamic micro-op number.
+ * @param current_load_num The current dynamic on-path load number.
  */
-void aci_cleanup_stale(unsigned int current_op_num);
+void aci_cleanup_stale(uint64_t current_load_num);
 
 #endif /* IFUSE_ACI_H */
