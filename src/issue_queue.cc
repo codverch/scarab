@@ -29,6 +29,8 @@
 
 #include "issue_queue.h"
 
+#include "ideal-fusion/ideal_fusion.h"
+
 extern "C" {
 #include "globals/assert.h"
 #include "globals/global_defs.h"
@@ -668,6 +670,13 @@ void IssueQueues::dispatch() {
   uns32 num_fill_rs = 0;
 
   for (op = node->next_op_into_rs; op; op = op->next_node) {
+    /*
+     * Ideal-fusion LOAD2 is a completed ROB placeholder. LOAD1 supplies its
+     * value, so it must not consume an RS entry or execute on a functional unit.
+     */
+    if (ideal_fusion_load2_is_nop(op))
+      continue;
+
     ASSERT(proc_id, op->queue_id == MAX_UNS16 && op->queue_entry_id == MAX_UNS16);
     uns16 queue_id = find_emptiest_queue(op);
     if (queue_id == MAX_UNS16) {

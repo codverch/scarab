@@ -55,6 +55,7 @@
 #include "exec_ports.h"
 #include "ft.h"
 #include "icache_stage.h"
+#include "ideal-fusion/ideal_fusion.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map.h"
@@ -364,7 +365,9 @@ void node_fill_rob(Stage_Data* src_sd) {
     if (!op)
       continue;
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if (!ideal_fusion_load2_is_nop(op) &&
+        (op->inst_info->table_info.mem_type == MEM_LD ||
+         op->inst_info->table_info.mem_type == MEM_ST)) {
       if (!lsq_available(op->inst_info->table_info.mem_type)) {
         DEBUG(node->proc_id, "Node fill stalled: LSQ full for op_num:%s mem_type:%s src_sd_op_count:%d node_count:%d\n",
               unsstr64(op->op_num), op->inst_info->table_info.mem_type == MEM_LD ? "LD" : "ST", src_sd->op_count,
@@ -417,7 +420,18 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n", unsstr64(op->op_num), op->off_path);
 
-    op->state = OS_IN_ROB;
+    if (ideal_fusion_load2_is_nop(op)) {
+      /*
+       * LOAD2 keeps its ROB slot for instruction accounting, but LOAD1 supplies
+       * its value. It therefore needs no LSQ entry, RS entry, FU, or memory
+       * request.
+       */
+      STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD2_BYPASSED);
+      op->state = OS_DONE;
+      op->done_cycle = cycle_count;
+    } else {
+      op->state = OS_IN_ROB;
+    }
 
     /* always stop issuing after a synchronizing op */
     if (op->inst_info->table_info.bar_type & BAR_ISSUE)
@@ -553,7 +567,9 @@ void node_retire() {
 
     node_precommit_retire(op);
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if (!ideal_fusion_load2_is_nop(op) &&
+        (op->inst_info->table_info.mem_type == MEM_LD ||
+         op->inst_info->table_info.mem_type == MEM_ST)) {
       lsq_commit(op);
     }
 

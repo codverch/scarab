@@ -47,6 +47,7 @@
 #include "libs/hash_lib.h"
 
 #include "cmp_model.h"
+#include "ideal-fusion/ideal_fusion.h"
 #include "map_rename.h"
 #include "model.h"
 #include "op_info.h"
@@ -554,6 +555,8 @@ void wake_up_ops(Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
 
   // write back the register value for the dependent ops
   reg_file_produce(op);
+
+  ideal_fusion_on_load_complete(op, wake_action);
 
   ASSERT(op->proc_id, wake_action);
   for (temp = op->wake_up_head; temp; temp = temp->next) {

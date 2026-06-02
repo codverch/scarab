@@ -47,6 +47,7 @@
 #include "bp/bp.h"
 
 #include "ft.h"
+#include "ideal-fusion/ideal_fusion.h"
 #include "map.h"
 #include "map_rename.h"
 #include "model.h"
@@ -264,6 +265,13 @@ static inline void stage_process_op(Op* op) {
 
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);
+
+  /*
+   * Ideal-fusion LOAD2 dependents are wired normally above. This hook either
+   * records that LOAD2 is waiting for LOAD1 or releases them immediately when
+   * LOAD1 completed before LOAD2 reached rename.
+   */
+  ideal_fusion_on_rename(op, model->wake_hook);
 }
 
 static inline void map_stage_collect_stat(Flag stall, Flag starved) {

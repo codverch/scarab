@@ -112,3 +112,10 @@ DEF_PARAM( ignore_bar_fetch             , IGNORE_BAR_FETCH           , Flag   , 
 DEF_PARAM( trace_bbv_output             , TRACE_BBV_OUTPUT          , char*  , string    , NULL     ,       )
 DEF_PARAM( trace_footprint_output       , TRACE_FOOTPRINT_OUTPUT    , char*  , string    , ""       ,       )
 DEF_PARAM( segment_instr_count          , SEGMENT_INSTR_COUNT       , uns64  , uns64     , 0        ,       )
+
+// Ideal fusion uses two runs:
+//   pass 1: discover and log fusible LOAD1/LOAD2 pairs
+//   pass 2: load the logged pairs and model their fusion
+DEF_PARAM( ideal_fusion_pass            , IDEAL_FUSION_PASS         , uns    , uns       , 1        ,       )
+DEF_PARAM( ideal_fusion_distance        , IDEAL_FUSION_DISTANCE     , uns    , uns       , 512      ,       )
+DEF_PARAM( ideal_fusion_log             , IDEAL_FUSION_LOG          , char*  , string    , "ideal_fusion_candidates.csv", )
