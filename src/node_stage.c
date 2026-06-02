@@ -727,7 +727,8 @@ void node_precommit_update(void) {
       return;
 
     // wait until looking up the d-cache for memory operands
-    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+    if (!ideal_fusion_load2_is_nop(op) &&
+        (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
         op->dcache_cycle > cycle_count)
       return;
 
