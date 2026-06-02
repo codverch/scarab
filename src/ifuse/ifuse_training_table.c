@@ -28,7 +28,6 @@
  */
 
 #define TRAINING_TABLE_NUM_ENTRIES IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES
-#define TRAINING_TABLE_MAX_PROBES  64U
 
 typedef struct TrainingTableEntry {
     Addr         ld1_pc_addr;
@@ -92,7 +91,12 @@ static TrainingTableEntry* training_table_find_entry(
     unsigned int start_idx =
         (unsigned int)(hash_value & (TRAINING_TABLE_NUM_ENTRIES - 1U));
 
-    for (unsigned int probe = 0; probe < TRAINING_TABLE_MAX_PROBES; probe++) {
+    /*
+     * This is an ideal-capacity baseline. Probe the complete backing table so
+     * a collision chain cannot discard a valid observation while free rows
+     * remain elsewhere.
+     */
+    for (unsigned int probe = 0; probe < TRAINING_TABLE_NUM_ENTRIES; probe++) {
         unsigned int idx =
             (start_idx + probe) & (TRAINING_TABLE_NUM_ENTRIES - 1U);
         TrainingTableEntry* entry = &training_table_entries[idx];
@@ -118,6 +122,7 @@ static TrainingTableEntry* training_table_find_entry(
         }
     }
 
+    STAT_EVENT(0, TRAINING_TABLE_BACKING_ALLOC_FAILURES);
     return NULL;
 }
 

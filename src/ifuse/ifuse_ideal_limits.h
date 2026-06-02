@@ -17,7 +17,12 @@
 #define IFUSE_IDEAL_ACI_MAX_NODES  (1U << 19)
 #define IFUSE_IDEAL_EXEC_PAIR_MAX_NODES (1U << 19)
 
-/* Retire-time training-table entries (distinct fusible pair patterns). */
-#define IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES (1U << 20) /* 1048576 */
+/*
+ * Retire-time training-table entries (distinct fusible pair patterns).
+ * Keep this deliberately large for ideal-limit studies. The training table
+ * probes every row before reporting exhaustion, so collisions do not silently
+ * discard observations while unused backing rows remain.
+ */
+#define IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES (1U << 24) /* 16777216 */
 
 #endif /* IFUSE_IDEAL_LIMITS_H */
