@@ -371,6 +371,13 @@ void cmp_recover() {
   ASSERT(bp_recovery_info->proc_id, bp_recovery_info->proc_id == g_bp_data->proc_id);
   ASSERT(bp_recovery_info->proc_id, bp_recovery_info->proc_id == map_data->proc_id);
 
+  /*
+   * Count an IFuse flush only when recovery actually fires. A failed LOAD2 can
+   * be squashed by an older recovery before it reaches this point.
+   */
+  if (bp_recovery_info->ifuse_recovery)
+    STAT_EVENT(bp_recovery_info->proc_id, IFUSE_MISPREDICTION_FLUSHES);
+
   bp_recovery_info->recovery_cycle = MAX_CTR;
   bp_recovery_info->redirect_cycle = MAX_CTR;
   ifuse_recovery_begin_flush(bp_recovery_info->recovery_op_num);

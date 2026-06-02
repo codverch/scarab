@@ -53,6 +53,7 @@ extern "C" {
 
 #include "decoupled_frontend.h"
 #include "op_pool.h"
+#include "statistics.h"
 #include "uop_cache.h"
 
 #define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_DECOUPLED_FE, ##args)
@@ -258,6 +259,22 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
           // by flushing younger consumers after this LOAD2 reaches its FU.
           op->ifuse_load_role = PREDICTED_NOT_FUSED;
           op->ifuse_ld2_prediction_failed = TRUE;
+          STAT_EVENT(proc_id, IFUSE_MISPREDICTED_LOADS);
+          /*
+           * Cause counters intentionally overlap: predicting the wrong cache
+           * block also means that LD1's stored offset delta produced the wrong
+           * LD2 effective address. A delta mismatch can still remain within
+           * the correct cache block.
+           */
+          if ((op->oracle_info.va >> ACI_CACHE_LINE_BITS) !=
+              (waiting_pair->predicted_ld2_effective_addr >>
+               ACI_CACHE_LINE_BITS)) {
+            STAT_EVENT(proc_id, IFUSE_MISPREDICTED_CACHE_BLOCK_ADDR);
+          }
+          if (op->oracle_info.va !=
+              waiting_pair->predicted_ld2_effective_addr) {
+            STAT_EVENT(proc_id, IFUSE_MISPREDICTED_OFFSET_DELTA);
+          }
           fct_update_confidence(waiting_pair->ld1_pc_addr, false);
         } else {
           // Reinforce accurate LD1-to-LD2 predictions.
