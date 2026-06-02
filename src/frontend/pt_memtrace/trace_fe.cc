@@ -414,8 +414,11 @@ void ext_trace_recover(uns proc_id, uns bp_id, uns64 inst_uid, Addr fetch_addr,
   dummy_op.btb_pred = {};
 
   /*
-   * IFuse fetch-time redirect leaves the on-path cursor at the failing load.
-   * After exec flush, resume fetch from the recovery PC (fall-through).
+   * IFuse fetch-time redirect starts a separate speculative stream after the
+   * failed LOAD2. Fetching LOAD2 already advanced next_onpath_pi to its
+   * fall-through, so recovery only needs to discard that speculative stream.
+   * Seeking here would read the one-way memtrace stream again and permanently
+   * skip instructions each time an IFuse misprediction is recovered.
    */
   if (ifuse_recovery && fetch_addr && bp_id == 0) {
     off_path_mode[proc_id][bp_id] = false;
@@ -424,7 +427,10 @@ void ext_trace_recover(uns proc_id, uns bp_id, uns64 inst_uid, Addr fetch_addr,
     while (!uop_generator_get_eom(proc_id)) {
       uop_generator_get_uop(proc_id, &dummy_op, &next_offpath_pi[proc_id][bp_id]);
     }
-    ext_trace_seek_onpath(proc_id, fetch_addr);
+    ASSERTM(proc_id, next_onpath_pi[proc_id].instruction_addr == fetch_addr,
+            "IFuse recovery cursor 0x%llx does not match fall-through 0x%llx\n",
+            (unsigned long long)next_onpath_pi[proc_id].instruction_addr,
+            (unsigned long long)fetch_addr);
     return;
   }
 
