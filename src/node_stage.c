@@ -56,6 +56,7 @@
 #include "ft.h"
 #include "icache_stage.h"
 #include "ifuse/ifuse_exec_pair.h"
+#include "ifuse/ifuse_recovery.h"
 #include "ifuse/ifuse_rename.h"
 #include "ifuse/ifuse_train_retire.h"
 #include "issue_queue.h"
@@ -194,7 +195,8 @@ void flush_scheduling_buffer() {
       DEBUG(node->proc_id, "Node sched-buffer flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, node->proc_id == op->proc_id);
-      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
+      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
+                                ifuse_recovery_is_flushing());
       ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
 
       node->sd.ops[ii] = NULL;
@@ -211,7 +213,8 @@ void flush_rs() {
     DEBUG(node->proc_id, "Node RS-input flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
           op->off_path);
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
-    ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
+    ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
+                              ifuse_recovery_is_flushing());
     ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
     node->next_op_into_rs = NULL;  // all later ops will also be flushed
   }
@@ -222,7 +225,6 @@ void flush_window() {
   Op** last;
   uns flush_ops = 0;
   uns keep_ops = 0;
-
   node->node_tail = NULL;
   for (op = node->node_head, last = &node->node_head; op; op = *last) {
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
@@ -233,10 +235,12 @@ void flush_window() {
     if (FLUSH_OP(op) || ifuse_flush_offpath) {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
-      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
+      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
+                                ifuse_recovery_is_flushing());
       if (!op->macro_fused)
         flush_ops++;
-      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
+      ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
+                                ifuse_recovery_is_flushing());
       if (!ifuse_flush_offpath)
         ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
       op->in_node_list = FALSE;

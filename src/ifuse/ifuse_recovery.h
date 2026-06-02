@@ -3,19 +3,23 @@
 
 #include "../op.h"
 
-/**
- * Schedules a pipeline recovery for an IFuse LOAD2 prediction failure.
- *
- * LOAD2 itself remains valid. Only younger operations are replayed because
- * they may have consumed LOAD2's incorrectly predicted fused value.
- */
-void ifuse_sched_recovery(Op* ld2_op, Counter detection_cycle);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Marks the interval in which Scarab is freeing squashed operations.
  */
 void ifuse_recovery_begin_flush(Counter recovery_op_num);
 void ifuse_recovery_end_flush(void);
+Flag ifuse_recovery_is_flushing(void);
+void ifuse_recovery_note_frontend_redirect(Counter flush_op_num);
+Flag ifuse_recovery_frontend_rebuild_needed(Counter recovery_op_num);
+void ifuse_recovery_clear_frontend_redirect(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * Repairs fetch-time IFuse table state for one squashed operation.

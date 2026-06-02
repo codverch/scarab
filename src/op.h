@@ -255,6 +255,7 @@ struct Op_struct {
   Flag                  ifuse_ld2_early_wake_signaled;
   Flag                  ifuse_ld2_agu_completed;
   Flag                  ifuse_ld2_prediction_failed;
+  Flag                  ifuse_flush_op;
   Flag                  ifuse_recovery_squashed;
   // }}}
 

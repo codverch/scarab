@@ -41,6 +41,7 @@ static RetiredLoadHistoryRow
 static int          retired_load_history_bucket_heads[RETIRED_LOAD_HISTORY_NUM_BUCKETS];
 static unsigned int retired_load_history_first_row = 0;
 static unsigned int retired_load_history_num_rows  = 0;
+static bool         retired_load_history_initialized = false;
 
 // Address helpers
 
@@ -175,6 +176,7 @@ void retired_load_history_clear(void) {
          row_num++) {
         retired_load_history_rows[row_num].next_bucket_row = -1;
     }
+    retired_load_history_initialized = true;
 }
 
 void retired_load_history_insert(Addr load_pc_addr,
@@ -182,6 +184,9 @@ void retired_load_history_insert(Addr load_pc_addr,
                                  unsigned int load_memory_access_size,
                                  unsigned int load_micro_op_num,
                                  uint64_t load_num) {
+    if (!retired_load_history_initialized) {
+        retired_load_history_clear();
+    }
     retired_load_history_prune(load_num);
 
     if (retired_load_history_num_rows >= RETIRED_LOAD_HISTORY_CAPACITY) {
@@ -213,6 +218,9 @@ bool retired_load_history_find_and_remove_match(
     unsigned int current_load_micro_op_num,
     uint64_t current_load_num,
     RetiredLoadHistoryEntry* matched_load) {
+    if (!retired_load_history_initialized) {
+        retired_load_history_clear();
+    }
     retired_load_history_prune(current_load_num);
 
     Addr current_load_cacheblock_addr =
@@ -266,6 +274,9 @@ bool retired_load_history_find_and_remove_match(
 }
 
 void retired_load_history_invalidate_cacheblock(Addr store_cacheblock_addr) {
+    if (!retired_load_history_initialized) {
+        retired_load_history_clear();
+    }
     unsigned int logical_row = 0;
     while (logical_row < retired_load_history_num_rows) {
         unsigned int row_num = retired_load_history_row_num(logical_row);

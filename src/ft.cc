@@ -179,6 +179,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->ifuse_ld2_early_wake_signaled = FALSE;
     op->ifuse_ld2_agu_completed = FALSE;
     op->ifuse_ld2_prediction_failed = FALSE;
+    op->ifuse_flush_op = FALSE;
 
     // IFuse load classification path.
     //
@@ -299,16 +300,15 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->bp_pred_main.pred = op->oracle_info.dir;  // for prebuilt, pred is same as dir
     add_op(op);
     /*
-     * IFuse LOAD2 prediction failed: use Scarab's normal misprediction path
-     * (recover_at_exec + predict_ft + redirect_to_off_path). Stop extending
-     * this on-path FT; off-path fetch continues inside redirect_to_off_path.
+     * IFuse LOAD2 prediction failed. Stop this prebuilt on-path FT at LOAD2,
+     * but do not redirect yet: lookahead-buffer construction runs ahead of
+     * frontend service. predict_ft() starts the Scarab recovery path only when
+     * this FT is actually selected.
      */
     if (!off_path && op->eom && op->ifuse_load_role == PREDICTED_NOT_FUSED &&
         op->ifuse_ld2_prediction_failed) {
-      op->bp_pred_main.recover_at_exec = TRUE;
       op->bp_pred_main.pred_npc =
           ADDR_PLUS_OFFSET(op->inst_info->addr, op->inst_info->trace_info.inst_size);
-      op_select_bp_pred_info(op, BP_PRED_MAIN);
       break;
     }
     if (off_path) {
@@ -327,6 +327,12 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
       return event;
     }
     STAT_EVENT(proc_id, FTQ_FETCHED_INS_ONPATH + off_path);
+    if (ops.size() > 50000) {
+      fprintf(stderr, "[scarab] FT::build stuck off=%u ops=%zu addr=0x%llx eom=%u\n", (unsigned)off_path,
+              ops.size(), (unsigned long long)ops.back()->inst_info->addr, (unsigned)ops.back()->eom);
+      fflush(stderr);
+      ASSERT(proc_id, 0);
+    }
   } while (get_end_reason() == FT_NOT_ENDED);
 
   generate_ft_info();
@@ -391,6 +397,10 @@ std::pair<FT*, FT*> FT::extract_off_path_ft(uns split_index) {
   ASSERT(proc_id, index_uns < ops.size() && index_uns >= 0);
   ASSERT(proc_id, get_is_prebuilt());
 
+  Op* split_op = ops[split_index];
+  if (split_op->eom && split_op->ifuse_flush_op)
+    return {this, nullptr};
+
   // if split at the last op and FT already ended, no need to create new FT, just update end condition
   if (split_index == ops.size() - 1 && get_end_reason(false) != FT_NOT_ENDED) {
     generate_ft_info();
@@ -413,14 +423,22 @@ std::pair<FT*, FT*> FT::extract_off_path_ft(uns split_index) {
     ASSERT(0, (index_uns + 1 <= ops.size() - 1 && ops.size() - 1 < ops.size() && index_uns + 1 >= 0));
 
     generate_ft_info();
-    /* Trailing suffix may end with a latent IFuse-failed op after an earlier split. */
+    /*
+     * A trailing suffix may end with a latent IFuse-failed LOAD2 after an
+     * earlier branch split. Lookahead classified the load but predict_ft() has
+     * not consumed it yet, so its temporary flush marker and FT end reason are
+     * intentionally deferred until recovery fetch reaches this suffix.
+     */
     ft_info.dynamic_info.ended_by = get_end_reason(false);
+    const bool has_latent_ifuse_failure =
+        ops.back()->eom && ops.back()->ifuse_load_role == PREDICTED_NOT_FUSED &&
+        ops.back()->ifuse_ld2_prediction_failed;
 
     ASSERT(proc_id, ft_info.static_info.start && ft_info.static_info.length && ops.size());
     ASSERT(proc_id, ops.size() == (ops.size() - ops.size()) + ops.size());
     ASSERT(proc_id, ft_info.dynamic_info.first_op_off_path == 0);
-    ASSERT(proc_id, ft_info.dynamic_info.ended_by != FT_NOT_ENDED);
-    ASSERT(proc_id, get_end_reason(false) != FT_NOT_ENDED);
+    ASSERT(proc_id, ft_info.dynamic_info.ended_by != FT_NOT_ENDED || has_latent_ifuse_failure);
+    ASSERT(proc_id, get_end_reason(false) != FT_NOT_ENDED || has_latent_ifuse_failure);
   } else {
     off_path_ft->is_prebuilt = 1;
     this->is_prebuilt = 0;
@@ -481,21 +499,14 @@ FT_Event FT::predict_op_ft_event(Op* op, Bp_Pred_Level pred_level) {
     return FT_EVENT_FETCH_BARRIER;
   }
 
-  if (!op->off_path && op->eom && op->ifuse_ld2_prediction_failed && bp_pred_info->recover_at_exec)
-    return FT_EVENT_MISPREDICT;
+  /* IFuse redirect is handled in handle_ifuse_misprediction_flush at fetch (like IF). */
+  if (!op->off_path && op->eom && op->ifuse_flush_op && bp_pred_info->recover_at_exec)
+    return FT_EVENT_NONE;
 
   return FT_EVENT_NONE;
 }
 
 FT_PredictResult FT::predict_ft() {
-  /* IFuse failure wins over an earlier branch mispredict in the same FT. */
-  size_t ifuse_mispred_idx = ops.size();
-  for (size_t idx = op_pos; idx < ops.size(); idx++) {
-    Op* op = ops[idx];
-    if (!op->off_path && op->eom && op->ifuse_ld2_prediction_failed && op->bp_pred_main.recover_at_exec)
-      ifuse_mispred_idx = idx;
-  }
-
   FT_PredictResult branch_mispred = {0, FT_EVENT_NONE, nullptr, 0};
 
   for (size_t idx = op_pos; idx < ops.size(); idx++) {
@@ -550,6 +561,15 @@ FT_PredictResult FT::predict_ft() {
       op_select_bp_pred_info(op, BP_PRED_MAIN);
     }
     bp_btb_post_bp_predict(g_bp_data, op);  // for next BTB access
+    /*
+     * Lookahead prebuild only records the failed LOAD2. Start the temporary
+     * off-path stream when the FT is consumed, just as a branch prediction
+     * affects fetch only when Scarab predicts its FT.
+     */
+    if (!op->off_path && op->eom && op->ifuse_load_role == PREDICTED_NOT_FUSED &&
+        op->ifuse_ld2_prediction_failed) {
+      decoupled_fe_handle_ifuse_misprediction_flush(proc_id, bp_id, op);
+    }
     if (op->inst_info->table_info.cf_type) {
       // Per-CF prediction event: now that main's bp_pred_info is finalized for
       // op (and main's bp_data has just been spec-updated), fire alt-DFE
@@ -573,19 +593,12 @@ FT_PredictResult FT::predict_ft() {
         if (event == FT_EVENT_MISPREDICT) {
           if (branch_mispred.event == FT_EVENT_NONE)
             branch_mispred = {return_idx, event, op, pred_addr};
-          if (ifuse_mispred_idx < ops.size())
-            continue;
         }
         return {return_idx, event, op, pred_addr};
       }
     }
   }
 
-  if (ifuse_mispred_idx < ops.size()) {
-    Op* op = ops[ifuse_mispred_idx];
-    op_select_bp_pred_info(op, BP_PRED_MAIN);
-    return {ifuse_mispred_idx, FT_EVENT_MISPREDICT, op, op->bp_pred_main.pred_npc};
-  }
   if (branch_mispred.event != FT_EVENT_NONE)
     return branch_mispred;
   return {0, FT_EVENT_NONE, nullptr, 0};
@@ -652,8 +665,7 @@ FT_Ended_By FT::get_end_reason(bool honor_ifuse_ft_end_suppress) const {
   ASSERT(proc_id, op->inst_info);
   if (op->eom) {
     /* Match instruction-fusion flush_op: do not end the FT at a failed IFuse. */
-    if (honor_ifuse_ft_end_suppress && op->ifuse_load_role == PREDICTED_NOT_FUSED &&
-        op->ifuse_ld2_prediction_failed)
+    if (honor_ifuse_ft_end_suppress && op->ifuse_flush_op)
       return FT_NOT_ENDED;
 
     const Bp_Pred_Info* bp_pred_info = ft_active_or_main_bp_pred_info(op);

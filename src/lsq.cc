@@ -43,6 +43,7 @@ extern "C" {
 #include "bp/bp.h"
 
 #include "exec_ports.h"
+#include "ifuse/ifuse_recovery.h"
 #include "node_stage.h"
 }
 
@@ -130,7 +131,8 @@ void LSQ::recover(Counter flush_op_num) {
 
     // Free this off-path mem op from the back
     ASSERT(proc_id, !entries.empty());
-    ASSERT(proc_id, back_entry.op->off_path || bp_recovery_info->ifuse_recovery);
+    ASSERT(proc_id, back_entry.op->off_path || bp_recovery_info->ifuse_recovery ||
+                        ifuse_recovery_is_flushing());
     ASSERT(proc_id, entries.back().op_num == back_entry.op->op_num);
     ASSERT(proc_id, back_entry.op->inst_info->table_info.mem_type == this->mem_type);
     entries.pop_back();

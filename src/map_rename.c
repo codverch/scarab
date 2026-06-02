@@ -30,6 +30,7 @@
 #include "map_rename.h"
 
 #include "bp/bp.h"
+#include "ifuse/ifuse_recovery.h"
 #include "ifuse/ifuse_rename.h"
 
 #include "globals/assert.h"
@@ -452,7 +453,8 @@ static inline void reg_file_produce_dst(Op *op, int *reg_table_types, int reg_ta
 }
 
 static inline void reg_file_flush_mispredict(Op *op, int *reg_table_types, int reg_table_num) {
-  ASSERT(op->proc_id, op->off_path || bp_recovery_info->ifuse_recovery);
+  ASSERT(op->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
+                          ifuse_recovery_is_flushing());
 
   for (uns ii = 0; ii < op->inst_info->table_info.num_dest_regs; ii++) {
     int reg_type = reg_file_get_reg_type(op->dst_reg_id[ii][REG_TABLE_TYPE_ARCHITECTURAL]);
@@ -472,7 +474,8 @@ static inline void reg_file_flush_mispredict(Op *op, int *reg_table_types, int r
       ASSERT(op->proc_id, entry != NULL);
 
       entry->num_refs--;
-      ASSERT(op->proc_id, entry->off_path || bp_recovery_info->ifuse_recovery || entry->num_refs > 0);
+      ASSERT(op->proc_id, entry->off_path || bp_recovery_info->ifuse_recovery ||
+                              ifuse_recovery_is_flushing() || entry->num_refs > 0);
       if (entry->num_refs > 0) {
         continue;
       }
