@@ -425,8 +425,13 @@ void node_fill_rob(Stage_Data* src_sd) {
        * LOAD2 keeps its ROB slot for instruction accounting, but LOAD1 supplies
        * its value. It therefore needs no LSQ entry, RS entry, FU, or memory
        * request.
+       *
+       * Rename still counted LOAD2 as an on-path consumer of its address
+       * source registers. Since this op will not reach execute, consume those
+       * register-file bookkeeping references here.
        */
       STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD2_BYPASSED);
+      reg_file_consume(op);
       op->state = OS_DONE;
       op->done_cycle = cycle_count;
     } else {
