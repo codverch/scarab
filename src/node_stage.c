@@ -60,6 +60,7 @@
 #include "lsq.h"
 #include "map.h"
 #include "map_rename.h"
+#include "model.h"
 #include "op_pool.h"
 #include "sim.h"
 #include "statistics.h"
@@ -226,7 +227,7 @@ void flush_window() {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, op->off_path);
-      if (!op->macro_fused)
+      if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
         flush_ops++;
       ASSERT(node->proc_id, op->off_path);
       ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
@@ -243,7 +244,7 @@ void flush_window() {
         op->recovery_scheduled = FALSE;
       }
       DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
-      if (!op->macro_fused)
+      if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
         keep_ops++;
       last = &op->next_node;
       node->node_tail = op;
@@ -281,7 +282,7 @@ void debug_print_node_table() {
     ASSERT(node->proc_id, temp[slot_num] == NULL);
     temp[slot_num] = op;
     printed_all++;
-    if (!op->macro_fused)
+    if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
       printed_non_fused++;
     empty = FALSE;
 
@@ -365,7 +366,8 @@ void node_fill_rob(Stage_Data* src_sd) {
     if (!op)
       continue;
 
-    if (!ideal_fusion_load2_is_nop(op) &&
+    Flag ideal_fusion_skip_lsq = ideal_fusion_load2_is_nop(op);
+    if (!ideal_fusion_skip_lsq &&
         (op->inst_info->table_info.mem_type == MEM_LD ||
          op->inst_info->table_info.mem_type == MEM_ST)) {
       if (!lsq_available(op->inst_info->table_info.mem_type)) {
@@ -409,7 +411,8 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     // Jump uop after CMP or TEST will be fused into one uop
     node_fuse_op(op);
-    if (!op->macro_fused)
+    Flag ideal_fusion_skip_count = ideal_fusion_load2_is_nop(op);
+    if (!op->macro_fused && !ideal_fusion_skip_count)
       node->node_count++;
 
     ASSERTM(node->proc_id, node->node_count <= NODE_TABLE_SIZE,
@@ -421,19 +424,12 @@ void node_fill_rob(Stage_Data* src_sd) {
     DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n", unsstr64(op->op_num), op->off_path);
 
     if (ideal_fusion_load2_is_nop(op)) {
-      /*
-       * LOAD2 keeps its ROB slot for instruction accounting, but LOAD1 supplies
-       * its value. It therefore needs no LSQ entry, RS entry, FU, or memory
-       * request.
-       *
-       * Rename still counted LOAD2 as an on-path consumer of its address
-       * source registers. Since this op will not reach execute, consume those
-       * register-file bookkeeping references here.
-       */
       STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD2_BYPASSED);
-      reg_file_consume(op);
       op->state = OS_DONE;
+      op->precommitted = TRUE;
+      op->precommit_cycle = cycle_count;
       op->done_cycle = cycle_count;
+      op->dcache_cycle = cycle_count;
     } else {
       op->state = OS_IN_ROB;
     }
@@ -587,8 +583,8 @@ void node_retire() {
       printf("[ft_free_op] stage=node_stage:retire op_num=%llu op=%p\n", (unsigned long long)op->op_num, (void*)op);
       ft_free_op(op);
     }
-    // the fused op does not occupy the ROB entry
-    if (!macro_fused_saved)
+    // the fused op does not occupy the ROB entry; same for ideal-fusion LOAD2
+    if (!macro_fused_saved && !ideal_fusion_load2_is_nop(op))
       node->node_count--;
 
     ASSERT(node->proc_id, node->node_count >= 0);
@@ -645,7 +641,16 @@ Flag op_not_ready_for_retire(Op* op) {
 Flag is_node_table_empty() {
   if (node->node_count == 0) {
     if (node->node_head != NULL) {
-      ASSERT(node->proc_id, node->node_head->macro_fused);
+      Flag all_skippable = TRUE;
+      for (Op* o = node->node_head; o; o = o->next_node) {
+        if (o->macro_fused)
+          continue;
+        if (ideal_fusion_load2_is_nop(o))
+          continue;
+        all_skippable = FALSE;
+        break;
+      }
+      ASSERT(node->proc_id, all_skippable);
       return FALSE;
     }
 

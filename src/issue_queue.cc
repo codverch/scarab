@@ -668,25 +668,12 @@ IssueQueues::IssueQueues(uns proc_id) : proc_id(proc_id) {
 void IssueQueues::dispatch() {
   Op* op = NULL;
   uns32 num_fill_rs = 0;
-  Op* last_skipped_nop = NULL;
 
   for (op = node->next_op_into_rs; op; op = op->next_node) {
-    /*
-     * Ideal-fusion LOAD2 is a completed ROB placeholder. LOAD1 supplies its
-     * value, so it must not consume an RS entry or execute on a functional unit.
-     *
-     * Track the last skipped NOP so that if it is the final op currently in
-     * the ROB (next_node == NULL), we re-anchor next_op_into_rs at this NOP
-     * rather than setting it to NULL.  Without this, ops added by node_fill
-     * after the NOP are permanently invisible to the dispatch loop because
-     * they are linked to nop->next_node, but the loop starts from NULL and
-     * exits immediately.
-     */
     if (ideal_fusion_load2_is_nop(op)) {
-      last_skipped_nop = op;
+      ASSERT(node->proc_id, op->state == OS_DONE);
       continue;
     }
-    last_skipped_nop = NULL;
 
     ASSERT(proc_id, op->queue_id == MAX_UNS16 && op->queue_entry_id == MAX_UNS16);
     uns16 queue_id = find_emptiest_queue(op);
@@ -715,15 +702,7 @@ void IssueQueues::dispatch() {
     }
   }
 
-  /*
-   * If the loop ended at NULL because the last op(s) visited were LOAD2 NOPs,
-   * re-anchor at the last NOP instead of storing NULL.  node_fill will link
-   * future ops to that NOP's next_node; re-anchoring here ensures dispatch
-   * picks them up on the very next cycle.
-   */
-  node->next_op_into_rs = (op == NULL && last_skipped_nop != NULL)
-                              ? last_skipped_nop
-                              : op;
+  node->next_op_into_rs = op;
 }
 
 /*

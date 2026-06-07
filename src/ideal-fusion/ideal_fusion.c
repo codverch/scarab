@@ -53,13 +53,7 @@ typedef struct Ideal_Fusion_Pair_struct {
   struct Ideal_Fusion_Pair_struct* next;
 } Ideal_Fusion_Pair;
 
-typedef struct Ideal_Fusion_Readiness_struct {
-  Counter load1_micro_op_num;
-  Op* load2;
-  Counter load2_unique_num;
-  Flag load1_completed;
-  struct Ideal_Fusion_Readiness_struct* next;
-} Ideal_Fusion_Readiness;
+Load2BufferNode* load2_buffer_ht[LOAD2_BUFFER_HT_SIZE] = {NULL};
 
 /*
  * Candidate files identify dynamic ops using the order in which on-path ops
@@ -83,8 +77,6 @@ static Ideal_Fusion_Pair*
 static Ideal_Fusion_Pair*
   load2_pair_index[IDEAL_FUSION_PAIR_INDEX_BUCKETS] = {NULL};
 static Flag pair_indexes_loaded = FALSE;
-static Ideal_Fusion_Readiness*
-  readiness_index[IDEAL_FUSION_PAIR_INDEX_BUCKETS] = {NULL};
 
 static Addr get_cache_block_addr(Addr addr) {
   return (addr / DCACHE_LINE_SIZE) * DCACHE_LINE_SIZE;
@@ -159,53 +151,6 @@ static Ideal_Fusion_Pair* lookup_load2_pair(Counter micro_op_num) {
   }
 
   return NULL;
-}
-
-static Ideal_Fusion_Readiness* lookup_readiness(Counter load1_micro_op_num) {
-  Ideal_Fusion_Readiness* readiness;
-  uns bucket = get_pair_index_bucket(load1_micro_op_num);
-
-  for (readiness = readiness_index[bucket]; readiness;
-       readiness = readiness->next) {
-    if (readiness->load1_micro_op_num == load1_micro_op_num)
-      return readiness;
-  }
-
-  return NULL;
-}
-
-static Ideal_Fusion_Readiness* get_or_create_readiness(
-  Counter load1_micro_op_num) {
-  Ideal_Fusion_Readiness* readiness = lookup_readiness(load1_micro_op_num);
-  uns bucket;
-
-  if (readiness)
-    return readiness;
-
-  readiness = (Ideal_Fusion_Readiness*)calloc(1, sizeof(*readiness));
-  if (!readiness) {
-    fprintf(stderr, "Ideal fusion: could not allocate LOAD2 readiness entry.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  readiness->load1_micro_op_num = load1_micro_op_num;
-  bucket = get_pair_index_bucket(load1_micro_op_num);
-  readiness->next = readiness_index[bucket];
-  readiness_index[bucket] = readiness;
-  return readiness;
-}
-
-static void remove_readiness(Ideal_Fusion_Readiness* readiness) {
-  Ideal_Fusion_Readiness** entry;
-  uns bucket = get_pair_index_bucket(readiness->load1_micro_op_num);
-
-  for (entry = &readiness_index[bucket]; *entry; entry = &(*entry)->next) {
-    if (*entry == readiness) {
-      *entry = readiness->next;
-      free(readiness);
-      return;
-    }
-  }
 }
 
 /*
@@ -592,54 +537,123 @@ Flag ideal_fusion_load2_is_nop(const Op* op) {
   return op && op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2;
 }
 
-void ideal_fusion_on_rename(Op* op, void (*wake_action)(Op*, Op*, uns)) {
-  Ideal_Fusion_Readiness* readiness;
+Load2BufferNode* ideal_fusion_find_load2_buffer(Counter load1_micro_op_num) {
+  uns bucket = get_pair_index_bucket(load1_micro_op_num);
+  Load2BufferNode* node;
+
+  for (node = load2_buffer_ht[bucket]; node; node = node->next) {
+    if (node->entry.load1_micro_op_num == load1_micro_op_num)
+      return node;
+  }
+  return NULL;
+}
+
+Load2BufferNode* ideal_fusion_create_load2_buffer(Counter load1_micro_op_num) {
+  Load2BufferNode* node = (Load2BufferNode*)calloc(1, sizeof(*node));
+  uns bucket;
+
+  if (!node) {
+    fprintf(stderr, "Ideal fusion: could not allocate Load2 buffer entry.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  node->entry.load1_micro_op_num = load1_micro_op_num;
+  bucket = get_pair_index_bucket(load1_micro_op_num);
+  node->next = load2_buffer_ht[bucket];
+  load2_buffer_ht[bucket] = node;
+  return node;
+}
+
+void ideal_fusion_remove_load2_buffer(Load2BufferNode* node) {
+  Load2BufferNode** slot;
+  uns bucket;
+
+  if (!node)
+    return;
+
+  bucket = get_pair_index_bucket(node->entry.load1_micro_op_num);
+  for (slot = &load2_buffer_ht[bucket]; *slot; slot = &(*slot)->next) {
+    if (*slot == node) {
+      *slot = node->next;
+      free(node);
+      return;
+    }
+  }
+}
+
+static void ideal_fusion_complete_load2(Op* load2, Counter load1_wake_cycle,
+                                        Counter load1_done_cycle,
+                                        void (*wake_action)(Op*, Op*, uns)) {
+  load2->wake_cycle = load1_wake_cycle;
+  load2->done_cycle = load1_done_cycle;
+  wake_up_ops(load2, REG_DATA_DEP, wake_action);
+}
+
+void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns)) {
+  Load2BufferNode* node;
 
   if (!op || op->off_path || IDEAL_FUSION_PASS != 2)
     return;
 
   if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD1) {
-    get_or_create_readiness(op->ideal_fusion_micro_op_num);
+    node = ideal_fusion_find_load2_buffer(op->ideal_fusion_micro_op_num);
+    if (!node)
+      node = ideal_fusion_create_load2_buffer(op->ideal_fusion_micro_op_num);
     return;
   }
 
   if (!ideal_fusion_load2_is_nop(op))
     return;
 
-  readiness = get_or_create_readiness(
-    op->ideal_fusion_partner_micro_op_num);
-  readiness->load2 = op;
-  readiness->load2_unique_num = op->unique_num;
+  node = ideal_fusion_find_load2_buffer(op->ideal_fusion_partner_micro_op_num);
+  if (!node)
+    node = ideal_fusion_create_load2_buffer(op->ideal_fusion_partner_micro_op_num);
 
-  /*
-   * LOAD1 may have completed before LOAD2 reached rename. In that case,
-   * release LOAD2's dependents immediately after their wake-up links exist.
-   */
-  if (readiness->load1_completed) {
-    wake_up_ops(op, REG_DATA_DEP, wake_action);
-    remove_readiness(readiness);
+  node->entry.load2 = op;
+  node->entry.load2_unique_num = op->unique_num;
+  node->entry.load2_micro_op_num = op->ideal_fusion_micro_op_num;
+
+  if (node->entry.load1_completed && !node->entry.pair_completed) {
+    ideal_fusion_complete_load2(op, node->entry.load1_wake_cycle,
+                                node->entry.load1_done_cycle, wake_action);
+    node->entry.pair_completed = TRUE;
+    ideal_fusion_remove_load2_buffer(node);
+  } else {
+    node->entry.load2_waiting = TRUE;
+    node->entry.pair_completed = FALSE;
   }
 }
 
-void ideal_fusion_on_load_complete(Op* op,
-                                   void (*wake_action)(Op*, Op*, uns)) {
-  Ideal_Fusion_Readiness* readiness;
+void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns)) {
+  Load2BufferNode* node;
+  Op* load2;
 
-  if (!op || op->off_path || IDEAL_FUSION_PASS != 2 ||
-      op->ideal_fusion_load_role != IDEAL_FUSION_LOAD1)
+  if (!load1 || load1->off_path || IDEAL_FUSION_PASS != 2 ||
+      load1->ideal_fusion_load_role != IDEAL_FUSION_LOAD1)
     return;
 
-  readiness = get_or_create_readiness(op->ideal_fusion_micro_op_num);
-  readiness->load1_completed = TRUE;
+  node = ideal_fusion_find_load2_buffer(load1->ideal_fusion_micro_op_num);
+  if (!node)
+    node = ideal_fusion_create_load2_buffer(load1->ideal_fusion_micro_op_num);
 
-  /*
-   * LOAD2 may already be waiting after rename. Its memory access is skipped,
-   * so LOAD1 completion is the event that releases LOAD2's dependents.
-   */
-  if (readiness->load2 &&
-      readiness->load2->unique_num == readiness->load2_unique_num &&
-      readiness->load2->op_pool_valid) {
-    wake_up_ops(readiness->load2, REG_DATA_DEP, wake_action);
-    remove_readiness(readiness);
+  node->entry.load1_completed = TRUE;
+  node->entry.load1_wake_cycle = load1->wake_cycle;
+  node->entry.load1_done_cycle = load1->done_cycle;
+
+  if (!node->entry.load2 || !node->entry.load2_waiting ||
+      node->entry.pair_completed)
+    return;
+
+  load2 = node->entry.load2;
+  if (!load2->op_pool_valid ||
+      load2->unique_num != node->entry.load2_unique_num ||
+      !ideal_fusion_load2_is_nop(load2)) {
+    ideal_fusion_remove_load2_buffer(node);
+    return;
   }
+
+  ideal_fusion_complete_load2(load2, node->entry.load1_wake_cycle,
+                              node->entry.load1_done_cycle, wake_action);
+  node->entry.pair_completed = TRUE;
+  ideal_fusion_remove_load2_buffer(node);
 }

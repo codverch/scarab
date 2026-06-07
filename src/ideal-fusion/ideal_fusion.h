@@ -2,24 +2,47 @@
 #define __IDEAL_FUSION_H__
 
 #include "globals/global_types.h"
+#include "op.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*
- * Called once for each fetched op after its ideal-fusion metadata is
- * initialized. Pass-specific sequencing and classification will live here.
- */
 void ideal_fusion_on_fetch_op(Op* op);
 
 /*
- * Pass-2 hooks. LOAD2 remains in the ROB for accounting, but its value becomes
- * available when the corresponding LOAD1 completes.
+ * Pass-2 actuation:
+ *   - LOAD2 stays on the ROB chain but does not consume node_count / LSQ / RS
+ *   - LOAD2 renames normally (own physical dest); src consumer registration skipped
+ *   - Load2 buffer coordinates LOAD1 completion with LOAD2 dependent wakeup
  */
-void ideal_fusion_on_rename(Op* op, void (*wake_action)(Op*, Op*, uns));
-void ideal_fusion_on_load_complete(Op* op,
-                                   void (*wake_action)(Op*, Op*, uns));
+#define LOAD2_BUFFER_HT_SIZE 1000003
+
+typedef struct Load2BufferEntry {
+  Op* load2;
+  Counter load2_unique_num;
+  Flag load2_waiting;
+  Flag load1_completed;
+  Flag pair_completed;
+  Counter load1_wake_cycle;
+  Counter load1_done_cycle;
+  Counter load1_micro_op_num;
+  Counter load2_micro_op_num;
+} Load2BufferEntry;
+
+typedef struct Load2BufferNode {
+  Load2BufferEntry entry;
+  struct Load2BufferNode* next;
+} Load2BufferNode;
+
+extern Load2BufferNode* load2_buffer_ht[LOAD2_BUFFER_HT_SIZE];
+
+Load2BufferNode* ideal_fusion_find_load2_buffer(Counter load1_micro_op_num);
+Load2BufferNode* ideal_fusion_create_load2_buffer(Counter load1_micro_op_num);
+void ideal_fusion_remove_load2_buffer(Load2BufferNode* node);
+
+void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns));
+void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns));
 Flag ideal_fusion_load2_is_nop(const Op* op);
 
 #ifdef __cplusplus

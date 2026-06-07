@@ -266,12 +266,8 @@ static inline void stage_process_op(Op* op) {
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);
 
-  /*
-   * Ideal-fusion LOAD2 dependents are wired normally above. This hook either
-   * records that LOAD2 is waiting for LOAD1 or releases them immediately when
-   * LOAD1 completed before LOAD2 reached rename.
-   */
-  ideal_fusion_on_rename(op, model->wake_hook);
+  /* Ideal-fusion Load2 buffer coordination (after wake-up lists exist). */
+  ideal_fusion_on_map(op, model->wake_hook);
 }
 
 static inline void map_stage_collect_stat(Flag stall, Flag starved) {
