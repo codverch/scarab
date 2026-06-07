@@ -2,7 +2,6 @@
 #define __IDEAL_FUSION_H__
 
 #include "globals/global_types.h"
-#include "op.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -216,6 +216,7 @@ static void load_pair_indexes(void) {
   FILE* pair_log;
   char line[IDEAL_FUSION_CSV_LINE_SIZE];
   Counter line_num = 0;
+  Counter loaded_pair_count = 0;
 
   if (pair_indexes_loaded)
     return;
@@ -319,6 +320,7 @@ static void load_pair_indexes(void) {
     }
 
     index_fusion_pair(&pair);
+    loaded_pair_count++;
   }
 
   if (ferror(pair_log)) {
@@ -335,6 +337,10 @@ static void load_pair_indexes(void) {
   }
 
   pair_indexes_loaded = TRUE;
+
+  printf("Ideal fusion pass 2: loaded %llu candidate pair(s) from '%s'\n",
+         loaded_pair_count, IDEAL_FUSION_LOG);
+  fflush(stdout);
 }
 
 static void candidate_log_error(const char* action) {
