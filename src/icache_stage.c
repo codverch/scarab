@@ -645,7 +645,12 @@ Icache_State icache_serving_actions(Break_Reason* break_fetch) {
     occupied_lookup_buffer = 1;
   }
   {
-    static uint64_t dbg_icache_while_iters = 0;
+    // Per-call watchdog: detects a genuine single-cycle infinite loop in icache
+    // serving. Must be reset each invocation (NOT static) -- the icache serving
+    // path runs on every fusion-misprediction recovery, so a process-lifetime
+    // counter accumulates across cycles and falsely trips on long/aggressive
+    // runs even when each call only iterates a handful of times.
+    uint64_t dbg_icache_while_iters = 0;
     while (ic->sd.op_count < ic->sd.max_op_count) {
       if (++dbg_icache_while_iters > 100000) {
         fprintf(stderr,
