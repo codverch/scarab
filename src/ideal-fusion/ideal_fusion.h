@@ -7,6 +7,12 @@
 extern "C" {
 #endif
 
+typedef enum Ideal_Fusion_Policy_enum {
+  IDEAL_FUSION_OLDEST_FIRST,
+  IDEAL_FUSION_MOST_RECENT,
+  NUM_IDEAL_FUSION_POLICIES
+} Ideal_Fusion_Policy;
+
 void ideal_fusion_on_fetch_op(Op* op);
 
 /*

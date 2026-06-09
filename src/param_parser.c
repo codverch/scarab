@@ -55,6 +55,7 @@ the program.  This way, an exact duplicate run can be performed.
 #include "bp/bp.h"
 #include "frontend/frontend_intf.h"
 
+#include "ideal-fusion/ideal_fusion.h"
 #include "model.h"
 #include "sim.h"
 #include "stat_trace.h"
@@ -86,6 +87,7 @@ const char* sim_mode_names[] = {"uop", "full"
 #endif
 };
 const char* exit_cond_names[] = {"last_done", "first_done"};
+const char* ideal_fusion_type_names[] = {"oldest-first", "most-recent"};
 /* get_params() builds a heap-allocated merged argv (PARAMS.in + command line)
  * and returns a pointer into it. To avoid leaks, we track the base pointer
  * so main can free it via free_params_arg_list(). */
@@ -318,6 +320,24 @@ void get_exit_cond_param(const char* name, Generic_Enum* variable) {
 
     for (ii = 0; ii < NUM_EXIT_CONDS; ii++)
       if (strncmp(optarg, exit_cond_names[ii], MAX_STR_LENGTH) == 0) {
+        *variable = ii;
+        return;
+      }
+    FATAL_ERROR(0, "Invalid value ('%s') for parameter '%s' --- Ignored.\n", optarg, name);
+  } else
+    FATAL_ERROR(0, "Parameter '%s' missing value --- Ignored.\n", name);
+}
+
+/**************************************************************************************/
+/* get_ideal_fusion_type: match input string to internal enum
+ */
+
+void get_ideal_fusion_type_param(const char* name, Generic_Enum* variable) {
+  if (optarg) {
+    uns ii;
+
+    for (ii = 0; ii < NUM_IDEAL_FUSION_POLICIES; ii++)
+      if (strncmp(optarg, ideal_fusion_type_names[ii], MAX_STR_LENGTH) == 0) {
         *variable = ii;
         return;
       }

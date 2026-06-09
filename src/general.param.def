@@ -119,3 +119,6 @@ DEF_PARAM( segment_instr_count          , SEGMENT_INSTR_COUNT       , uns64  , u
 DEF_PARAM( ideal_fusion_pass            , IDEAL_FUSION_PASS         , uns    , uns       , 1        ,       )
 DEF_PARAM( ideal_fusion_distance        , IDEAL_FUSION_DISTANCE     , uns    , uns       , 512      ,       )
 DEF_PARAM( ideal_fusion_log             , IDEAL_FUSION_LOG          , char*  , string    , "ideal_fusion_candidates.csv", )
+// Pass 1 chooses which earlier LOAD1 to pair with a LOAD2 when multiple candidates
+// share the same cache block: oldest-first or most-recent.
+DEF_PARAM( ideal_fusion_type            , IDEAL_FUSION_TYPE         , int    , ideal_fusion_type, 0   ,       )

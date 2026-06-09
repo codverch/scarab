@@ -400,8 +400,20 @@ static void log_matched_pair(Ideal_Fusion_Load_Candidate* load1, Op* load2) {
     candidate_log_error("flush");
 }
 
+static Flag load1_matches_load2(const Ideal_Fusion_Load_Candidate* load1,
+                                Op* load2, Addr cache_block_addr) {
+  return load1->cache_block_addr == cache_block_addr &&
+         !load1->fused &&
+         access_fits_in_cache_block(load1->virtual_addr, load1->mem_size) &&
+         access_fits_in_cache_block(load2->oracle_info.va,
+                                    load2->oracle_info.mem_size) &&
+         load2->ideal_fusion_micro_op_num - load1->micro_op_num <
+           IDEAL_FUSION_DISTANCE;
+}
+
 static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
   Ideal_Fusion_Load_Candidate* load1;
+  Ideal_Fusion_Load_Candidate* best_match = NULL;
   Addr cache_block_addr;
   uns bucket;
 
@@ -414,17 +426,23 @@ static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
   bucket = get_candidate_bucket(cache_block_addr);
 
   for (load1 = load_candidates[bucket]; load1; load1 = load1->next) {
-    if (load1->cache_block_addr == cache_block_addr &&
-        !load1->fused &&
-        access_fits_in_cache_block(load1->virtual_addr, load1->mem_size) &&
-        access_fits_in_cache_block(load2->oracle_info.va,
-                                   load2->oracle_info.mem_size) &&
-        load2->ideal_fusion_micro_op_num - load1->micro_op_num <
-          IDEAL_FUSION_DISTANCE)
-      return load1;
+    if (!load1_matches_load2(load1, load2, cache_block_addr))
+      continue;
+
+    if (!best_match) {
+      best_match = load1;
+      continue;
+    }
+
+    if (IDEAL_FUSION_TYPE == IDEAL_FUSION_MOST_RECENT) {
+      if (load1->micro_op_num > best_match->micro_op_num)
+        best_match = load1;
+    } else if (load1->micro_op_num < best_match->micro_op_num) {
+      best_match = load1;
+    }
   }
 
-  return NULL;
+  return best_match;
 }
 
 static void track_load(Op* op) {
