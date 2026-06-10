@@ -133,7 +133,7 @@ void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
  * @param ld2_micro_op_num The dynamic micro-op number of LD2.
  * @param proc_id The core id used for statistics.
  */
-void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
+Flag fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                        Addr ld1_effective_addr,
                                        Addr ld2_effective_addr,
                                        unsigned int offset_delta,

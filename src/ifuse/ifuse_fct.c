@@ -28,6 +28,17 @@
 static FCT_Row* fct_rows = NULL; // Software backing rows for the ideal FCT
 static size_t   fct_num_hash_table_rows = 0;
 static bool     fct_is_initialized = false;
+static uint64_t fct_live_row_count = 0;
+static uint64_t fct_live_row_peak = 0;
+
+static void fct_note_new_live_row(unsigned int proc_id) {
+    fct_live_row_count++;
+    if (fct_live_row_count > fct_live_row_peak) {
+        INC_STAT_EVENT(proc_id, FCT_PEAK_LIVE,
+                       fct_live_row_count - fct_live_row_peak);
+        fct_live_row_peak = fct_live_row_count;
+    }
+}
 
 void fct_init(void) {
     if (fct_is_initialized) {
@@ -243,6 +254,7 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                       ld2_effective_addr, offset_delta, direction, ld2_mem_size,
                       ld1_micro_op_num, ld2_micro_op_num,
                       IFUSE_FCT_INITIAL_CONF);
+        fct_note_new_live_row(proc_id);
         return;
     }
 
@@ -279,7 +291,7 @@ void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
     fct_increment_confidence_score(row);
 }
 
-void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
+Flag fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                        Addr ld1_effective_addr,
                                        Addr ld2_effective_addr,
                                        unsigned int offset_delta,
@@ -292,12 +304,13 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
         fct_init();
     }
     if (ld1_pc_addr == 0 || ld2_pc_addr == 0 || offset_delta > 63U) {
-        return;
+        return FALSE;
     }
 
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
     if (row) {
-        return;
+        STAT_EVENT(proc_id, TRAINING_TABLE_PROMOTION_SKIPPED_FCT_EXISTS);
+        return FALSE;
     }
 
     row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
@@ -305,4 +318,6 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                   ld2_effective_addr, offset_delta, direction, ld2_mem_size,
                   ld1_micro_op_num, ld2_micro_op_num,
                   IFUSE_FCT_INITIAL_CONF);
+    fct_note_new_live_row(proc_id);
+    return TRUE;
 }

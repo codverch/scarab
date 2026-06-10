@@ -42,6 +42,17 @@ typedef struct TrainingTableEntry {
 // Module state
 static TrainingTableEntry* training_table_entries = NULL;
 static bool                training_table_initialized = false;
+static uint64_t            training_table_live_count = 0;
+static uint64_t            training_table_live_peak = 0;
+
+static void training_table_note_live_insert(void) {
+    training_table_live_count++;
+    if (training_table_live_count > training_table_live_peak) {
+        INC_STAT_EVENT(0, TRAINING_TABLE_PEAK_LIVE,
+                       training_table_live_count - training_table_live_peak);
+        training_table_live_peak = training_table_live_count;
+    }
+}
 
 // Hash-table helpers
 
@@ -110,6 +121,7 @@ static TrainingTableEntry* training_table_find_entry(
             entry->observation_count        = 0;
             entry->valid                    = true;
             STAT_EVENT(0, TRAINING_TABLE_INSERTS);
+            training_table_note_live_insert();
             return entry;
         }
 
@@ -224,6 +236,7 @@ static void training_table_observe_pair(
     if (entry->observation_count < 0xFFFFFFFFU) {
         entry->observation_count++;
     }
+    STAT_EVENT(proc_id, TRAINING_TABLE_OBSERVATIONS);
 
     unsigned int insert_threshold = IFUSE_TRAINING_INSERT_THRESHOLD;
     if (insert_threshold == 0U) {
@@ -240,13 +253,14 @@ static void training_table_observe_pair(
         return;
     }
 
-    fct_promote_ld2_candidate_for_ld1(ld1_pc_addr, ld2_pc_addr,
-                                      ld1_effective_addr, ld2_effective_addr,
-                                      offset_delta, direction,
-                                      ld2_memory_access_size,
-                                      ld1_micro_op_num, ld2_micro_op_num,
-                                      proc_id);
-    STAT_EVENT(proc_id, TRAINING_TABLE_PROMOTIONS);
+    if (fct_promote_ld2_candidate_for_ld1(ld1_pc_addr, ld2_pc_addr,
+                                          ld1_effective_addr, ld2_effective_addr,
+                                          offset_delta, direction,
+                                          ld2_memory_access_size,
+                                          ld1_micro_op_num, ld2_micro_op_num,
+                                          proc_id)) {
+        STAT_EVENT(proc_id, TRAINING_TABLE_PROMOTIONS);
+    }
 }
 
 void training_table_observe_fusible_pair(

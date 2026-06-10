@@ -39,6 +39,23 @@ static ACI_Node* aci_buckets[ACI_NUM_BUCKETS];
 static bool      aci_initialized = false;
 static uint64_t  aci_next_timestamp = 0;
 static IfuseIdealAlloc aci_node_allocator;
+static uint64_t        aci_live_prediction_count = 0;
+static uint64_t        aci_live_prediction_peak = 0;
+
+static void aci_note_prediction_inserted(void) {
+    aci_live_prediction_count++;
+    if (aci_live_prediction_count > aci_live_prediction_peak) {
+        INC_STAT_EVENT(0, ACI_LIVE_PREDICTION_PEAK,
+                       aci_live_prediction_count - aci_live_prediction_peak);
+        aci_live_prediction_peak = aci_live_prediction_count;
+    }
+}
+
+static void aci_note_prediction_removed(void) {
+    if (aci_live_prediction_count > 0) {
+        aci_live_prediction_count--;
+    }
+}
 
 // Internal helper methods
 static uint64_t aci_get_cacheblock_addr(uint64_t effective_addr);
@@ -61,6 +78,8 @@ void aci_init(void) {
 
     memset(aci_buckets, 0, sizeof(aci_buckets));
     aci_next_timestamp = 0;
+    aci_live_prediction_count = 0;
+    aci_live_prediction_peak = 0;
     if (!ifuse_ideal_alloc_init_fixed(&aci_node_allocator, sizeof(ACI_Node),
                                       IFUSE_IDEAL_ACI_MAX_NODES)) {
         fprintf(stderr, "ACI: fixed pool alloc failed (%u nodes)\n",
@@ -98,6 +117,7 @@ static void aci_remove_node(unsigned int bucket_idx, ACI_Node* prev,
     } else {
         aci_buckets[bucket_idx] = node->next;
     }
+    aci_note_prediction_removed();
     ifuse_ideal_alloc_put(&aci_node_allocator, node);
 }
 
@@ -181,6 +201,7 @@ void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
     aci_buckets[bucket_idx]            = node;
 
     STAT_EVENT(0, ACI_PREDICTION_INSERTS);
+    aci_note_prediction_inserted();
     if (oldest_same_block_prediction) {
         STAT_EVENT(0, ACI_SAME_CACHEBLOCK_INSERTS);
     }
