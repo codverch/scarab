@@ -13,9 +13,9 @@
  * Fusion Candidate Table (FCT)
  * ============================
  * The FCT predicts load fusion candidates by mapping each LD1 PC to a
- * corresponding LD2 candidate. The current implementation models an ideal
- * runtime structure and serves as the baseline prior to introducing realistic
- * capacity constraints.
+ * corresponding LD2 candidate. Ideal mode uses a large open-addressed hash
+ * table. Realistic mode uses a set-associative table (default 64 sets x 8
+ * ways = 512 entries) keyed by LD1 PC with tree PLRU replacement per set.
  *
  * The current runtime policy inserts an entry on the first retired observation
  * of an LD1-LD2 pair. If the same LD1 is later observed with a different LD2,
