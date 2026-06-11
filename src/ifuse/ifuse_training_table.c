@@ -21,14 +21,18 @@
  * and that no intervening store invalidated the pair.
  *
  * Ideal mode uses a large open-addressed table. Realistic mode uses a
- * set-associative table (default 128 sets x 8 ways = 1024 entries) keyed by the
- * exact runtime pattern: LD1 PC, LD2 PC, offset delta, direction, and LD2
- * memory access size. Each set keeps a 7-bit tree PLRU replacement policy.
+ * set-associative table: the low bits of the folded LD1 PC select the set,
+ * and a stored tag (remaining LD1 bits, folded LD2 PC, offset, direction,
+ * and LD2 size) is compared across the ways. Each set keeps a 7-bit tree
+ * PLRU replacement policy (8-way sets).
  */
 
+#define TRAINING_TABLE_PC_BITS  48U
+#define TRAINING_TABLE_PC_MASK  0xFFFFFFFFFFFFULL
+
 typedef struct TrainingTableEntry {
-    Addr         ld1_pc_addr;
-    Addr         ld2_pc_addr;
+    uint64_t     ld1_tag;
+    uint64_t     ld2_tag;
     unsigned int offset_delta;
     unsigned int ld2_memory_access_size;
     unsigned int observation_count;
@@ -43,6 +47,7 @@ static bool                training_table_initialized = false;
 static unsigned int        training_table_num_entries = 0;
 static unsigned int        training_table_num_sets    = 0;
 static unsigned int        training_table_num_ways    = 0;
+static unsigned int        training_table_set_index_bits = 0;
 static uint64_t            training_table_live_count  = 0;
 static uint64_t            training_table_live_peak   = 0;
 
@@ -61,29 +66,83 @@ static void training_table_note_live_remove(void) {
     }
 }
 
-static bool training_table_keys_match(
+static bool training_table_keys_match_ideal(
     const TrainingTableEntry* entry,
     Addr ld1_pc_addr,
     Addr ld2_pc_addr,
     unsigned int offset_delta,
     bool direction,
     unsigned int ld2_memory_access_size) {
-    return entry->ld1_pc_addr == ld1_pc_addr &&
-           entry->ld2_pc_addr == ld2_pc_addr &&
+    return entry->ld1_tag == (uint64_t)ld1_pc_addr &&
+           entry->ld2_tag == (uint64_t)ld2_pc_addr &&
            entry->offset_delta == offset_delta &&
            entry->direction == direction &&
            entry->ld2_memory_access_size == ld2_memory_access_size;
 }
 
-static void training_table_init_entry_fields(
+static uint64_t training_table_fold_pc(Addr pc_addr) {
+    return (uint64_t)pc_addr & TRAINING_TABLE_PC_MASK;
+}
+
+static unsigned int training_table_log2_u32(unsigned int value) {
+    unsigned int bits = 0U;
+
+    while (value > 1U) {
+        value >>= 1U;
+        bits++;
+    }
+
+    return bits;
+}
+
+static unsigned int training_table_get_set_index(Addr ld1_pc_addr) {
+    return (unsigned int)(training_table_fold_pc(ld1_pc_addr) &
+                          (training_table_num_sets - 1U));
+}
+
+static uint64_t training_table_get_ld1_tag(Addr ld1_pc_addr) {
+    return training_table_fold_pc(ld1_pc_addr) >> training_table_set_index_bits;
+}
+
+static bool training_table_tags_match(
+    const TrainingTableEntry* entry,
+    uint64_t ld1_tag,
+    uint64_t ld2_tag,
+    unsigned int offset_delta,
+    bool direction,
+    unsigned int ld2_memory_access_size) {
+    return entry->ld1_tag == ld1_tag &&
+           entry->ld2_tag == ld2_tag &&
+           entry->offset_delta == offset_delta &&
+           entry->direction == direction &&
+           entry->ld2_memory_access_size == ld2_memory_access_size;
+}
+
+static void training_table_init_entry_fields_ideal(
     TrainingTableEntry* entry,
     Addr ld1_pc_addr,
     Addr ld2_pc_addr,
     unsigned int offset_delta,
     bool direction,
     unsigned int ld2_memory_access_size) {
-    entry->ld1_pc_addr            = ld1_pc_addr;
-    entry->ld2_pc_addr            = ld2_pc_addr;
+    entry->ld1_tag                = (uint64_t)ld1_pc_addr;
+    entry->ld2_tag                = (uint64_t)ld2_pc_addr;
+    entry->offset_delta           = offset_delta;
+    entry->direction              = direction;
+    entry->ld2_memory_access_size = ld2_memory_access_size;
+    entry->observation_count      = 0;
+    entry->valid                  = true;
+}
+
+static void training_table_init_entry_fields_realistic(
+    TrainingTableEntry* entry,
+    Addr ld1_pc_addr,
+    Addr ld2_pc_addr,
+    unsigned int offset_delta,
+    bool direction,
+    unsigned int ld2_memory_access_size) {
+    entry->ld1_tag                = training_table_get_ld1_tag(ld1_pc_addr);
+    entry->ld2_tag                = training_table_fold_pc(ld2_pc_addr);
     entry->offset_delta           = offset_delta;
     entry->direction              = direction;
     entry->ld2_memory_access_size = ld2_memory_access_size;
@@ -203,7 +262,7 @@ static TrainingTableEntry* training_table_find_entry_ideal(
         TrainingTableEntry* entry = &training_table_entries[idx];
 
         if (!entry->valid) {
-            training_table_init_entry_fields(
+            training_table_init_entry_fields_ideal(
                 entry, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
                 ld2_memory_access_size);
             STAT_EVENT(0, TRAINING_TABLE_INSERTS);
@@ -211,9 +270,9 @@ static TrainingTableEntry* training_table_find_entry_ideal(
             return entry;
         }
 
-        if (training_table_keys_match(entry, ld1_pc_addr, ld2_pc_addr,
-                                      offset_delta, direction,
-                                      ld2_memory_access_size)) {
+        if (training_table_keys_match_ideal(entry, ld1_pc_addr, ld2_pc_addr,
+                                            offset_delta, direction,
+                                            ld2_memory_access_size)) {
             return entry;
         }
     }
@@ -223,8 +282,8 @@ static TrainingTableEntry* training_table_find_entry_ideal(
 }
 
 /**
- * Bounded set-associative lookup: hash to a set, probe all ways, then use
- * tree PLRU replacement inside that set when no invalid way is available.
+ * Bounded set-associative lookup: folded LD1 PC bits select the set, stored
+ * tag fields identify the way, and tree PLRU picks a victim on miss.
  */
 static TrainingTableEntry* training_table_find_entry_realistic(
     Addr ld1_pc_addr,
@@ -232,11 +291,9 @@ static TrainingTableEntry* training_table_find_entry_realistic(
     unsigned int offset_delta,
     bool direction,
     unsigned int ld2_memory_access_size) {
-    uint64_t hash_value = training_table_hash(
-        ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
-        ld2_memory_access_size);
-    unsigned int set_idx =
-        (unsigned int)(hash_value & (training_table_num_sets - 1U));
+    unsigned int set_idx = training_table_get_set_index(ld1_pc_addr);
+    uint64_t     ld1_tag = training_table_get_ld1_tag(ld1_pc_addr);
+    uint64_t     ld2_tag = training_table_fold_pc(ld2_pc_addr);
 
     unsigned int invalid_way = training_table_num_ways;
 
@@ -244,9 +301,8 @@ static TrainingTableEntry* training_table_find_entry_realistic(
         TrainingTableEntry* entry = training_table_entry_at(set_idx, way);
 
         if (entry->valid &&
-            training_table_keys_match(entry, ld1_pc_addr, ld2_pc_addr,
-                                      offset_delta, direction,
-                                      ld2_memory_access_size)) {
+            training_table_tags_match(entry, ld1_tag, ld2_tag, offset_delta,
+                                      direction, ld2_memory_access_size)) {
             training_table_plru_touch(set_idx, way);
             return entry;
         }
@@ -259,7 +315,7 @@ static TrainingTableEntry* training_table_find_entry_realistic(
     if (invalid_way < training_table_num_ways) {
         TrainingTableEntry* invalid_entry =
             training_table_entry_at(set_idx, invalid_way);
-        training_table_init_entry_fields(
+        training_table_init_entry_fields_realistic(
             invalid_entry, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
             ld2_memory_access_size);
         training_table_plru_touch(set_idx, invalid_way);
@@ -275,7 +331,7 @@ static TrainingTableEntry* training_table_find_entry_realistic(
     training_table_note_live_remove();
     STAT_EVENT(0, TRAINING_TABLE_EVICTED);
 
-    training_table_init_entry_fields(
+    training_table_init_entry_fields_realistic(
         victim, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
         ld2_memory_access_size);
     training_table_plru_touch(set_idx, victim_way);
@@ -364,7 +420,11 @@ void training_table_init(void) {
                     IFUSE_TRAINING_TABLE_EVICT_POLICY);
             exit(1);
         }
+
+        training_table_set_index_bits =
+            training_table_log2_u32(training_table_num_sets);
     } else {
+        training_table_set_index_bits = 0U;
         training_table_num_entries = IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES;
         training_table_num_sets    = 0U;
         training_table_num_ways    = 0U;
