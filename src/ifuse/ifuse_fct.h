@@ -14,8 +14,9 @@
  * ============================
  * The FCT predicts load fusion candidates by mapping each LD1 PC to a
  * corresponding LD2 candidate. Ideal mode uses a large open-addressed hash
- * table. Realistic mode uses a set-associative table (default 64 sets x 8
- * ways = 512 entries) keyed by LD1 PC with tree PLRU replacement per set.
+ * table. Realistic mode uses a set-associative table keyed by LD1 PC: the low
+ * bits of the folded LD1 PC select the set, and the remaining LD1 tag bits are
+ * compared across the ways, with tree PLRU replacement per set.
  *
  * The current runtime policy inserts an entry on the first retired observation
  * of an LD1-LD2 pair. If the same LD1 is later observed with a different LD2,
@@ -28,6 +29,7 @@
 typedef struct FCT_Row {
     // Load identification
     Addr         ld1_pc_addr;
+    uint64_t     ld1_tag;
     Addr         ld2_pc_addr;
 
     // Memory access information

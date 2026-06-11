@@ -21,10 +21,13 @@
  * If the same LD1 is later observed with a different LD2, the existing entry
  * is updated with the new pairing.
  *
- * Realistic mode uses a set-associative table (default 128 sets x 8 ways =
- * 1024 entries) keyed by LD1 PC, with a 7-bit tree PLRU replacement policy
- * per set.
+ * Realistic mode uses a set-associative table keyed by LD1 PC, the low bits
+ * of the folded LD1 PC select the set, and the remaining LD1 tag bits are
+ * compared across the ways, with a 7-bit tree PLRU replacement policy per set.
  */
+
+#define FCT_PC_BITS 48U
+#define FCT_PC_MASK 0xFFFFFFFFFFFFULL
 
 static FCT_Row* fct_rows = NULL;
 static uint8_t*   fct_plru = NULL;
@@ -32,6 +35,7 @@ static size_t     fct_num_hash_table_rows = 0;
 static unsigned int fct_num_sets = 0;
 static unsigned int fct_num_ways = 0;
 static unsigned int fct_num_entries = 0;
+static unsigned int fct_set_index_bits = 0;
 static bool       fct_is_initialized = false;
 static uint64_t   fct_live_row_count = 0;
 static uint64_t   fct_live_row_peak = 0;
@@ -49,6 +53,17 @@ static void fct_note_live_remove(void) {
     if (fct_live_row_count > 0) {
         fct_live_row_count--;
     }
+}
+
+static unsigned int fct_log2_u32(unsigned int value) {
+    unsigned int bits = 0U;
+
+    while (value > 1U) {
+        value >>= 1U;
+        bits++;
+    }
+
+    return bits;
 }
 
 static FCT_Row* fct_row_at(unsigned int set_idx, unsigned int way) {
@@ -154,7 +169,10 @@ void fct_init(void) {
                     IFUSE_FCT_EVICT_POLICY);
             exit(1);
         }
+
+        fct_set_index_bits = fct_log2_u32(fct_num_sets);
     } else {
+        fct_set_index_bits = 0U;
         fct_num_hash_table_rows = 1U << IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS;
         fct_num_sets = 0U;
         fct_num_ways = 0U;
@@ -184,6 +202,18 @@ void fct_init(void) {
     training_table_init();
 }
 
+static uint64_t fct_fold_pc(Addr pc_addr) {
+    return (uint64_t)pc_addr & FCT_PC_MASK;
+}
+
+static unsigned int fct_get_set_index(Addr ld1_pc_addr) {
+    return (unsigned int)(fct_fold_pc(ld1_pc_addr) & (fct_num_sets - 1U));
+}
+
+static uint64_t fct_get_ld1_tag(Addr ld1_pc_addr) {
+    return fct_fold_pc(ld1_pc_addr) >> fct_set_index_bits;
+}
+
 /**
  * Returns the first software hash-table slot to probe for ld1_pc_addr.
  */
@@ -193,11 +223,6 @@ static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
     h *= 0xff51afd7ed558ccdULL;
     h ^= h >> 33;
     return (size_t)(h & row_index_mask);
-}
-
-static unsigned int fct_get_set_idx(Addr ld1_pc_addr) {
-    return (unsigned int)fct_get_probe_start_idx(ld1_pc_addr,
-                                                 fct_num_sets - 1U);
 }
 
 static unsigned int fct_max_confidence_score(void) {
@@ -228,6 +253,7 @@ static void fct_write_row(FCT_Row* row, Addr ld1_pc_addr, Addr ld2_pc_addr,
                           unsigned int ld2_micro_op_num,
                           unsigned int confidence_score) {
     row->ld1_pc_addr        = ld1_pc_addr;
+    row->ld1_tag            = fct_get_ld1_tag(ld1_pc_addr);
     row->ld2_pc_addr        = ld2_pc_addr;
     row->ld1_effective_addr = ld1_effective_addr;
     row->ld2_effective_addr = ld2_effective_addr;
@@ -268,11 +294,12 @@ static FCT_Row* fct_lookup_row_realistic(Addr ld1_pc_addr) {
         return NULL;
     }
 
-    unsigned int set_idx = fct_get_set_idx(ld1_pc_addr);
+    unsigned int set_idx = fct_get_set_index(ld1_pc_addr);
+    uint64_t     ld1_tag = fct_get_ld1_tag(ld1_pc_addr);
 
     for (unsigned int way = 0; way < fct_num_ways; way++) {
         FCT_Row* row = fct_row_at(set_idx, way);
-        if (row->valid && row->ld1_pc_addr == ld1_pc_addr) {
+        if (row->valid && row->ld1_tag == ld1_tag) {
             fct_plru_touch(set_idx, way);
             return row;
         }
@@ -313,7 +340,7 @@ static FCT_Row* fct_find_empty_row_ideal(Addr ld1_pc_addr) {
  */
 static FCT_Row* fct_allocate_row_realistic(Addr ld1_pc_addr,
                                            unsigned int proc_id) {
-    unsigned int set_idx = fct_get_set_idx(ld1_pc_addr);
+    unsigned int set_idx = fct_get_set_index(ld1_pc_addr);
     unsigned int invalid_way = fct_num_ways;
 
     for (unsigned int way = 0; way < fct_num_ways; way++) {
