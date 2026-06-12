@@ -23,7 +23,7 @@
  * Ideal mode uses a large open-addressed table. Realistic mode uses a
  * set-associative table: a lightweight XOR-rotate fold of the full pair key
  * selects the set, stored tag fields are compared across the ways, and each
- * set keeps a 7-bit tree PLRU replacement policy (8-way sets).
+ * set keeps a tree PLRU replacement policy (4- or 8-way sets).
  */
 
 #define TRAINING_TABLE_PC_BITS  48U
@@ -232,6 +232,25 @@ static uint64_t training_table_fold_pc(Addr pc_addr) {
     return (uint64_t)pc_addr & TRAINING_TABLE_PC_MASK;
 }
 
+static uint64_t training_table_truncate_folded_pc(uint64_t folded_pc,
+                                                  unsigned int pc_bits) {
+    if (pc_bits >= TRAINING_TABLE_PC_BITS) {
+        return folded_pc;
+    }
+
+    return folded_pc >> (TRAINING_TABLE_PC_BITS - pc_bits);
+}
+
+static uint64_t training_table_fold_pc_for_index(Addr pc_addr) {
+    return training_table_truncate_folded_pc(
+        training_table_fold_pc(pc_addr), IFUSE_TRAINING_TABLE_INDEX_PC_BITS);
+}
+
+static uint64_t training_table_get_pc_tag(Addr pc_addr) {
+    return training_table_truncate_folded_pc(
+        training_table_fold_pc(pc_addr), IFUSE_TRAINING_TABLE_PC_TAG_BITS);
+}
+
 /**
  * Hardware-friendly set index: XOR folded PCs/metadata, rotate LD2 bits,
  * then fold upper hash bits back in without any multiply.
@@ -242,8 +261,8 @@ static uint64_t training_table_xor_rotate_fold_set_key(
     unsigned int offset_delta,
     bool direction,
     unsigned int ld2_memory_access_size) {
-    uint64_t fold1 = training_table_fold_pc(ld1_pc_addr);
-    uint64_t fold2 = training_table_fold_pc(ld2_pc_addr);
+    uint64_t fold1 = training_table_fold_pc_for_index(ld1_pc_addr);
+    uint64_t fold2 = training_table_fold_pc_for_index(ld2_pc_addr);
     uint64_t mix   = fold1 ^ (fold2 << 17U) ^ (fold2 >> 15U);
 
     mix ^= ((uint64_t)offset_delta << 6U);
@@ -272,7 +291,7 @@ static unsigned int training_table_get_set_index(
 }
 
 static uint64_t training_table_get_ld1_tag(Addr ld1_pc_addr) {
-    return training_table_fold_pc(ld1_pc_addr);
+    return training_table_get_pc_tag(ld1_pc_addr);
 }
 
 static bool training_table_tags_match(
@@ -313,7 +332,7 @@ static void training_table_init_entry_fields_realistic(
     bool direction,
     unsigned int ld2_memory_access_size) {
     entry->ld1_tag                = training_table_get_ld1_tag(ld1_pc_addr);
-    entry->ld2_tag                = training_table_fold_pc(ld2_pc_addr);
+    entry->ld2_tag                = training_table_get_pc_tag(ld2_pc_addr);
     entry->offset_delta           = offset_delta;
     entry->direction              = direction;
     entry->ld2_memory_access_size = ld2_memory_access_size;
@@ -327,6 +346,44 @@ static TrainingTableEntry* training_table_entry_at(unsigned int set_idx,
 }
 
 /**
+ * Marks one way as most-recently used in a 4-way tree PLRU set.
+ */
+static void training_table_plru_touch_4way(unsigned int set_idx,
+                                           unsigned int way) {
+    uint8_t state = training_table_plru[set_idx] & 0x07U;
+
+    switch (way) {
+        case 0U:
+            state |= 0x03U; /* bit0=1, bit1=1 */
+            break;
+        case 1U:
+            state |= 0x01U; /* bit0=1, bit1=0 */
+            state &= (uint8_t)~0x02U;
+            break;
+        case 2U:
+            state |= 0x04U; /* bit0=0, bit2=1 */
+            state &= (uint8_t)~0x01U;
+            break;
+        case 3U:
+            state &= (uint8_t)~0x05U; /* bit0=0, bit2=0 */
+            break;
+        default:
+            return;
+    }
+
+    training_table_plru[set_idx] = state;
+}
+
+static unsigned int training_table_plru_victim_4way(unsigned int set_idx) {
+    uint8_t state = training_table_plru[set_idx] & 0x07U;
+
+    if ((state & 0x1U) != 0U) {
+        return ((state & 0x2U) != 0U) ? 0U : 1U;
+    }
+    return ((state & 0x4U) != 0U) ? 2U : 3U;
+}
+
+/**
  * Marks one way as most-recently used in an 8-way tree PLRU set.
  *
  * Tree layout:
@@ -337,7 +394,7 @@ static TrainingTableEntry* training_table_entry_at(unsigned int set_idx,
  *   bit3 bit4 bit5 bit6
  *   W0 W1 W2 W3 W4 W5 W6 W7
  */
-static void training_table_plru_touch(unsigned int set_idx, unsigned int way) {
+static void training_table_plru_touch_8way(unsigned int set_idx, unsigned int way) {
     uint8_t state = training_table_plru[set_idx] & 0x7FU;
 
     switch (way) {
@@ -378,7 +435,7 @@ static void training_table_plru_touch(unsigned int set_idx, unsigned int way) {
     training_table_plru[set_idx] = state;
 }
 
-static unsigned int training_table_plru_victim(unsigned int set_idx) {
+static unsigned int training_table_plru_victim_8way(unsigned int set_idx) {
     uint8_t state = training_table_plru[set_idx] & 0x7FU;
 
     if ((state & 0x1U) != 0U) {
@@ -391,6 +448,21 @@ static unsigned int training_table_plru_victim(unsigned int set_idx) {
         return ((state & 0x20U) != 0U) ? 4U : 5U;
     }
     return ((state & 0x40U) != 0U) ? 6U : 7U;
+}
+
+static void training_table_plru_touch(unsigned int set_idx, unsigned int way) {
+    if (training_table_num_ways == 4U) {
+        training_table_plru_touch_4way(set_idx, way);
+        return;
+    }
+    training_table_plru_touch_8way(set_idx, way);
+}
+
+static unsigned int training_table_plru_victim(unsigned int set_idx) {
+    if (training_table_num_ways == 4U) {
+        return training_table_plru_victim_4way(set_idx);
+    }
+    return training_table_plru_victim_8way(set_idx);
 }
 
 // Hash-table helpers
@@ -467,7 +539,7 @@ static TrainingTableEntry* training_table_find_entry_realistic(
         ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
         ld2_memory_access_size);
     uint64_t     ld1_tag = training_table_get_ld1_tag(ld1_pc_addr);
-    uint64_t     ld2_tag = training_table_fold_pc(ld2_pc_addr);
+    uint64_t     ld2_tag = training_table_get_pc_tag(ld2_pc_addr);
 
     unsigned int invalid_way = training_table_num_ways;
 
@@ -575,10 +647,10 @@ void training_table_init(void) {
                     training_table_num_sets);
             exit(1);
         }
-        if (training_table_num_ways != 8U) {
+        if (training_table_num_ways != 4U && training_table_num_ways != 8U) {
             fprintf(stderr,
                     "TRAINING_TABLE: realistic set-associative mode requires "
-                    "ifuse_training_table_ways=8 (got %u)\n",
+                    "ifuse_training_table_ways=4 or 8 (got %u)\n",
                     training_table_num_ways);
             exit(1);
         }
@@ -596,6 +668,18 @@ void training_table_init(void) {
                     "TRAINING_TABLE: only evict_policy=0 (tree PLRU) is "
                     "supported for realistic mode (got %u)\n",
                     IFUSE_TRAINING_TABLE_EVICT_POLICY);
+            exit(1);
+        }
+        if (IFUSE_TRAINING_TABLE_PC_TAG_BITS == 0U ||
+            IFUSE_TRAINING_TABLE_PC_TAG_BITS > TRAINING_TABLE_PC_BITS ||
+            IFUSE_TRAINING_TABLE_INDEX_PC_BITS == 0U ||
+            IFUSE_TRAINING_TABLE_INDEX_PC_BITS > TRAINING_TABLE_PC_BITS) {
+            fprintf(stderr,
+                    "TRAINING_TABLE: pc_tag_bits and index_pc_bits must be "
+                    "in [1, %u] (got tag=%u index=%u)\n",
+                    TRAINING_TABLE_PC_BITS,
+                    IFUSE_TRAINING_TABLE_PC_TAG_BITS,
+                    IFUSE_TRAINING_TABLE_INDEX_PC_BITS);
             exit(1);
         }
     } else {
