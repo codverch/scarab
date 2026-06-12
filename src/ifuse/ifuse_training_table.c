@@ -21,10 +21,9 @@
  * and that no intervening store invalidated the pair.
  *
  * Ideal mode uses a large open-addressed table. Realistic mode uses a
- * set-associative table: the low bits of the folded LD1 PC select the set,
- * and a stored tag (remaining LD1 bits, folded LD2 PC, offset, direction,
- * and LD2 size) is compared across the ways. Each set keeps a 7-bit tree
- * PLRU replacement policy (8-way sets).
+ * set-associative table: a lightweight XOR-rotate fold of the full pair key
+ * selects the set, stored tag fields are compared across the ways, and each
+ * set keeps a 7-bit tree PLRU replacement policy (8-way sets).
  */
 
 #define TRAINING_TABLE_PC_BITS  48U
@@ -47,9 +46,19 @@ static bool                training_table_initialized = false;
 static unsigned int        training_table_num_entries = 0;
 static unsigned int        training_table_num_sets    = 0;
 static unsigned int        training_table_num_ways    = 0;
-static unsigned int        training_table_set_index_bits = 0;
 static uint64_t            training_table_live_count  = 0;
 static uint64_t            training_table_live_peak   = 0;
+static unsigned int*       training_table_set_peak_live = NULL;
+static unsigned int*       training_table_set_evictions = NULL;
+static bool*               training_table_set_ever_full = NULL;
+static bool*               training_table_set_had_eviction = NULL;
+static unsigned int        training_table_global_set_peak_live = 0;
+static unsigned int        training_table_hot_set_count = 0;
+static unsigned int        training_table_conflict_set_count = 0;
+static bool                training_table_set_stats_registered = false;
+
+static TrainingTableEntry* training_table_entry_at(unsigned int set_idx,
+                                                   unsigned int way);
 
 static void training_table_note_live_insert(void) {
     training_table_live_count++;
@@ -64,6 +73,145 @@ static void training_table_note_live_remove(void) {
     if (training_table_live_count > 0) {
         training_table_live_count--;
     }
+}
+
+static unsigned int training_table_get_set_live(unsigned int set_idx) {
+    unsigned int live = 0U;
+
+    for (unsigned int way = 0; way < training_table_num_ways; way++) {
+        if (training_table_entry_at(set_idx, way)->valid) {
+            live++;
+        }
+    }
+
+    return live;
+}
+
+static void training_table_update_set_stats(unsigned int set_idx) {
+    if (!training_table_set_peak_live || set_idx >= training_table_num_sets) {
+        return;
+    }
+
+    unsigned int live = training_table_get_set_live(set_idx);
+
+    if (live > training_table_set_peak_live[set_idx]) {
+        training_table_set_peak_live[set_idx] = live;
+    }
+
+    if (live > training_table_global_set_peak_live) {
+        INC_STAT_EVENT(0, TRAINING_TABLE_SET_PEAK_LIVE,
+                       live - training_table_global_set_peak_live);
+        training_table_global_set_peak_live = live;
+    }
+
+    if (live >= training_table_num_ways &&
+        !training_table_set_ever_full[set_idx]) {
+        training_table_set_ever_full[set_idx] = true;
+        training_table_hot_set_count++;
+        STAT_EVENT(0, TRAINING_TABLE_HOT_SETS);
+    }
+}
+
+static void training_table_note_set_eviction(unsigned int set_idx) {
+    if (!training_table_set_evictions || set_idx >= training_table_num_sets) {
+        return;
+    }
+
+    training_table_set_evictions[set_idx]++;
+
+    if (!training_table_set_had_eviction[set_idx]) {
+        training_table_set_had_eviction[set_idx] = true;
+        training_table_conflict_set_count++;
+        STAT_EVENT(0, TRAINING_TABLE_CONFLICT_SETS);
+    }
+}
+
+static void training_table_set_stats_atexit(void) {
+    training_table_dump_set_stats();
+}
+
+static void training_table_init_set_stats(void) {
+    training_table_set_peak_live =
+        (unsigned int*)calloc(training_table_num_sets, sizeof(unsigned int));
+    training_table_set_evictions =
+        (unsigned int*)calloc(training_table_num_sets, sizeof(unsigned int));
+    training_table_set_ever_full =
+        (bool*)calloc(training_table_num_sets, sizeof(bool));
+    training_table_set_had_eviction =
+        (bool*)calloc(training_table_num_sets, sizeof(bool));
+
+    if (!training_table_set_peak_live || !training_table_set_evictions ||
+        !training_table_set_ever_full || !training_table_set_had_eviction) {
+        fprintf(stderr,
+                "TRAINING_TABLE: calloc failed for %u set stat vectors\n",
+                training_table_num_sets);
+        exit(1);
+    }
+
+    if (!training_table_set_stats_registered) {
+        atexit(training_table_set_stats_atexit);
+        training_table_set_stats_registered = true;
+    }
+}
+
+void training_table_dump_set_stats(void) {
+    if (!IFUSE_REALISTIC_TRAINING_TABLE || !training_table_set_peak_live ||
+        training_table_num_sets == 0U) {
+        return;
+    }
+
+    FILE* fp = fopen("ifuse_tt_set_histo.out", "w");
+    if (!fp) {
+        fprintf(stderr,
+                "TRAINING_TABLE: could not write ifuse_tt_set_histo.out\n");
+        return;
+    }
+
+    unsigned int sets_with_evictions = 0U;
+    unsigned int top_peak = 0U;
+    unsigned int top_evictions = 0U;
+    unsigned int top_evict_set = 0U;
+
+    for (unsigned int set_idx = 0; set_idx < training_table_num_sets;
+         set_idx++) {
+        if (training_table_set_evictions[set_idx] > 0U) {
+            sets_with_evictions++;
+        }
+        if (training_table_set_peak_live[set_idx] > top_peak) {
+            top_peak = training_table_set_peak_live[set_idx];
+        }
+        if (training_table_set_evictions[set_idx] > top_evictions) {
+            top_evictions = training_table_set_evictions[set_idx];
+            top_evict_set = set_idx;
+        }
+    }
+
+    fprintf(fp, "# IFuse training table per-set stats (realistic mode)\n");
+    fprintf(fp, "# sets=%u ways=%u entries=%u global_peak_live=%llu\n",
+            training_table_num_sets, training_table_num_ways,
+            training_table_num_entries,
+            (unsigned long long)training_table_live_peak);
+    fprintf(fp, "# set_peak_live=%u hot_sets=%u conflict_sets=%u\n",
+            training_table_global_set_peak_live, training_table_hot_set_count,
+            training_table_conflict_set_count);
+    fprintf(fp, "# sets_with_evictions=%u top_evict_set=%u top_evictions=%u\n",
+            sets_with_evictions, top_evict_set, top_evictions);
+    fprintf(fp, "# columns: set_idx peak_live evictions ever_full\n");
+
+    for (unsigned int set_idx = 0; set_idx < training_table_num_sets;
+         set_idx++) {
+        if (training_table_set_peak_live[set_idx] == 0U &&
+            training_table_set_evictions[set_idx] == 0U) {
+            continue;
+        }
+
+        fprintf(fp, "%u %u %u %u\n", set_idx,
+                training_table_set_peak_live[set_idx],
+                training_table_set_evictions[set_idx],
+                training_table_set_ever_full[set_idx] ? 1U : 0U);
+    }
+
+    fclose(fp);
 }
 
 static bool training_table_keys_match_ideal(
@@ -84,24 +232,47 @@ static uint64_t training_table_fold_pc(Addr pc_addr) {
     return (uint64_t)pc_addr & TRAINING_TABLE_PC_MASK;
 }
 
-static unsigned int training_table_log2_u32(unsigned int value) {
-    unsigned int bits = 0U;
+/**
+ * Hardware-friendly set index: XOR folded PCs/metadata, rotate LD2 bits,
+ * then fold upper hash bits back in without any multiply.
+ */
+static uint64_t training_table_xor_rotate_fold_set_key(
+    Addr ld1_pc_addr,
+    Addr ld2_pc_addr,
+    unsigned int offset_delta,
+    bool direction,
+    unsigned int ld2_memory_access_size) {
+    uint64_t fold1 = training_table_fold_pc(ld1_pc_addr);
+    uint64_t fold2 = training_table_fold_pc(ld2_pc_addr);
+    uint64_t mix   = fold1 ^ (fold2 << 17U) ^ (fold2 >> 15U);
 
-    while (value > 1U) {
-        value >>= 1U;
-        bits++;
+    mix ^= ((uint64_t)offset_delta << 6U);
+    if (direction) {
+        mix ^= (1ULL << 12U);
     }
+    mix ^= ((uint64_t)ld2_memory_access_size << 13U);
 
-    return bits;
+    mix ^= mix >> 32U;
+    mix ^= mix >> 16U;
+    mix ^= mix >> 8U;
+
+    return mix;
 }
 
-static unsigned int training_table_get_set_index(Addr ld1_pc_addr) {
-    return (unsigned int)(training_table_fold_pc(ld1_pc_addr) &
+static unsigned int training_table_get_set_index(
+    Addr ld1_pc_addr,
+    Addr ld2_pc_addr,
+    unsigned int offset_delta,
+    bool direction,
+    unsigned int ld2_memory_access_size) {
+    return (unsigned int)(training_table_xor_rotate_fold_set_key(
+                              ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
+                              ld2_memory_access_size) &
                           (training_table_num_sets - 1U));
 }
 
 static uint64_t training_table_get_ld1_tag(Addr ld1_pc_addr) {
-    return training_table_fold_pc(ld1_pc_addr) >> training_table_set_index_bits;
+    return training_table_fold_pc(ld1_pc_addr);
 }
 
 static bool training_table_tags_match(
@@ -282,8 +453,9 @@ static TrainingTableEntry* training_table_find_entry_ideal(
 }
 
 /**
- * Bounded set-associative lookup: folded LD1 PC bits select the set, stored
- * tag fields identify the way, and tree PLRU picks a victim on miss.
+ * Bounded set-associative lookup: an XOR-rotate fold of the pair key selects
+ * the set, stored tag fields identify the way, and tree PLRU picks a victim
+ * on miss.
  */
 static TrainingTableEntry* training_table_find_entry_realistic(
     Addr ld1_pc_addr,
@@ -291,7 +463,9 @@ static TrainingTableEntry* training_table_find_entry_realistic(
     unsigned int offset_delta,
     bool direction,
     unsigned int ld2_memory_access_size) {
-    unsigned int set_idx = training_table_get_set_index(ld1_pc_addr);
+    unsigned int set_idx = training_table_get_set_index(
+        ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
+        ld2_memory_access_size);
     uint64_t     ld1_tag = training_table_get_ld1_tag(ld1_pc_addr);
     uint64_t     ld2_tag = training_table_fold_pc(ld2_pc_addr);
 
@@ -321,6 +495,7 @@ static TrainingTableEntry* training_table_find_entry_realistic(
         training_table_plru_touch(set_idx, invalid_way);
         STAT_EVENT(0, TRAINING_TABLE_INSERTS);
         training_table_note_live_insert();
+        training_table_update_set_stats(set_idx);
         return invalid_entry;
     }
 
@@ -330,12 +505,15 @@ static TrainingTableEntry* training_table_find_entry_realistic(
     victim->observation_count = 0;
     training_table_note_live_remove();
     STAT_EVENT(0, TRAINING_TABLE_EVICTED);
+    training_table_note_set_eviction(set_idx);
 
     training_table_init_entry_fields_realistic(
         victim, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
         ld2_memory_access_size);
     training_table_plru_touch(set_idx, victim_way);
     STAT_EVENT(0, TRAINING_TABLE_INSERTS);
+    training_table_note_live_insert();
+    training_table_update_set_stats(set_idx);
     return victim;
 }
 
@@ -420,11 +598,7 @@ void training_table_init(void) {
                     IFUSE_TRAINING_TABLE_EVICT_POLICY);
             exit(1);
         }
-
-        training_table_set_index_bits =
-            training_table_log2_u32(training_table_num_sets);
     } else {
-        training_table_set_index_bits = 0U;
         training_table_num_entries = IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES;
         training_table_num_sets    = 0U;
         training_table_num_ways    = 0U;
@@ -448,10 +622,14 @@ void training_table_init(void) {
                     training_table_num_sets);
             exit(1);
         }
+        training_table_init_set_stats();
     }
 
     training_table_live_count = 0;
     training_table_live_peak  = 0;
+    training_table_global_set_peak_live = 0;
+    training_table_hot_set_count = 0;
+    training_table_conflict_set_count = 0;
     training_table_initialized = true;
 }
 
