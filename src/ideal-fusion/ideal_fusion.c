@@ -217,6 +217,7 @@ static void load_pair_indexes(void) {
   char line[IDEAL_FUSION_CSV_LINE_SIZE];
   Counter line_num = 0;
   Counter loaded_pair_count = 0;
+  Counter skipped_distance_count = 0;
 
   if (pair_indexes_loaded)
     return;
@@ -319,6 +320,12 @@ static void load_pair_indexes(void) {
       pair_log_error(line_num, "inconsistent cache-block metadata");
     }
 
+    /* Pass 2: apply fusion only for pairs within the distance window. */
+    if (recorded_distance >= IDEAL_FUSION_DISTANCE) {
+      skipped_distance_count++;
+      continue;
+    }
+
     index_fusion_pair(&pair);
     loaded_pair_count++;
   }
@@ -338,8 +345,10 @@ static void load_pair_indexes(void) {
 
   pair_indexes_loaded = TRUE;
 
-  printf("Ideal fusion pass 2: loaded %llu candidate pair(s) from '%s'\n",
-         loaded_pair_count, IDEAL_FUSION_LOG);
+  printf("Ideal fusion pass 2: loaded %llu candidate pair(s) from '%s' "
+         "(distance < %u, skipped %llu)\n",
+         loaded_pair_count, IDEAL_FUSION_LOG, IDEAL_FUSION_DISTANCE,
+         skipped_distance_count);
   fflush(stdout);
 }
 
@@ -416,6 +425,7 @@ static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
   Ideal_Fusion_Load_Candidate* best_match = NULL;
   Addr cache_block_addr;
   uns bucket;
+  uns match_count = 0;
 
   if (load2->inst_info->table_info.mem_type != MEM_LD ||
       load2->inst_info->table_info.num_dest_regs == 0 ||
@@ -429,6 +439,13 @@ static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
     if (!load1_matches_load2(load1, load2, cache_block_addr))
       continue;
 
+    match_count++;
+    /* DEBUG: list every qualifying LOAD1 the policy gets to choose between. */
+    printf("[IDEAL_FUSION] candidate load1 micro_op=%llu (block=0x%llx) for "
+           "load2 micro_op=%llu\n",
+           load1->micro_op_num, (uns64)cache_block_addr,
+           load2->ideal_fusion_micro_op_num);
+
     if (!best_match) {
       best_match = load1;
       continue;
@@ -440,6 +457,17 @@ static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
     } else if (load1->micro_op_num < best_match->micro_op_num) {
       best_match = load1;
     }
+  }
+
+  /* DEBUG: only interesting when the policy actually had a choice to make. */
+  if (match_count > 1 && best_match) {
+    printf("[IDEAL_FUSION] policy=%s chose load1 micro_op=%llu out of %u "
+           "candidates for load2 micro_op=%llu\n",
+           IDEAL_FUSION_TYPE == IDEAL_FUSION_MOST_RECENT ? "most-recent"
+                                                         : "oldest-first",
+           best_match->micro_op_num, match_count,
+           load2->ideal_fusion_micro_op_num);
+    fflush(stdout);
   }
 
   return best_match;
