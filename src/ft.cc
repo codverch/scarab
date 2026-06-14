@@ -45,6 +45,7 @@ extern "C" {
   #include "ifuse/ifuse_apt.h"
   #include "ifuse/ifuse_fct.h"
   #include "ifuse/ifuse_load_tracker.h"
+  #include "ifuse/ifuse_training_table.h"
   #include "ifuse/ifuse.param.h"
   }
 
@@ -274,24 +275,53 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
           if (op->oracle_info.va !=
               waiting_pair->predicted_ld2_effective_addr) {
             STAT_EVENT(proc_id, IFUSE_MISPREDICTED_OFFSET_DELTA);
+            training_table_retrain_fusible_pair(
+                waiting_pair->ld1_pc_addr,
+                op->inst_info->addr,
+                waiting_pair->ld1_effective_addr,
+                op->oracle_info.va,
+                0,
+                op->oracle_info.mem_size,
+                waiting_pair->ld1_micro_op_num,
+                (unsigned int)op->op_num,
+                proc_id);
           }
-          fct_update_confidence(waiting_pair->ld1_pc_addr, false);
+          if (waiting_pair->fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
+            fct_update_delta_confidence(
+                waiting_pair->ld1_pc_addr,
+                waiting_pair->fct_delta_slot_idx,
+                false);
+          }
         } else {
           // Reinforce accurate LD1-to-LD2 predictions.
-          fct_update_confidence(waiting_pair->ld1_pc_addr, true);
+          if (waiting_pair->fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
+            fct_update_delta_confidence(
+                waiting_pair->ld1_pc_addr,
+                waiting_pair->fct_delta_slot_idx,
+                true);
+          }
         }
 
       } else {
         // If this load has a trained FCT entry, classify it as LD1 and predict LD2.
         FCT_Row* candidate = fct_lookup(op->inst_info->addr);
+        int delta_slot_idx = candidate ? fct_select_delta_slot(candidate) : -1;
 
-        if (candidate && candidate->confidence_score >= IFUSE_FCT_CONF_THRESHOLD) {
+        if (candidate && delta_slot_idx >= 0) {
           op->ifuse_load_role = LOAD1;
 
+          const FCT_DeltaSlot* delta_slot =
+              &candidate->delta_slots[delta_slot_idx];
           Addr predicted_ld2_effective_addr =
-              candidate->direction ?
-                  op->oracle_info.va + candidate->offset_delta :
-                  op->oracle_info.va - candidate->offset_delta;
+              delta_slot->direction ?
+                  op->oracle_info.va + delta_slot->offset_delta :
+                  op->oracle_info.va - delta_slot->offset_delta;
+
+          if (delta_slot_idx == 0) {
+            STAT_EVENT(proc_id, FCT_DELTA_SLOT0_PREDICTIONS);
+          } else {
+            STAT_EVENT(proc_id, FCT_DELTA_SLOT1_PREDICTIONS);
+          }
 
           // APT records the expected future LD2 PC.
           APT_Entry* inserted_pair = apt_insert_entry(
@@ -301,7 +331,8 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
               current_load_num,
               candidate->ld2_mem_size,
               candidate->ld2_pc_addr,
-              predicted_ld2_effective_addr);
+              predicted_ld2_effective_addr,
+              (unsigned int)delta_slot_idx);
 
           // ACI records the predicted LD2 cache block.
           if (inserted_pair) {

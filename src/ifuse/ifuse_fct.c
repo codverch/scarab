@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Custom headers
 #include "ifuse_fct.h"
@@ -15,17 +16,17 @@
 /**
  * Ideal Fusion Candidate Table (FCT) runtime policy.
  *
- * The ideal FCT models a single LD2 candidate for each LD1 PC. 
- * Retire-time training can insert entries either on the first observation of
- * an LD1-LD2 pair or after the training table validates the pair as frequent.
- * If the same LD1 is later observed with a different LD2, the existing entry
- * is updated with the new pairing.
+ * The ideal FCT models one LD2 candidate and up to two offset deltas for each
+ * LD1 PC. Retire-time training can insert entries either on the first
+ * observation of an LD1-LD2 pair or after the training table validates the
+ * pair as frequent. If the same LD1 is later observed with a different LD2,
+ * the existing entry is updated with the new pairing.
  *
  * Simulator state is maintained in a large open-addressed hash table with
  * 2^IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS entries.
  */
 
-static FCT_Row* fct_rows = NULL; // Software backing rows for the ideal FCT
+static FCT_Row* fct_rows = NULL;
 static size_t   fct_num_hash_table_rows = 0;
 static bool     fct_is_initialized = false;
 
@@ -46,12 +47,6 @@ void fct_init(void) {
     training_table_init();
 }
 
-/**
- * Returns the first software hash-table slot to probe for ld1_pc_addr.
- *
- * The ideal FCT is keyed by the full LD1 PC. This hash is only for simulator
- * lookup speed; it is not a modeled hardware index.
- */
 static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
     uint64_t h = (uint64_t)ld1_pc_addr;
     h ^= h >> 33;
@@ -60,21 +55,10 @@ static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
     return (size_t)(h & row_index_mask);
 }
 
-/**
- * Returns the configured FCT confidence cap.
- *
- * The runtime policy treats the prediction threshold as the maximum useful
- * confidence. A row inserted at confidence 100 should not grow to 500 and keep
- * predicting through many penalties; once it reaches the prediction threshold,
- * it is fully trusted until a misprediction lowers it.
- */
 static unsigned int fct_max_confidence_score(void) {
     return IFUSE_FCT_CONF_THRESHOLD;
 }
 
-/**
- * Returns the confidence score after applying the configured confidence cap.
- */
 static unsigned int fct_saturating_confidence_score(
     unsigned int confidence_score) {
     const unsigned int max_confidence_score = fct_max_confidence_score();
@@ -82,41 +66,164 @@ static unsigned int fct_saturating_confidence_score(
         max_confidence_score : confidence_score;
 }
 
-/**
- * Reinforces row without exceeding the configured prediction threshold.
- */
-static void fct_increment_confidence_score(FCT_Row* row) {
-    if (!row) {
+static void fct_clear_delta_slots(FCT_Row* row) {
+    memset(row->delta_slots, 0, sizeof(row->delta_slots));
+}
+
+static void fct_init_delta_slot(FCT_DeltaSlot* slot,
+                                unsigned int offset_delta,
+                                bool direction,
+                                unsigned int confidence_score) {
+    slot->offset_delta       = offset_delta;
+    slot->direction          = direction;
+    slot->confidence_score   = fct_saturating_confidence_score(confidence_score);
+    slot->valid              = true;
+}
+
+static void fct_increment_delta_slot_confidence(FCT_DeltaSlot* slot) {
+    if (!slot || !slot->valid) {
         return;
     }
 
-    row->confidence_score =
-        fct_saturating_confidence_score(row->confidence_score + 1U);
+    slot->confidence_score =
+        fct_saturating_confidence_score(slot->confidence_score + 1U);
 }
 
-static void fct_write_row(FCT_Row* row, Addr ld1_pc_addr, Addr ld2_pc_addr,
-                          Addr ld1_effective_addr, Addr ld2_effective_addr,
-                          unsigned int offset_delta,
-                          bool direction, unsigned int ld2_mem_size,
-                          unsigned int ld1_micro_op_num,
-                          unsigned int ld2_micro_op_num,
-                          unsigned int confidence_score) {
+static int fct_find_delta_slot(const FCT_Row* row,
+                               unsigned int offset_delta,
+                               bool direction) {
+    for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
+        const FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
+        if (slot->valid &&
+            slot->offset_delta == offset_delta &&
+            slot->direction == direction) {
+            return (int)slot_idx;
+        }
+    }
+    return -1;
+}
+
+static int fct_find_empty_delta_slot(const FCT_Row* row) {
+    for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
+        if (!row->delta_slots[slot_idx].valid) {
+            return (int)slot_idx;
+        }
+    }
+    return -1;
+}
+
+static int fct_find_weakest_delta_slot(const FCT_Row* row) {
+    int weakest_slot_idx = -1;
+    unsigned int weakest_confidence = 0;
+
+    for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
+        const FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
+        if (!slot->valid) {
+            continue;
+        }
+        if (weakest_slot_idx < 0 ||
+            slot->confidence_score < weakest_confidence) {
+            weakest_slot_idx = (int)slot_idx;
+            weakest_confidence = slot->confidence_score;
+        }
+    }
+
+    return weakest_slot_idx;
+}
+
+static void fct_write_row_metadata(FCT_Row* row,
+                                   Addr ld1_pc_addr,
+                                   Addr ld2_pc_addr,
+                                   Addr ld1_effective_addr,
+                                   Addr ld2_effective_addr,
+                                   unsigned int ld2_mem_size,
+                                   unsigned int ld1_micro_op_num,
+                                   unsigned int ld2_micro_op_num) {
     row->ld1_pc_addr        = ld1_pc_addr;
     row->ld2_pc_addr        = ld2_pc_addr;
     row->ld1_effective_addr = ld1_effective_addr;
     row->ld2_effective_addr = ld2_effective_addr;
-    row->offset_delta       = offset_delta;
-    row->direction          = direction;
     row->ld2_mem_size       = ld2_mem_size;
     row->ld1_micro_op_num   = ld1_micro_op_num;
     row->ld2_micro_op_num   = ld2_micro_op_num;
     row->valid              = true;
-    row->confidence_score   = fct_saturating_confidence_score(confidence_score);
 }
 
-/**
- * Returns the row for ld1_pc_addr.
- */
+static void fct_write_new_row_with_delta(FCT_Row* row,
+                                         Addr ld1_pc_addr,
+                                         Addr ld2_pc_addr,
+                                         Addr ld1_effective_addr,
+                                         Addr ld2_effective_addr,
+                                         unsigned int offset_delta,
+                                         bool direction,
+                                         unsigned int ld2_mem_size,
+                                         unsigned int ld1_micro_op_num,
+                                         unsigned int ld2_micro_op_num,
+                                         unsigned int confidence_score) {
+    fct_clear_delta_slots(row);
+    fct_write_row_metadata(row, ld1_pc_addr, ld2_pc_addr,
+                           ld1_effective_addr, ld2_effective_addr,
+                           ld2_mem_size, ld1_micro_op_num, ld2_micro_op_num);
+    fct_init_delta_slot(&row->delta_slots[0], offset_delta, direction,
+                        confidence_score);
+}
+
+static void fct_install_or_reinforce_delta(FCT_Row* row,
+                                           unsigned int offset_delta,
+                                           bool direction,
+                                           unsigned int confidence_score,
+                                           unsigned int proc_id,
+                                           bool track_second_promotion) {
+    int existing_slot_idx =
+        fct_find_delta_slot(row, offset_delta, direction);
+    if (existing_slot_idx >= 0) {
+        fct_increment_delta_slot_confidence(
+            &row->delta_slots[existing_slot_idx]);
+        return;
+    }
+
+    int target_slot_idx = fct_find_empty_delta_slot(row);
+    if (target_slot_idx < 0) {
+        target_slot_idx = fct_find_weakest_delta_slot(row);
+        if (target_slot_idx < 0) {
+            return;
+        }
+        STAT_EVENT(proc_id, FCT_DELTA_SLOT_REPLACEMENTS);
+    } else if (target_slot_idx == 1 && track_second_promotion) {
+        STAT_EVENT(proc_id, FCT_SECOND_DELTA_PROMOTIONS);
+    }
+
+    fct_init_delta_slot(&row->delta_slots[target_slot_idx],
+                        offset_delta, direction, confidence_score);
+}
+
+int fct_select_delta_slot(const FCT_Row* row) {
+    if (!row || !row->valid) {
+        return -1;
+    }
+
+    int best_slot_idx = -1;
+    unsigned int best_confidence = 0;
+
+    for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
+        const FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
+        if (!slot->valid ||
+            slot->confidence_score < IFUSE_FCT_CONF_THRESHOLD) {
+            continue;
+        }
+
+        if (best_slot_idx < 0 ||
+            slot->confidence_score > best_confidence ||
+            (slot->confidence_score == best_confidence &&
+             slot_idx < (unsigned int)best_slot_idx)) {
+            best_slot_idx = (int)slot_idx;
+            best_confidence = slot->confidence_score;
+        }
+    }
+
+    return best_slot_idx;
+}
+
 static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
     if (!fct_rows || fct_num_hash_table_rows == 0U) {
         return NULL;
@@ -139,9 +246,6 @@ static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
     return NULL;
 }
 
-/**
- * Returns the first empty backing row on ld1_pc_addr's probe chain.
- */
 static FCT_Row* fct_find_empty_row(Addr ld1_pc_addr) {
     if (!fct_rows || fct_num_hash_table_rows == 0U) {
         return NULL;
@@ -161,9 +265,6 @@ static FCT_Row* fct_find_empty_row(Addr ld1_pc_addr) {
     return NULL;
 }
 
-/**
- * Returns the FCT row for ld1_pc_addr, allocating a new ideal row if needed.
- */
 static FCT_Row* fct_allocate_row_for_load1_pc(Addr ld1_pc_addr) {
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
     if (row) {
@@ -187,8 +288,9 @@ FCT_Row* fct_lookup(Addr ld1_pc_addr) {
     return fct_lookup_row(ld1_pc_addr);
 }
 
-void fct_update_confidence(Addr ld1_pc_addr, bool prediction_correct) {
-    if (!fct_is_initialized) {
+void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
+                                 bool prediction_correct) {
+    if (!fct_is_initialized || slot_idx >= FCT_NUM_DELTA_SLOTS) {
         return;
     }
 
@@ -197,15 +299,20 @@ void fct_update_confidence(Addr ld1_pc_addr, bool prediction_correct) {
         return;
     }
 
-    if (prediction_correct) {
-        fct_increment_confidence_score(row);
+    FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
+    if (!slot->valid) {
         return;
     }
 
-    const unsigned int confidence_penalty =
-        IFUSE_FCT_MISPRED_CONF_PENALTY;
-    row->confidence_score = (row->confidence_score <= confidence_penalty) ?
-        0 : row->confidence_score - confidence_penalty;
+    if (prediction_correct) {
+        fct_increment_delta_slot_confidence(slot);
+        return;
+    }
+
+    const unsigned int confidence_penalty = IFUSE_FCT_MISPRED_CONF_PENALTY;
+    slot->confidence_score =
+        (slot->confidence_score <= confidence_penalty) ?
+        0U : slot->confidence_score - confidence_penalty;
 }
 
 Flag fct_has_load1_pc_entry(Addr ld1_pc_addr) {
@@ -236,28 +343,29 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
             return;
         }
 
-        // First observations create a new row with low confidence; repeated
-        // observations or training-table promotion make it predictive.
         row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
-        fct_write_row(row, ld1_pc_addr, ld2_pc_addr, ld1_effective_addr,
-                      ld2_effective_addr, offset_delta, direction, ld2_mem_size,
-                      ld1_micro_op_num, ld2_micro_op_num,
-                      IFUSE_FCT_INITIAL_CONF);
+        fct_write_new_row_with_delta(row, ld1_pc_addr, ld2_pc_addr,
+                                     ld1_effective_addr, ld2_effective_addr,
+                                     offset_delta, direction, ld2_mem_size,
+                                     ld1_micro_op_num, ld2_micro_op_num,
+                                     IFUSE_FCT_INITIAL_CONF);
         return;
     }
 
-    if (row->ld2_pc_addr == ld2_pc_addr) {
-        // Reinforce a stable LD1->LD2 candidate.
-        fct_increment_confidence_score(row);
+    if (row->ld2_pc_addr == ld2_pc_addr &&
+        row->ld2_mem_size == ld2_mem_size) {
+        fct_install_or_reinforce_delta(row, offset_delta, direction,
+                                       IFUSE_FCT_INITIAL_CONF, proc_id,
+                                       false);
         return;
     }
 
-    // Preserve the one-LD2-per-LD1 rule by replacing the older candidate.
     STAT_EVENT(proc_id, FCT_LD2_REPLACEMENTS);
-    fct_write_row(row, ld1_pc_addr, ld2_pc_addr, ld1_effective_addr,
-                  ld2_effective_addr, offset_delta, direction, ld2_mem_size,
-                  ld1_micro_op_num, ld2_micro_op_num,
-                  IFUSE_FCT_INITIAL_CONF);
+    fct_write_new_row_with_delta(row, ld1_pc_addr, ld2_pc_addr,
+                                 ld1_effective_addr, ld2_effective_addr,
+                                 offset_delta, direction, ld2_mem_size,
+                                 ld1_micro_op_num, ld2_micro_op_num,
+                                 IFUSE_FCT_INITIAL_CONF);
 }
 
 void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
@@ -270,13 +378,16 @@ void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
 
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
     if (!row || row->ld2_pc_addr != ld2_pc_addr ||
-        row->offset_delta != offset_delta ||
-        row->direction != direction ||
         row->ld2_mem_size != ld2_mem_size) {
         return;
     }
 
-    fct_increment_confidence_score(row);
+    int slot_idx = fct_find_delta_slot(row, offset_delta, direction);
+    if (slot_idx < 0) {
+        return;
+    }
+
+    fct_increment_delta_slot_confidence(&row->delta_slots[slot_idx]);
 }
 
 void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
@@ -296,13 +407,27 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
     }
 
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
-    if (row) {
+    if (!row) {
+        row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
+        fct_write_new_row_with_delta(row, ld1_pc_addr, ld2_pc_addr,
+                                     ld1_effective_addr, ld2_effective_addr,
+                                     offset_delta, direction, ld2_mem_size,
+                                     ld1_micro_op_num, ld2_micro_op_num,
+                                     IFUSE_FCT_INITIAL_CONF);
         return;
     }
 
-    row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
-    fct_write_row(row, ld1_pc_addr, ld2_pc_addr, ld1_effective_addr,
-                  ld2_effective_addr, offset_delta, direction, ld2_mem_size,
-                  ld1_micro_op_num, ld2_micro_op_num,
-                  IFUSE_FCT_INITIAL_CONF);
+    if (row->ld2_pc_addr != ld2_pc_addr ||
+        row->ld2_mem_size != ld2_mem_size) {
+        STAT_EVENT(proc_id, FCT_LD2_REPLACEMENTS);
+        fct_write_new_row_with_delta(row, ld1_pc_addr, ld2_pc_addr,
+                                     ld1_effective_addr, ld2_effective_addr,
+                                     offset_delta, direction, ld2_mem_size,
+                                     ld1_micro_op_num, ld2_micro_op_num,
+                                     IFUSE_FCT_INITIAL_CONF);
+        return;
+    }
+
+    fct_install_or_reinforce_delta(row, offset_delta, direction,
+                                   IFUSE_FCT_INITIAL_CONF, proc_id, true);
 }

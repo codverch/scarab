@@ -4,6 +4,7 @@
 
 // Custom headers
 #include "globals/global_types.h"
+#include "ifuse_fct.h"
 
 #ifndef IFUSE_APT_H
 #define IFUSE_APT_H
@@ -27,6 +28,7 @@ typedef struct APT_Entry {
     unsigned int predicted_ld2_memory_access_size;
 
     // Bookkeeping
+    unsigned int fct_delta_slot_idx;
     bool         valid;
     bool         matched;
     uint64_t     timestamp;
@@ -63,6 +65,7 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr);
  * @param predicted_ld2_memory_access_size The predicted LD2 access size.
  * @param ld2_pc_addr The predicted LD2 PC address.
  * @param predicted_ld2_effective_addr The predicted LD2 effective address.
+ * @param fct_delta_slot_idx The FCT delta slot used for this prediction.
  * @return The inserted APT entry, or NULL if insertion fails.
  */
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
@@ -71,7 +74,8 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             uint64_t ld1_load_num,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
-                            Addr predicted_ld2_effective_addr);
+                            Addr predicted_ld2_effective_addr,
+                            unsigned int fct_delta_slot_idx);
 
 /**
  * Removes the entry for a dynamic LD1 after rename-stage bookkeeping completes.

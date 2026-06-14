@@ -9,6 +9,9 @@
 #ifndef IFUSE_FCT_H
 #define IFUSE_FCT_H
 
+#define FCT_NUM_DELTA_SLOTS 2
+#define FCT_INVALID_DELTA_SLOT_IDX 0xFFFFFFFFU
+
 /**
  * Fusion Candidate Table (FCT)
  * ============================
@@ -17,13 +20,21 @@
  * runtime structure and serves as the baseline prior to introducing realistic
  * capacity constraints.
  *
- * The current runtime policy inserts an entry on the first retired observation
- * of an LD1-LD2 pair. If the same LD1 is later observed with a different LD2,
- * the existing entry is updated immediately.
+ * Each LD1 row stores up to two cache-line offset deltas for the same LD2 PC.
+ * Fetch selects the delta slot with the highest confidence that meets the
+ * prediction threshold.
  */
 
- /**
- * One FCT row contains one LD2 candidate and metadata for a single LD1 PC.
+typedef struct FCT_DeltaSlot {
+    unsigned int offset_delta;
+    bool         direction;
+    unsigned int confidence_score;
+    bool         valid;
+} FCT_DeltaSlot;
+
+/**
+ * One FCT row contains one LD2 candidate and up to two offset deltas for a
+ * single LD1 PC.
  */
 typedef struct FCT_Row {
     // Load identification
@@ -33,7 +44,6 @@ typedef struct FCT_Row {
     // Memory access information
     Addr         ld1_effective_addr;
     Addr         ld2_effective_addr;
-    unsigned int offset_delta;
     unsigned int ld2_mem_size;
 
     // Execution context
@@ -41,9 +51,8 @@ typedef struct FCT_Row {
     unsigned int ld2_micro_op_num;
 
     // Prediction metadata
-    bool         direction;
-    bool         valid;
-    unsigned int confidence_score;
+    bool              valid;
+    FCT_DeltaSlot     delta_slots[FCT_NUM_DELTA_SLOTS];
 } FCT_Row;
 
 void fct_init(void);
@@ -57,12 +66,23 @@ void fct_init(void);
 FCT_Row* fct_lookup(Addr ld1_pc_addr);
 
 /**
- * Updates the confidence score after a frontend prediction resolves.
+ * Returns the delta slot index with the highest confidence that meets the
+ * prediction threshold. Tie-break: lower slot index (primary slot 0).
+ *
+ * @return A slot index in [0, FCT_NUM_DELTA_SLOTS), or -1 if none qualify.
+ */
+int fct_select_delta_slot(const FCT_Row* row);
+
+/**
+ * Updates the confidence score for one delta slot after a frontend prediction
+ * resolves.
  *
  * @param ld1_pc_addr The PC of the predicted first load.
+ * @param slot_idx The delta slot used for the prediction.
  * @param prediction_correct TRUE if the fused prediction was correct.
  */
-void fct_update_confidence(Addr ld1_pc_addr, bool prediction_correct);
+void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
+                                 bool prediction_correct);
 
 /**
  * TRUE if the FCT already holds a row for this load1 PC.
@@ -117,9 +137,9 @@ void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
 /**
  * Promotes a training-table validated LD1->LD2 candidate into the FCT.
  *
- * This dynamic-training path is sticky by LD1 PC: if the FCT already has a row
- * for ld1_pc_addr, the promotion is skipped. Later ordinary retire observations
- * can still reinforce the installed exact pair.
+ * If the FCT already has a row for ld1_pc_addr with the same LD2 PC, a new
+ * offset delta is installed in the second slot or replaces the weaker slot.
+ * A different LD2 PC replaces the entire row.
  *
  * @param ld1_pc_addr The PC of the retired first load.
  * @param ld2_pc_addr The PC of the retired second load candidate.

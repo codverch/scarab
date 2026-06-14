@@ -236,7 +236,8 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             uint64_t ld1_load_num,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
-                            Addr predicted_ld2_effective_addr) {
+                            Addr predicted_ld2_effective_addr,
+                            unsigned int fct_delta_slot_idx) {
     if (!apt_initialized) {
         apt_init();
     }
@@ -259,6 +260,7 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
     node->entry.ld2_physical_reg_id              = 0xFFFF;
     node->entry.predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
     node->entry.predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
+    node->entry.fct_delta_slot_idx               = fct_delta_slot_idx;
     node->entry.valid                            = true;
     node->entry.matched                          = false;
     node->entry.timestamp                        = ++apt_next_timestamp;
