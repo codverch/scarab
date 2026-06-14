@@ -21,9 +21,9 @@
  * If the same LD1 is later observed with a different LD2, the existing entry
  * is updated with the new pairing.
  *
- * Realistic mode uses a set-associative table keyed by LD1 PC, the low bits
- * of the folded LD1 PC select the set, and the remaining LD1 tag bits are
- * compared across the ways, with a 7-bit tree PLRU replacement policy per set.
+ * Realistic mode uses a set-associative table keyed by LD1 PC: a lightweight
+ * XOR-rotate fold of the folded LD1 PC selects the set, the full folded LD1 PC
+ * is compared as the tag across the ways, with tree PLRU replacement per set.
  */
 
 #define FCT_PC_BITS 48U
@@ -35,10 +35,148 @@ static size_t     fct_num_hash_table_rows = 0;
 static unsigned int fct_num_sets = 0;
 static unsigned int fct_num_ways = 0;
 static unsigned int fct_num_entries = 0;
-static unsigned int fct_set_index_bits = 0;
 static bool       fct_is_initialized = false;
 static uint64_t   fct_live_row_count = 0;
 static uint64_t   fct_live_row_peak = 0;
+static unsigned int* fct_set_peak_live = NULL;
+static unsigned int* fct_set_evictions = NULL;
+static bool*         fct_set_ever_full = NULL;
+static bool*         fct_set_had_eviction = NULL;
+static unsigned int  fct_global_set_peak_live = 0;
+static unsigned int  fct_hot_set_count = 0;
+static unsigned int  fct_conflict_set_count = 0;
+static bool          fct_set_stats_registered = false;
+
+static FCT_Row* fct_row_at(unsigned int set_idx, unsigned int way);
+
+static unsigned int fct_get_set_live(unsigned int set_idx) {
+    unsigned int live = 0U;
+
+    for (unsigned int way = 0; way < fct_num_ways; way++) {
+        if (fct_row_at(set_idx, way)->valid) {
+            live++;
+        }
+    }
+
+    return live;
+}
+
+static void fct_update_set_stats(unsigned int set_idx) {
+    if (!fct_set_peak_live || set_idx >= fct_num_sets) {
+        return;
+    }
+
+    unsigned int live = fct_get_set_live(set_idx);
+
+    if (live > fct_set_peak_live[set_idx]) {
+        fct_set_peak_live[set_idx] = live;
+    }
+
+    if (live > fct_global_set_peak_live) {
+        INC_STAT_EVENT(0, FCT_SET_PEAK_LIVE,
+                       live - fct_global_set_peak_live);
+        fct_global_set_peak_live = live;
+    }
+
+    if (live >= fct_num_ways && !fct_set_ever_full[set_idx]) {
+        fct_set_ever_full[set_idx] = true;
+        fct_hot_set_count++;
+        STAT_EVENT(0, FCT_HOT_SETS);
+    }
+}
+
+static void fct_note_set_eviction(unsigned int set_idx) {
+    if (!fct_set_evictions || set_idx >= fct_num_sets) {
+        return;
+    }
+
+    fct_set_evictions[set_idx]++;
+
+    if (!fct_set_had_eviction[set_idx]) {
+        fct_set_had_eviction[set_idx] = true;
+        fct_conflict_set_count++;
+        STAT_EVENT(0, FCT_CONFLICT_SETS);
+    }
+}
+
+static void fct_set_stats_atexit(void) {
+    fct_dump_set_stats();
+}
+
+static void fct_init_set_stats(void) {
+    fct_set_peak_live =
+        (unsigned int*)calloc(fct_num_sets, sizeof(unsigned int));
+    fct_set_evictions =
+        (unsigned int*)calloc(fct_num_sets, sizeof(unsigned int));
+    fct_set_ever_full = (bool*)calloc(fct_num_sets, sizeof(bool));
+    fct_set_had_eviction = (bool*)calloc(fct_num_sets, sizeof(bool));
+
+    if (!fct_set_peak_live || !fct_set_evictions || !fct_set_ever_full ||
+        !fct_set_had_eviction) {
+        fprintf(stderr, "FCT: calloc failed for %u set stat vectors\n",
+                fct_num_sets);
+        exit(1);
+    }
+
+    if (!fct_set_stats_registered) {
+        atexit(fct_set_stats_atexit);
+        fct_set_stats_registered = true;
+    }
+}
+
+void fct_dump_set_stats(void) {
+    if (!IFUSE_REALISTIC_FCT || !fct_set_peak_live || fct_num_sets == 0U) {
+        return;
+    }
+
+    FILE* fp = fopen("ifuse_fct_set_histo.out", "w");
+    if (!fp) {
+        fprintf(stderr, "FCT: could not write ifuse_fct_set_histo.out\n");
+        return;
+    }
+
+    unsigned int sets_with_evictions = 0U;
+    unsigned int top_peak = 0U;
+    unsigned int top_evictions = 0U;
+    unsigned int top_evict_set = 0U;
+
+    for (unsigned int set_idx = 0; set_idx < fct_num_sets; set_idx++) {
+        if (fct_set_evictions[set_idx] > 0U) {
+            sets_with_evictions++;
+        }
+        if (fct_set_peak_live[set_idx] > top_peak) {
+            top_peak = fct_set_peak_live[set_idx];
+        }
+        if (fct_set_evictions[set_idx] > top_evictions) {
+            top_evictions = fct_set_evictions[set_idx];
+            top_evict_set = set_idx;
+        }
+    }
+
+    fprintf(fp, "# IFuse FCT per-set stats (realistic mode)\n");
+    fprintf(fp, "# sets=%u ways=%u entries=%u global_peak_live=%llu\n",
+            fct_num_sets, fct_num_ways, fct_num_entries,
+            (unsigned long long)fct_live_row_peak);
+    fprintf(fp, "# set_peak_live=%u hot_sets=%u conflict_sets=%u\n",
+            fct_global_set_peak_live, fct_hot_set_count,
+            fct_conflict_set_count);
+    fprintf(fp, "# sets_with_evictions=%u top_evict_set=%u top_evictions=%u\n",
+            sets_with_evictions, top_evict_set, top_evictions);
+    fprintf(fp, "# columns: set_idx peak_live evictions ever_full\n");
+
+    for (unsigned int set_idx = 0; set_idx < fct_num_sets; set_idx++) {
+        if (fct_set_peak_live[set_idx] == 0U &&
+            fct_set_evictions[set_idx] == 0U) {
+            continue;
+        }
+
+        fprintf(fp, "%u %u %u %u\n", set_idx,
+                fct_set_peak_live[set_idx], fct_set_evictions[set_idx],
+                fct_set_ever_full[set_idx] ? 1U : 0U);
+    }
+
+    fclose(fp);
+}
 
 static void fct_note_new_live_row(unsigned int proc_id) {
     fct_live_row_count++;
@@ -55,25 +193,51 @@ static void fct_note_live_remove(void) {
     }
 }
 
-static unsigned int fct_log2_u32(unsigned int value) {
-    unsigned int bits = 0U;
-
-    while (value > 1U) {
-        value >>= 1U;
-        bits++;
-    }
-
-    return bits;
-}
-
 static FCT_Row* fct_row_at(unsigned int set_idx, unsigned int way) {
     return &fct_rows[(set_idx * fct_num_ways) + way];
 }
 
 /**
+ * Marks one way as most-recently used in a 4-way tree PLRU set.
+ */
+static void fct_plru_touch_4way(unsigned int set_idx, unsigned int way) {
+    uint8_t state = fct_plru[set_idx] & 0x07U;
+
+    switch (way) {
+        case 0U:
+            state |= 0x03U;
+            break;
+        case 1U:
+            state |= 0x01U;
+            state &= (uint8_t)~0x02U;
+            break;
+        case 2U:
+            state |= 0x04U;
+            state &= (uint8_t)~0x01U;
+            break;
+        case 3U:
+            state &= (uint8_t)~0x05U;
+            break;
+        default:
+            return;
+    }
+
+    fct_plru[set_idx] = state;
+}
+
+static unsigned int fct_plru_victim_4way(unsigned int set_idx) {
+    uint8_t state = fct_plru[set_idx] & 0x07U;
+
+    if ((state & 0x1U) != 0U) {
+        return ((state & 0x2U) != 0U) ? 0U : 1U;
+    }
+    return ((state & 0x4U) != 0U) ? 2U : 3U;
+}
+
+/**
  * Marks one way as most-recently used in an 8-way tree PLRU set.
  */
-static void fct_plru_touch(unsigned int set_idx, unsigned int way) {
+static void fct_plru_touch_8way(unsigned int set_idx, unsigned int way) {
     uint8_t state = fct_plru[set_idx] & 0x7FU;
 
     switch (way) {
@@ -114,7 +278,7 @@ static void fct_plru_touch(unsigned int set_idx, unsigned int way) {
     fct_plru[set_idx] = state;
 }
 
-static unsigned int fct_plru_victim(unsigned int set_idx) {
+static unsigned int fct_plru_victim_8way(unsigned int set_idx) {
     uint8_t state = fct_plru[set_idx] & 0x7FU;
 
     if ((state & 0x1U) != 0U) {
@@ -127,6 +291,21 @@ static unsigned int fct_plru_victim(unsigned int set_idx) {
         return ((state & 0x20U) != 0U) ? 4U : 5U;
     }
     return ((state & 0x40U) != 0U) ? 6U : 7U;
+}
+
+static void fct_plru_touch(unsigned int set_idx, unsigned int way) {
+    if (fct_num_ways == 4U) {
+        fct_plru_touch_4way(set_idx, way);
+        return;
+    }
+    fct_plru_touch_8way(set_idx, way);
+}
+
+static unsigned int fct_plru_victim(unsigned int set_idx) {
+    if (fct_num_ways == 4U) {
+        return fct_plru_victim_4way(set_idx);
+    }
+    return fct_plru_victim_8way(set_idx);
 }
 
 void fct_init(void) {
@@ -147,10 +326,10 @@ void fct_init(void) {
                     fct_num_sets);
             exit(1);
         }
-        if (fct_num_ways != 8U) {
+        if (fct_num_ways != 4U && fct_num_ways != 8U) {
             fprintf(stderr,
                     "FCT: realistic set-associative mode requires "
-                    "ifuse_fct_ways=8 (got %u)\n",
+                    "ifuse_fct_ways=4 or 8 (got %u)\n",
                     fct_num_ways);
             exit(1);
         }
@@ -169,10 +348,7 @@ void fct_init(void) {
                     IFUSE_FCT_EVICT_POLICY);
             exit(1);
         }
-
-        fct_set_index_bits = fct_log2_u32(fct_num_sets);
     } else {
-        fct_set_index_bits = 0U;
         fct_num_hash_table_rows = 1U << IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS;
         fct_num_sets = 0U;
         fct_num_ways = 0U;
@@ -193,10 +369,14 @@ void fct_init(void) {
                     fct_num_sets);
             exit(1);
         }
+        fct_init_set_stats();
     }
 
     fct_live_row_count = 0;
     fct_live_row_peak  = 0;
+    fct_global_set_peak_live = 0;
+    fct_hot_set_count = 0;
+    fct_conflict_set_count = 0;
     fct_is_initialized = true;
 
     training_table_init();
@@ -206,12 +386,28 @@ static uint64_t fct_fold_pc(Addr pc_addr) {
     return (uint64_t)pc_addr & FCT_PC_MASK;
 }
 
+/**
+ * Hardware-friendly set index: XOR-rotate the folded LD1 PC, then fold
+ * upper hash bits back in without any multiply.
+ */
+static uint64_t fct_xor_rotate_fold_set_key(Addr ld1_pc_addr) {
+    uint64_t fold = fct_fold_pc(ld1_pc_addr);
+    uint64_t mix  = fold ^ (fold << 17U) ^ (fold >> 15U);
+
+    mix ^= mix >> 32U;
+    mix ^= mix >> 16U;
+    mix ^= mix >> 8U;
+
+    return mix;
+}
+
 static unsigned int fct_get_set_index(Addr ld1_pc_addr) {
-    return (unsigned int)(fct_fold_pc(ld1_pc_addr) & (fct_num_sets - 1U));
+    return (unsigned int)(fct_xor_rotate_fold_set_key(ld1_pc_addr) &
+                          (fct_num_sets - 1U));
 }
 
 static uint64_t fct_get_ld1_tag(Addr ld1_pc_addr) {
-    return fct_fold_pc(ld1_pc_addr) >> fct_set_index_bits;
+    return fct_fold_pc(ld1_pc_addr);
 }
 
 /**
@@ -354,6 +550,7 @@ static FCT_Row* fct_allocate_row_realistic(Addr ld1_pc_addr,
         FCT_Row* row = fct_row_at(set_idx, invalid_way);
         fct_plru_touch(set_idx, invalid_way);
         fct_note_new_live_row(proc_id);
+        fct_update_set_stats(set_idx);
         return row;
     }
 
@@ -361,8 +558,10 @@ static FCT_Row* fct_allocate_row_realistic(Addr ld1_pc_addr,
     FCT_Row* victim = fct_row_at(set_idx, victim_way);
     victim->valid = false;
     fct_note_live_remove();
+    fct_note_set_eviction(set_idx);
     STAT_EVENT(proc_id, FCT_EVICTED);
     fct_plru_touch(set_idx, victim_way);
+    fct_update_set_stats(set_idx);
     return victim;
 }
 

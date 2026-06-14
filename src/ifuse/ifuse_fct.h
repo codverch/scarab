@@ -14,9 +14,9 @@
  * ============================
  * The FCT predicts load fusion candidates by mapping each LD1 PC to a
  * corresponding LD2 candidate. Ideal mode uses a large open-addressed hash
- * table. Realistic mode uses a set-associative table keyed by LD1 PC: the low
- * bits of the folded LD1 PC select the set, and the remaining LD1 tag bits are
- * compared across the ways, with tree PLRU replacement per set.
+ * table. Realistic mode uses a set-associative table keyed by LD1 PC: a
+ * XOR-rotate fold of the folded LD1 PC selects the set, the full folded LD1 PC
+ * is compared as the tag across the ways, with tree PLRU replacement per set.
  *
  * The current runtime policy inserts an entry on the first retired observation
  * of an LD1-LD2 pair. If the same LD1 is later observed with a different LD2,
@@ -144,5 +144,11 @@ Flag fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                        unsigned int ld1_micro_op_num,
                                        unsigned int ld2_micro_op_num,
                                        unsigned int proc_id);
+
+/**
+ * Writes per-set occupancy/eviction histograms for realistic mode.
+ * Called automatically at process exit when realistic mode is enabled.
+ */
+void fct_dump_set_stats(void);
 
 #endif /* IFUSE_FCT_H */
