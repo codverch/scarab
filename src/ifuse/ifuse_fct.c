@@ -29,6 +29,7 @@
 static FCT_Row* fct_rows = NULL;
 static size_t   fct_num_hash_table_rows = 0;
 static bool     fct_is_initialized = false;
+static uint64_t fct_delta_update_timestamp = 0;
 
 void fct_init(void) {
     if (fct_is_initialized) {
@@ -43,6 +44,7 @@ void fct_init(void) {
         exit(1);
     }
     fct_is_initialized = true;
+    fct_delta_update_timestamp = 0;
 
     training_table_init();
 }
@@ -56,7 +58,11 @@ static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
 }
 
 static unsigned int fct_max_confidence_score(void) {
-    return IFUSE_FCT_CONF_THRESHOLD;
+    unsigned int max_confidence_score = IFUSE_FCT_MAX_CONF;
+    if (max_confidence_score < IFUSE_FCT_CONF_THRESHOLD) {
+        max_confidence_score = IFUSE_FCT_CONF_THRESHOLD;
+    }
+    return max_confidence_score;
 }
 
 static unsigned int fct_saturating_confidence_score(
@@ -77,16 +83,22 @@ static void fct_init_delta_slot(FCT_DeltaSlot* slot,
     slot->offset_delta       = offset_delta;
     slot->direction          = direction;
     slot->confidence_score   = fct_saturating_confidence_score(confidence_score);
+    slot->last_correct_timestamp = 0;
     slot->valid              = true;
 }
 
-static void fct_increment_delta_slot_confidence(FCT_DeltaSlot* slot) {
+static void fct_increment_delta_slot_confidence(FCT_DeltaSlot* slot,
+                                                bool mark_correct) {
     if (!slot || !slot->valid) {
         return;
     }
 
     slot->confidence_score =
-        fct_saturating_confidence_score(slot->confidence_score + 1U);
+        fct_saturating_confidence_score(
+            slot->confidence_score + IFUSE_FCT_CORRECT_CONF_REWARD);
+    if (mark_correct) {
+        slot->last_correct_timestamp = ++fct_delta_update_timestamp;
+    }
 }
 
 static int fct_find_delta_slot(const FCT_Row* row,
@@ -122,7 +134,10 @@ static int fct_find_weakest_delta_slot(const FCT_Row* row) {
             continue;
         }
         if (weakest_slot_idx < 0 ||
-            slot->confidence_score < weakest_confidence) {
+            slot->confidence_score < weakest_confidence ||
+            (slot->confidence_score == weakest_confidence &&
+             slot->last_correct_timestamp <
+                 row->delta_slots[weakest_slot_idx].last_correct_timestamp)) {
             weakest_slot_idx = (int)slot_idx;
             weakest_confidence = slot->confidence_score;
         }
@@ -178,7 +193,7 @@ static void fct_install_or_reinforce_delta(FCT_Row* row,
         fct_find_delta_slot(row, offset_delta, direction);
     if (existing_slot_idx >= 0) {
         fct_increment_delta_slot_confidence(
-            &row->delta_slots[existing_slot_idx]);
+            &row->delta_slots[existing_slot_idx], false);
         return;
     }
 
@@ -204,6 +219,7 @@ int fct_select_delta_slot(const FCT_Row* row) {
 
     int best_slot_idx = -1;
     unsigned int best_confidence = 0;
+    uint64_t best_last_correct_timestamp = 0;
 
     for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
         const FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
@@ -215,9 +231,10 @@ int fct_select_delta_slot(const FCT_Row* row) {
         if (best_slot_idx < 0 ||
             slot->confidence_score > best_confidence ||
             (slot->confidence_score == best_confidence &&
-             slot_idx < (unsigned int)best_slot_idx)) {
+             slot->last_correct_timestamp > best_last_correct_timestamp)) {
             best_slot_idx = (int)slot_idx;
             best_confidence = slot->confidence_score;
+            best_last_correct_timestamp = slot->last_correct_timestamp;
         }
     }
 
@@ -305,7 +322,7 @@ void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
     }
 
     if (prediction_correct) {
-        fct_increment_delta_slot_confidence(slot);
+        fct_increment_delta_slot_confidence(slot, true);
         return;
     }
 
@@ -387,7 +404,7 @@ void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
         return;
     }
 
-    fct_increment_delta_slot_confidence(&row->delta_slots[slot_idx]);
+    fct_increment_delta_slot_confidence(&row->delta_slots[slot_idx], false);
 }
 
 void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,

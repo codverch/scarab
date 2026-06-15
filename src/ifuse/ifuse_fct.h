@@ -29,6 +29,7 @@ typedef struct FCT_DeltaSlot {
     unsigned int offset_delta;
     bool         direction;
     unsigned int confidence_score;
+    uint64_t     last_correct_timestamp;
     bool         valid;
 } FCT_DeltaSlot;
 
@@ -67,7 +68,7 @@ FCT_Row* fct_lookup(Addr ld1_pc_addr);
 
 /**
  * Returns the delta slot index with the highest confidence that meets the
- * prediction threshold. Tie-break: lower slot index (primary slot 0).
+ * prediction threshold. Tie-break: most recently correct slot.
  *
  * @return A slot index in [0, FCT_NUM_DELTA_SLOTS), or -1 if none qualify.
  */
