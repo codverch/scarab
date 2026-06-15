@@ -7,6 +7,7 @@
 // Custom headers
 #include "ifuse_fct.h"
 #include "ifuse_ideal_limits.h"
+#include "ifuse_plru.h"
 #include "ifuse_training_table.h"
 #include "../general.param.h"
 #include "../statistics.h"
@@ -345,126 +346,6 @@ static TrainingTableEntry* training_table_entry_at(unsigned int set_idx,
     return &training_table_entries[(set_idx * training_table_num_ways) + way];
 }
 
-/**
- * Marks one way as most-recently used in a 4-way tree PLRU set.
- */
-static void training_table_plru_touch_4way(unsigned int set_idx,
-                                           unsigned int way) {
-    uint8_t state = training_table_plru[set_idx] & 0x07U;
-
-    switch (way) {
-        case 0U:
-            state |= 0x03U; /* bit0=1, bit1=1 */
-            break;
-        case 1U:
-            state |= 0x01U; /* bit0=1, bit1=0 */
-            state &= (uint8_t)~0x02U;
-            break;
-        case 2U:
-            state |= 0x04U; /* bit0=0, bit2=1 */
-            state &= (uint8_t)~0x01U;
-            break;
-        case 3U:
-            state &= (uint8_t)~0x05U; /* bit0=0, bit2=0 */
-            break;
-        default:
-            return;
-    }
-
-    training_table_plru[set_idx] = state;
-}
-
-static unsigned int training_table_plru_victim_4way(unsigned int set_idx) {
-    uint8_t state = training_table_plru[set_idx] & 0x07U;
-
-    if ((state & 0x1U) != 0U) {
-        return ((state & 0x2U) != 0U) ? 0U : 1U;
-    }
-    return ((state & 0x4U) != 0U) ? 2U : 3U;
-}
-
-/**
- * Marks one way as most-recently used in an 8-way tree PLRU set.
- *
- * Tree layout:
- *           bit0
- *          /    \
- *       bit1    bit2
- *      /  \    /  \
- *   bit3 bit4 bit5 bit6
- *   W0 W1 W2 W3 W4 W5 W6 W7
- */
-static void training_table_plru_touch_8way(unsigned int set_idx, unsigned int way) {
-    uint8_t state = training_table_plru[set_idx] & 0x7FU;
-
-    switch (way) {
-        case 0U:
-            state |= 0x0BU; /* bit0=1, bit1=1, bit3=1 */
-            break;
-        case 1U:
-            state |= 0x03U; /* bit0=1, bit1=1 */
-            state &= (uint8_t)~0x08U; /* bit3=0 */
-            break;
-        case 2U:
-            state |= 0x11U; /* bit0=1, bit4=1 */
-            state &= (uint8_t)~0x02U; /* bit1=0 */
-            break;
-        case 3U:
-            state |= 0x01U; /* bit0=1 */
-            state &= (uint8_t)~0x12U; /* bit1=0, bit4=0 */
-            break;
-        case 4U:
-            state |= 0x24U; /* bit2=1, bit5=1 */
-            state &= (uint8_t)~0x01U; /* bit0=0 */
-            break;
-        case 5U:
-            state |= 0x04U; /* bit2=1 */
-            state &= (uint8_t)~0x21U; /* bit0=0, bit5=0 */
-            break;
-        case 6U:
-            state |= 0x40U; /* bit6=1 */
-            state &= (uint8_t)~0x05U; /* bit0=0, bit2=0 */
-            break;
-        case 7U:
-            state &= (uint8_t)~0x45U; /* bit0=0, bit2=0, bit6=0 */
-            break;
-        default:
-            return;
-    }
-
-    training_table_plru[set_idx] = state;
-}
-
-static unsigned int training_table_plru_victim_8way(unsigned int set_idx) {
-    uint8_t state = training_table_plru[set_idx] & 0x7FU;
-
-    if ((state & 0x1U) != 0U) {
-        if ((state & 0x2U) != 0U) {
-            return ((state & 0x8U) != 0U) ? 0U : 1U;
-        }
-        return ((state & 0x10U) != 0U) ? 2U : 3U;
-    }
-    if ((state & 0x4U) != 0U) {
-        return ((state & 0x20U) != 0U) ? 4U : 5U;
-    }
-    return ((state & 0x40U) != 0U) ? 6U : 7U;
-}
-
-static void training_table_plru_touch(unsigned int set_idx, unsigned int way) {
-    if (training_table_num_ways == 4U) {
-        training_table_plru_touch_4way(set_idx, way);
-        return;
-    }
-    training_table_plru_touch_8way(set_idx, way);
-}
-
-static unsigned int training_table_plru_victim(unsigned int set_idx) {
-    if (training_table_num_ways == 4U) {
-        return training_table_plru_victim_4way(set_idx);
-    }
-    return training_table_plru_victim_8way(set_idx);
-}
-
 // Hash-table helpers
 
 /**
@@ -549,7 +430,8 @@ static TrainingTableEntry* training_table_find_entry_realistic(
         if (entry->valid &&
             training_table_tags_match(entry, ld1_tag, ld2_tag, offset_delta,
                                       direction, ld2_memory_access_size)) {
-            training_table_plru_touch(set_idx, way);
+            ifuse_plru_touch(training_table_plru, set_idx, way,
+                             training_table_num_ways);
             return entry;
         }
 
@@ -564,14 +446,17 @@ static TrainingTableEntry* training_table_find_entry_realistic(
         training_table_init_entry_fields_realistic(
             invalid_entry, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
             ld2_memory_access_size);
-        training_table_plru_touch(set_idx, invalid_way);
+        ifuse_plru_touch(training_table_plru, set_idx, invalid_way,
+                         training_table_num_ways);
         STAT_EVENT(0, TRAINING_TABLE_INSERTS);
         training_table_note_live_insert();
         training_table_update_set_stats(set_idx);
         return invalid_entry;
     }
 
-    unsigned int victim_way = training_table_plru_victim(set_idx);
+    unsigned int victim_way =
+        ifuse_plru_victim(training_table_plru, set_idx,
+                          training_table_num_ways);
     TrainingTableEntry* victim = training_table_entry_at(set_idx, victim_way);
     victim->valid = false;
     victim->observation_count = 0;
@@ -582,7 +467,8 @@ static TrainingTableEntry* training_table_find_entry_realistic(
     training_table_init_entry_fields_realistic(
         victim, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
         ld2_memory_access_size);
-    training_table_plru_touch(set_idx, victim_way);
+    ifuse_plru_touch(training_table_plru, set_idx, victim_way,
+                     training_table_num_ways);
     STAT_EVENT(0, TRAINING_TABLE_INSERTS);
     training_table_note_live_insert();
     training_table_update_set_stats(set_idx);

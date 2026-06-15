@@ -6,6 +6,7 @@
 
 // Custom headers
 #include "ifuse_fct.h"
+#include "ifuse_plru.h"
 #include "ifuse_training_table.h"
 #include "../general.param.h"
 #include "../statistics.h"
@@ -197,117 +198,6 @@ static FCT_Row* fct_row_at(unsigned int set_idx, unsigned int way) {
     return &fct_rows[(set_idx * fct_num_ways) + way];
 }
 
-/**
- * Marks one way as most-recently used in a 4-way tree PLRU set.
- */
-static void fct_plru_touch_4way(unsigned int set_idx, unsigned int way) {
-    uint8_t state = fct_plru[set_idx] & 0x07U;
-
-    switch (way) {
-        case 0U:
-            state |= 0x03U;
-            break;
-        case 1U:
-            state |= 0x01U;
-            state &= (uint8_t)~0x02U;
-            break;
-        case 2U:
-            state |= 0x04U;
-            state &= (uint8_t)~0x01U;
-            break;
-        case 3U:
-            state &= (uint8_t)~0x05U;
-            break;
-        default:
-            return;
-    }
-
-    fct_plru[set_idx] = state;
-}
-
-static unsigned int fct_plru_victim_4way(unsigned int set_idx) {
-    uint8_t state = fct_plru[set_idx] & 0x07U;
-
-    if ((state & 0x1U) != 0U) {
-        return ((state & 0x2U) != 0U) ? 0U : 1U;
-    }
-    return ((state & 0x4U) != 0U) ? 2U : 3U;
-}
-
-/**
- * Marks one way as most-recently used in an 8-way tree PLRU set.
- */
-static void fct_plru_touch_8way(unsigned int set_idx, unsigned int way) {
-    uint8_t state = fct_plru[set_idx] & 0x7FU;
-
-    switch (way) {
-        case 0U:
-            state |= 0x0BU;
-            break;
-        case 1U:
-            state |= 0x03U;
-            state &= (uint8_t)~0x08U;
-            break;
-        case 2U:
-            state |= 0x11U;
-            state &= (uint8_t)~0x02U;
-            break;
-        case 3U:
-            state |= 0x01U;
-            state &= (uint8_t)~0x12U;
-            break;
-        case 4U:
-            state |= 0x24U;
-            state &= (uint8_t)~0x01U;
-            break;
-        case 5U:
-            state |= 0x04U;
-            state &= (uint8_t)~0x21U;
-            break;
-        case 6U:
-            state |= 0x40U;
-            state &= (uint8_t)~0x05U;
-            break;
-        case 7U:
-            state &= (uint8_t)~0x45U;
-            break;
-        default:
-            return;
-    }
-
-    fct_plru[set_idx] = state;
-}
-
-static unsigned int fct_plru_victim_8way(unsigned int set_idx) {
-    uint8_t state = fct_plru[set_idx] & 0x7FU;
-
-    if ((state & 0x1U) != 0U) {
-        if ((state & 0x2U) != 0U) {
-            return ((state & 0x8U) != 0U) ? 0U : 1U;
-        }
-        return ((state & 0x10U) != 0U) ? 2U : 3U;
-    }
-    if ((state & 0x4U) != 0U) {
-        return ((state & 0x20U) != 0U) ? 4U : 5U;
-    }
-    return ((state & 0x40U) != 0U) ? 6U : 7U;
-}
-
-static void fct_plru_touch(unsigned int set_idx, unsigned int way) {
-    if (fct_num_ways == 4U) {
-        fct_plru_touch_4way(set_idx, way);
-        return;
-    }
-    fct_plru_touch_8way(set_idx, way);
-}
-
-static unsigned int fct_plru_victim(unsigned int set_idx) {
-    if (fct_num_ways == 4U) {
-        return fct_plru_victim_4way(set_idx);
-    }
-    return fct_plru_victim_8way(set_idx);
-}
-
 void fct_init(void) {
     if (fct_is_initialized) {
         return;
@@ -496,7 +386,7 @@ static FCT_Row* fct_lookup_row_realistic(Addr ld1_pc_addr) {
     for (unsigned int way = 0; way < fct_num_ways; way++) {
         FCT_Row* row = fct_row_at(set_idx, way);
         if (row->valid && row->ld1_tag == ld1_tag) {
-            fct_plru_touch(set_idx, way);
+            ifuse_plru_touch(fct_plru, set_idx, way, fct_num_ways);
             return row;
         }
     }
@@ -548,19 +438,20 @@ static FCT_Row* fct_allocate_row_realistic(Addr ld1_pc_addr,
 
     if (invalid_way < fct_num_ways) {
         FCT_Row* row = fct_row_at(set_idx, invalid_way);
-        fct_plru_touch(set_idx, invalid_way);
+        ifuse_plru_touch(fct_plru, set_idx, invalid_way, fct_num_ways);
         fct_note_new_live_row(proc_id);
         fct_update_set_stats(set_idx);
         return row;
     }
 
-    unsigned int victim_way = fct_plru_victim(set_idx);
+    unsigned int victim_way =
+        ifuse_plru_victim(fct_plru, set_idx, fct_num_ways);
     FCT_Row* victim = fct_row_at(set_idx, victim_way);
     victim->valid = false;
     fct_note_live_remove();
     fct_note_set_eviction(set_idx);
     STAT_EVENT(proc_id, FCT_EVICTED);
-    fct_plru_touch(set_idx, victim_way);
+    ifuse_plru_touch(fct_plru, set_idx, victim_way, fct_num_ways);
     fct_update_set_stats(set_idx);
     return victim;
 }
