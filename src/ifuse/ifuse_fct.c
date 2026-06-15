@@ -93,12 +93,59 @@ static void fct_increment_delta_slot_confidence(FCT_DeltaSlot* slot,
         return;
     }
 
+    if (!mark_correct) {
+        /*
+         * Retire-time observations only bootstrap a slot to the prediction
+         * threshold. They must not keep inflating ranking confidence once the
+         * slot is already eligible, otherwise the first-installed delta (slot
+         * 0) dominates selection even when another delta is more accurate.
+         */
+        if (slot->confidence_score >= IFUSE_FCT_CONF_THRESHOLD) {
+            return;
+        }
+
+        unsigned int new_confidence_score =
+            slot->confidence_score + IFUSE_FCT_CORRECT_CONF_REWARD;
+        if (new_confidence_score > IFUSE_FCT_CONF_THRESHOLD) {
+            new_confidence_score = IFUSE_FCT_CONF_THRESHOLD;
+        }
+        slot->confidence_score = new_confidence_score;
+        return;
+    }
+
     slot->confidence_score =
         fct_saturating_confidence_score(
             slot->confidence_score + IFUSE_FCT_CORRECT_CONF_REWARD);
-    if (mark_correct) {
-        slot->last_correct_timestamp = ++fct_delta_update_timestamp;
+    slot->last_correct_timestamp = ++fct_delta_update_timestamp;
+}
+
+static void fct_offset_delta_from_addresses(Addr ld1_effective_addr,
+                                            Addr ld2_effective_addr,
+                                            unsigned int* offset_delta,
+                                            bool* direction) {
+    unsigned int ld1_offset =
+        (unsigned int)(ld1_effective_addr & 63U);
+    unsigned int ld2_offset =
+        (unsigned int)(ld2_effective_addr & 63U);
+
+    if (ld2_offset >= ld1_offset) {
+        *offset_delta = ld2_offset - ld1_offset;
+        *direction    = true;
+    } else {
+        *offset_delta = ld1_offset - ld2_offset;
+        *direction    = false;
     }
+}
+
+static void fct_penalize_delta_slot_confidence(FCT_DeltaSlot* slot) {
+    if (!slot || !slot->valid) {
+        return;
+    }
+
+    const unsigned int confidence_penalty = IFUSE_FCT_MISPRED_CONF_PENALTY;
+    slot->confidence_score =
+        (slot->confidence_score <= confidence_penalty) ?
+        0U : slot->confidence_score - confidence_penalty;
 }
 
 static int fct_find_delta_slot(const FCT_Row* row,
@@ -326,10 +373,48 @@ void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
         return;
     }
 
-    const unsigned int confidence_penalty = IFUSE_FCT_MISPRED_CONF_PENALTY;
-    slot->confidence_score =
-        (slot->confidence_score <= confidence_penalty) ?
-        0U : slot->confidence_score - confidence_penalty;
+    fct_penalize_delta_slot_confidence(slot);
+}
+
+void fct_update_delta_confidence_on_offset_misprediction(
+    Addr ld1_pc_addr,
+    unsigned int mispredicted_slot_idx,
+    Addr ld1_effective_addr,
+    Addr ld2_effective_addr) {
+    if (!fct_is_initialized ||
+        mispredicted_slot_idx >= FCT_NUM_DELTA_SLOTS) {
+        return;
+    }
+
+    FCT_Row* row = fct_lookup_row(ld1_pc_addr);
+    if (!row) {
+        return;
+    }
+
+    FCT_DeltaSlot* mispredicted_slot =
+        &row->delta_slots[mispredicted_slot_idx];
+    if (mispredicted_slot->valid) {
+        fct_penalize_delta_slot_confidence(mispredicted_slot);
+    }
+
+    unsigned int observed_offset_delta = 0;
+    bool         observed_direction    = false;
+    fct_offset_delta_from_addresses(ld1_effective_addr, ld2_effective_addr,
+                                    &observed_offset_delta,
+                                    &observed_direction);
+    if (observed_offset_delta > 63U) {
+        return;
+    }
+
+    int observed_slot_idx = fct_find_delta_slot(
+        row, observed_offset_delta, observed_direction);
+    if (observed_slot_idx < 0 ||
+        (unsigned int)observed_slot_idx == mispredicted_slot_idx) {
+        return;
+    }
+
+    fct_increment_delta_slot_confidence(
+        &row->delta_slots[observed_slot_idx], true);
 }
 
 Flag fct_has_load1_pc_entry(Addr ld1_pc_addr) {

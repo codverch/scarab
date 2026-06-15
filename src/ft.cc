@@ -287,10 +287,19 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
                 proc_id);
           }
           if (waiting_pair->fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
-            fct_update_delta_confidence(
-                waiting_pair->ld1_pc_addr,
-                waiting_pair->fct_delta_slot_idx,
-                false);
+            if (op->oracle_info.va !=
+                waiting_pair->predicted_ld2_effective_addr) {
+              fct_update_delta_confidence_on_offset_misprediction(
+                  waiting_pair->ld1_pc_addr,
+                  waiting_pair->fct_delta_slot_idx,
+                  waiting_pair->ld1_effective_addr,
+                  op->oracle_info.va);
+            } else {
+              fct_update_delta_confidence(
+                  waiting_pair->ld1_pc_addr,
+                  waiting_pair->fct_delta_slot_idx,
+                  false);
+            }
           }
         } else {
           // Reinforce accurate LD1-to-LD2 predictions.

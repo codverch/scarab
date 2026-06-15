@@ -21,8 +21,10 @@
  * capacity constraints.
  *
  * Each LD1 row stores up to two cache-line offset deltas for the same LD2 PC.
- * Fetch selects the delta slot with the highest confidence that meets the
- * prediction threshold.
+ * Fetch selects the delta slot with the highest prediction-validated
+ * confidence that meets the prediction threshold. Retire-time observations
+ * only bootstrap a slot to the threshold; frontend outcomes decide which
+ * eligible delta is chosen when multiple candidates exist.
  */
 
 typedef struct FCT_DeltaSlot {
@@ -84,6 +86,24 @@ int fct_select_delta_slot(const FCT_Row* row);
  */
 void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
                                  bool prediction_correct);
+
+/**
+ * Applies offset-delta-specific confidence feedback after a frontend mispred.
+ *
+ * The mispredicted slot is penalized. If the FCT already tracks the observed
+ * offset delta in another slot, that slot is reinforced and marked as the most
+ * recently correct choice for future selection.
+ *
+ * @param ld1_pc_addr The PC of the predicted first load.
+ * @param mispredicted_slot_idx The delta slot used for the failed prediction.
+ * @param ld1_effective_addr The effective address produced by LD1.
+ * @param ld2_effective_addr The effective address produced by LD2.
+ */
+void fct_update_delta_confidence_on_offset_misprediction(
+    Addr ld1_pc_addr,
+    unsigned int mispredicted_slot_idx,
+    Addr ld1_effective_addr,
+    Addr ld2_effective_addr);
 
 /**
  * TRUE if the FCT already holds a row for this load1 PC.
