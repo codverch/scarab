@@ -8,6 +8,7 @@
 #include "ifuse_fct.h"
 #include "ifuse_ideal_limits.h"
 #include "ifuse_plru.h"
+#include "ifuse_set_stats.h"
 #include "ifuse_training_table.h"
 #include "../general.param.h"
 #include "../statistics.h"
@@ -49,13 +50,7 @@ static unsigned int        training_table_num_sets    = 0;
 static unsigned int        training_table_num_ways    = 0;
 static uint64_t            training_table_live_count  = 0;
 static uint64_t            training_table_live_peak   = 0;
-static unsigned int*       training_table_set_peak_live = NULL;
-static unsigned int*       training_table_set_evictions = NULL;
-static bool*               training_table_set_ever_full = NULL;
-static bool*               training_table_set_had_eviction = NULL;
-static unsigned int        training_table_global_set_peak_live = 0;
-static unsigned int        training_table_hot_set_count = 0;
-static unsigned int        training_table_conflict_set_count = 0;
+static IfuseSetStats       training_table_set_stats;
 static bool                training_table_set_stats_registered = false;
 
 static TrainingTableEntry* training_table_entry_at(unsigned int set_idx,
@@ -89,42 +84,12 @@ static unsigned int training_table_get_set_live(unsigned int set_idx) {
 }
 
 static void training_table_update_set_stats(unsigned int set_idx) {
-    if (!training_table_set_peak_live || set_idx >= training_table_num_sets) {
-        return;
-    }
-
-    unsigned int live = training_table_get_set_live(set_idx);
-
-    if (live > training_table_set_peak_live[set_idx]) {
-        training_table_set_peak_live[set_idx] = live;
-    }
-
-    if (live > training_table_global_set_peak_live) {
-        INC_STAT_EVENT(0, TRAINING_TABLE_SET_PEAK_LIVE,
-                       live - training_table_global_set_peak_live);
-        training_table_global_set_peak_live = live;
-    }
-
-    if (live >= training_table_num_ways &&
-        !training_table_set_ever_full[set_idx]) {
-        training_table_set_ever_full[set_idx] = true;
-        training_table_hot_set_count++;
-        STAT_EVENT(0, TRAINING_TABLE_HOT_SETS);
-    }
+    ifuse_set_stats_note_set_live(&training_table_set_stats, 0, set_idx,
+                                  training_table_get_set_live(set_idx));
 }
 
 static void training_table_note_set_eviction(unsigned int set_idx) {
-    if (!training_table_set_evictions || set_idx >= training_table_num_sets) {
-        return;
-    }
-
-    training_table_set_evictions[set_idx]++;
-
-    if (!training_table_set_had_eviction[set_idx]) {
-        training_table_set_had_eviction[set_idx] = true;
-        training_table_conflict_set_count++;
-        STAT_EVENT(0, TRAINING_TABLE_CONFLICT_SETS);
-    }
+    ifuse_set_stats_note_eviction(&training_table_set_stats, 0, set_idx);
 }
 
 static void training_table_set_stats_atexit(void) {
@@ -132,22 +97,11 @@ static void training_table_set_stats_atexit(void) {
 }
 
 static void training_table_init_set_stats(void) {
-    training_table_set_peak_live =
-        (unsigned int*)calloc(training_table_num_sets, sizeof(unsigned int));
-    training_table_set_evictions =
-        (unsigned int*)calloc(training_table_num_sets, sizeof(unsigned int));
-    training_table_set_ever_full =
-        (bool*)calloc(training_table_num_sets, sizeof(bool));
-    training_table_set_had_eviction =
-        (bool*)calloc(training_table_num_sets, sizeof(bool));
-
-    if (!training_table_set_peak_live || !training_table_set_evictions ||
-        !training_table_set_ever_full || !training_table_set_had_eviction) {
-        fprintf(stderr,
-                "TRAINING_TABLE: calloc failed for %u set stat vectors\n",
-                training_table_num_sets);
-        exit(1);
-    }
+    ifuse_set_stats_init(&training_table_set_stats, training_table_num_sets,
+                         training_table_num_ways,
+                         TRAINING_TABLE_SET_PEAK_LIVE,
+                         TRAINING_TABLE_HOT_SETS,
+                         TRAINING_TABLE_CONFLICT_SETS, "TRAINING_TABLE");
 
     if (!training_table_set_stats_registered) {
         atexit(training_table_set_stats_atexit);
@@ -156,63 +110,13 @@ static void training_table_init_set_stats(void) {
 }
 
 void training_table_dump_set_stats(void) {
-    if (!IFUSE_REALISTIC_TRAINING_TABLE || !training_table_set_peak_live ||
-        training_table_num_sets == 0U) {
+    if (!IFUSE_REALISTIC_TRAINING_TABLE) {
         return;
     }
 
-    FILE* fp = fopen("ifuse_tt_set_histo.out", "w");
-    if (!fp) {
-        fprintf(stderr,
-                "TRAINING_TABLE: could not write ifuse_tt_set_histo.out\n");
-        return;
-    }
-
-    unsigned int sets_with_evictions = 0U;
-    unsigned int top_peak = 0U;
-    unsigned int top_evictions = 0U;
-    unsigned int top_evict_set = 0U;
-
-    for (unsigned int set_idx = 0; set_idx < training_table_num_sets;
-         set_idx++) {
-        if (training_table_set_evictions[set_idx] > 0U) {
-            sets_with_evictions++;
-        }
-        if (training_table_set_peak_live[set_idx] > top_peak) {
-            top_peak = training_table_set_peak_live[set_idx];
-        }
-        if (training_table_set_evictions[set_idx] > top_evictions) {
-            top_evictions = training_table_set_evictions[set_idx];
-            top_evict_set = set_idx;
-        }
-    }
-
-    fprintf(fp, "# IFuse training table per-set stats (realistic mode)\n");
-    fprintf(fp, "# sets=%u ways=%u entries=%u global_peak_live=%llu\n",
-            training_table_num_sets, training_table_num_ways,
-            training_table_num_entries,
-            (unsigned long long)training_table_live_peak);
-    fprintf(fp, "# set_peak_live=%u hot_sets=%u conflict_sets=%u\n",
-            training_table_global_set_peak_live, training_table_hot_set_count,
-            training_table_conflict_set_count);
-    fprintf(fp, "# sets_with_evictions=%u top_evict_set=%u top_evictions=%u\n",
-            sets_with_evictions, top_evict_set, top_evictions);
-    fprintf(fp, "# columns: set_idx peak_live evictions ever_full\n");
-
-    for (unsigned int set_idx = 0; set_idx < training_table_num_sets;
-         set_idx++) {
-        if (training_table_set_peak_live[set_idx] == 0U &&
-            training_table_set_evictions[set_idx] == 0U) {
-            continue;
-        }
-
-        fprintf(fp, "%u %u %u %u\n", set_idx,
-                training_table_set_peak_live[set_idx],
-                training_table_set_evictions[set_idx],
-                training_table_set_ever_full[set_idx] ? 1U : 0U);
-    }
-
-    fclose(fp);
+    ifuse_set_stats_dump(&training_table_set_stats, "ifuse_tt_set_histo.out",
+                         "training table", training_table_num_entries,
+                         training_table_live_peak, "TRAINING_TABLE");
 }
 
 static bool training_table_keys_match_ideal(
@@ -597,9 +501,6 @@ void training_table_init(void) {
 
     training_table_live_count = 0;
     training_table_live_peak  = 0;
-    training_table_global_set_peak_live = 0;
-    training_table_hot_set_count = 0;
-    training_table_conflict_set_count = 0;
     training_table_initialized = true;
 }
 

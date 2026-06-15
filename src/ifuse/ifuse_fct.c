@@ -7,6 +7,7 @@
 // Custom headers
 #include "ifuse_fct.h"
 #include "ifuse_plru.h"
+#include "ifuse_set_stats.h"
 #include "ifuse_training_table.h"
 #include "../general.param.h"
 #include "../statistics.h"
@@ -39,14 +40,8 @@ static unsigned int fct_num_entries = 0;
 static bool       fct_is_initialized = false;
 static uint64_t   fct_live_row_count = 0;
 static uint64_t   fct_live_row_peak = 0;
-static unsigned int* fct_set_peak_live = NULL;
-static unsigned int* fct_set_evictions = NULL;
-static bool*         fct_set_ever_full = NULL;
-static bool*         fct_set_had_eviction = NULL;
-static unsigned int  fct_global_set_peak_live = 0;
-static unsigned int  fct_hot_set_count = 0;
-static unsigned int  fct_conflict_set_count = 0;
-static bool          fct_set_stats_registered = false;
+static IfuseSetStats fct_set_stats;
+static bool       fct_set_stats_registered = false;
 
 static FCT_Row* fct_row_at(unsigned int set_idx, unsigned int way);
 
@@ -63,41 +58,12 @@ static unsigned int fct_get_set_live(unsigned int set_idx) {
 }
 
 static void fct_update_set_stats(unsigned int set_idx) {
-    if (!fct_set_peak_live || set_idx >= fct_num_sets) {
-        return;
-    }
-
-    unsigned int live = fct_get_set_live(set_idx);
-
-    if (live > fct_set_peak_live[set_idx]) {
-        fct_set_peak_live[set_idx] = live;
-    }
-
-    if (live > fct_global_set_peak_live) {
-        INC_STAT_EVENT(0, FCT_SET_PEAK_LIVE,
-                       live - fct_global_set_peak_live);
-        fct_global_set_peak_live = live;
-    }
-
-    if (live >= fct_num_ways && !fct_set_ever_full[set_idx]) {
-        fct_set_ever_full[set_idx] = true;
-        fct_hot_set_count++;
-        STAT_EVENT(0, FCT_HOT_SETS);
-    }
+    ifuse_set_stats_note_set_live(&fct_set_stats, 0, set_idx,
+                                  fct_get_set_live(set_idx));
 }
 
 static void fct_note_set_eviction(unsigned int set_idx) {
-    if (!fct_set_evictions || set_idx >= fct_num_sets) {
-        return;
-    }
-
-    fct_set_evictions[set_idx]++;
-
-    if (!fct_set_had_eviction[set_idx]) {
-        fct_set_had_eviction[set_idx] = true;
-        fct_conflict_set_count++;
-        STAT_EVENT(0, FCT_CONFLICT_SETS);
-    }
+    ifuse_set_stats_note_eviction(&fct_set_stats, 0, set_idx);
 }
 
 static void fct_set_stats_atexit(void) {
@@ -105,19 +71,9 @@ static void fct_set_stats_atexit(void) {
 }
 
 static void fct_init_set_stats(void) {
-    fct_set_peak_live =
-        (unsigned int*)calloc(fct_num_sets, sizeof(unsigned int));
-    fct_set_evictions =
-        (unsigned int*)calloc(fct_num_sets, sizeof(unsigned int));
-    fct_set_ever_full = (bool*)calloc(fct_num_sets, sizeof(bool));
-    fct_set_had_eviction = (bool*)calloc(fct_num_sets, sizeof(bool));
-
-    if (!fct_set_peak_live || !fct_set_evictions || !fct_set_ever_full ||
-        !fct_set_had_eviction) {
-        fprintf(stderr, "FCT: calloc failed for %u set stat vectors\n",
-                fct_num_sets);
-        exit(1);
-    }
+    ifuse_set_stats_init(&fct_set_stats, fct_num_sets, fct_num_ways,
+                         FCT_SET_PEAK_LIVE, FCT_HOT_SETS, FCT_CONFLICT_SETS,
+                         "FCT");
 
     if (!fct_set_stats_registered) {
         atexit(fct_set_stats_atexit);
@@ -126,57 +82,12 @@ static void fct_init_set_stats(void) {
 }
 
 void fct_dump_set_stats(void) {
-    if (!IFUSE_REALISTIC_FCT || !fct_set_peak_live || fct_num_sets == 0U) {
+    if (!IFUSE_REALISTIC_FCT) {
         return;
     }
 
-    FILE* fp = fopen("ifuse_fct_set_histo.out", "w");
-    if (!fp) {
-        fprintf(stderr, "FCT: could not write ifuse_fct_set_histo.out\n");
-        return;
-    }
-
-    unsigned int sets_with_evictions = 0U;
-    unsigned int top_peak = 0U;
-    unsigned int top_evictions = 0U;
-    unsigned int top_evict_set = 0U;
-
-    for (unsigned int set_idx = 0; set_idx < fct_num_sets; set_idx++) {
-        if (fct_set_evictions[set_idx] > 0U) {
-            sets_with_evictions++;
-        }
-        if (fct_set_peak_live[set_idx] > top_peak) {
-            top_peak = fct_set_peak_live[set_idx];
-        }
-        if (fct_set_evictions[set_idx] > top_evictions) {
-            top_evictions = fct_set_evictions[set_idx];
-            top_evict_set = set_idx;
-        }
-    }
-
-    fprintf(fp, "# IFuse FCT per-set stats (realistic mode)\n");
-    fprintf(fp, "# sets=%u ways=%u entries=%u global_peak_live=%llu\n",
-            fct_num_sets, fct_num_ways, fct_num_entries,
-            (unsigned long long)fct_live_row_peak);
-    fprintf(fp, "# set_peak_live=%u hot_sets=%u conflict_sets=%u\n",
-            fct_global_set_peak_live, fct_hot_set_count,
-            fct_conflict_set_count);
-    fprintf(fp, "# sets_with_evictions=%u top_evict_set=%u top_evictions=%u\n",
-            sets_with_evictions, top_evict_set, top_evictions);
-    fprintf(fp, "# columns: set_idx peak_live evictions ever_full\n");
-
-    for (unsigned int set_idx = 0; set_idx < fct_num_sets; set_idx++) {
-        if (fct_set_peak_live[set_idx] == 0U &&
-            fct_set_evictions[set_idx] == 0U) {
-            continue;
-        }
-
-        fprintf(fp, "%u %u %u %u\n", set_idx,
-                fct_set_peak_live[set_idx], fct_set_evictions[set_idx],
-                fct_set_ever_full[set_idx] ? 1U : 0U);
-    }
-
-    fclose(fp);
+    ifuse_set_stats_dump(&fct_set_stats, "ifuse_fct_set_histo.out", "FCT",
+                         fct_num_entries, fct_live_row_peak, "FCT");
 }
 
 static void fct_note_new_live_row(unsigned int proc_id) {
@@ -264,9 +175,6 @@ void fct_init(void) {
 
     fct_live_row_count = 0;
     fct_live_row_peak  = 0;
-    fct_global_set_peak_live = 0;
-    fct_hot_set_count = 0;
-    fct_conflict_set_count = 0;
     fct_is_initialized = true;
 
     training_table_init();
