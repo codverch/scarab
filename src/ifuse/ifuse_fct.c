@@ -7,6 +7,8 @@
 
 // Custom headers
 #include "ifuse_fct.h"
+#include "ifuse_plru.h"
+#include "ifuse_set_stats.h"
 #include "ifuse_training_table.h"
 #include "../general.param.h"
 #include "../statistics.h"
@@ -14,22 +16,34 @@
 #include "ifuse.param.h"
 
 /**
- * Ideal Fusion Candidate Table (FCT) runtime policy.
+ * Fusion Candidate Table (FCT) runtime policy.
  *
- * The ideal FCT models one LD2 candidate and up to two offset deltas for each
- * LD1 PC. Retire-time training can insert entries either on the first
- * observation of an LD1-LD2 pair or after the training table validates the
- * pair as frequent. If the same LD1 is later observed with a different LD2,
- * the existing entry is updated with the new pairing.
+ * The FCT models one LD2 candidate and up to four offset deltas for each LD1 PC.
+ * Retire-time training can insert entries either on the first observation of an
+ * LD1-LD2 pair or after the training table validates the pair as frequent. If
+ * the same LD1 is later observed with a different LD2, the existing entry is
+ * updated with the new pairing.
  *
- * Simulator state is maintained in a large open-addressed hash table with
- * 2^IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS entries.
+ * Ideal mode uses a large open-addressed hash table with
+ * 2^IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS entries. Realistic mode uses a
+ * set-associative table keyed by LD1 PC with tree PLRU replacement per set.
  */
 
+#define FCT_PC_BITS 48U
+#define FCT_PC_MASK 0xFFFFFFFFFFFFULL
+
 static FCT_Row* fct_rows = NULL;
-static size_t   fct_num_hash_table_rows = 0;
-static bool     fct_is_initialized = false;
-static uint64_t fct_delta_update_timestamp = 0;
+static uint8_t*   fct_plru = NULL;
+static size_t     fct_num_hash_table_rows = 0;
+static unsigned int fct_num_sets = 0;
+static unsigned int fct_num_ways = 0;
+static unsigned int fct_num_entries = 0;
+static bool       fct_is_initialized = false;
+static uint64_t   fct_delta_update_timestamp = 0;
+static uint64_t   fct_live_row_count = 0;
+static uint64_t   fct_live_row_peak = 0;
+static IfuseSetStats fct_set_stats;
+static bool       fct_set_stats_registered = false;
 
 #define FCT_DELTA_SELECT_HIGHEST_SCORE        0U
 #define FCT_DELTA_SELECT_LOWEST_SLOT          1U
@@ -40,22 +54,164 @@ static uint64_t fct_delta_update_timestamp = 0;
 #define FCT_DELTA_TIE_MOST_RECENT_CORRECT     1U
 #define FCT_DELTA_TIE_HIGHEST_SLOT            2U
 
+static FCT_Row* fct_row_at(unsigned int set_idx, unsigned int way) {
+    return &fct_rows[(set_idx * fct_num_ways) + way];
+}
+
+static unsigned int fct_get_set_live(unsigned int set_idx) {
+    unsigned int live = 0U;
+
+    for (unsigned int way = 0; way < fct_num_ways; way++) {
+        if (fct_row_at(set_idx, way)->valid) {
+            live++;
+        }
+    }
+
+    return live;
+}
+
+static void fct_update_set_stats(unsigned int set_idx) {
+    ifuse_set_stats_note_set_live(&fct_set_stats, 0, set_idx,
+                                  fct_get_set_live(set_idx));
+}
+
+static void fct_note_set_eviction(unsigned int set_idx) {
+    ifuse_set_stats_note_eviction(&fct_set_stats, 0, set_idx);
+}
+
+static void fct_set_stats_atexit(void) {
+    fct_dump_set_stats();
+}
+
+static void fct_init_set_stats(void) {
+    ifuse_set_stats_init(&fct_set_stats, fct_num_sets, fct_num_ways,
+                         FCT_SET_PEAK_LIVE, FCT_HOT_SETS, FCT_CONFLICT_SETS,
+                         "FCT");
+
+    if (!fct_set_stats_registered) {
+        atexit(fct_set_stats_atexit);
+        fct_set_stats_registered = true;
+    }
+}
+
+void fct_dump_set_stats(void) {
+    if (!IFUSE_REALISTIC_FCT) {
+        return;
+    }
+
+    ifuse_set_stats_dump(&fct_set_stats, "ifuse_fct_set_histo.out", "FCT",
+                         fct_num_entries, fct_live_row_peak, "FCT");
+}
+
+static void fct_note_new_live_row(unsigned int proc_id) {
+    fct_live_row_count++;
+    if (fct_live_row_count > fct_live_row_peak) {
+        INC_STAT_EVENT(proc_id, FCT_PEAK_LIVE,
+                       fct_live_row_count - fct_live_row_peak);
+        fct_live_row_peak = fct_live_row_count;
+    }
+}
+
+static void fct_note_live_remove(void) {
+    if (fct_live_row_count > 0) {
+        fct_live_row_count--;
+    }
+}
+
 void fct_init(void) {
     if (fct_is_initialized) {
         return;
     }
 
-    fct_num_hash_table_rows = 1U << IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS;
+    if (IFUSE_REALISTIC_FCT) {
+        fct_num_sets = IFUSE_FCT_SETS;
+        fct_num_ways = IFUSE_FCT_WAYS;
+        fct_num_entries = fct_num_sets * fct_num_ways;
+        fct_num_hash_table_rows = fct_num_entries;
+
+        if (fct_num_sets == 0U ||
+            (fct_num_sets & (fct_num_sets - 1U)) != 0U) {
+            fprintf(stderr,
+                    "FCT: ifuse_fct_sets must be a power of two (got %u)\n",
+                    fct_num_sets);
+            exit(1);
+        }
+        if (fct_num_ways != 4U && fct_num_ways != 8U) {
+            fprintf(stderr,
+                    "FCT: realistic set-associative mode requires "
+                    "ifuse_fct_ways=4 or 8 (got %u)\n",
+                    fct_num_ways);
+            exit(1);
+        }
+        if (fct_num_entries != IFUSE_FCT_ENTRIES) {
+            fprintf(stderr,
+                    "FCT: ifuse_fct_entries (%u) must equal sets*ways "
+                    "(%u*%u=%u)\n",
+                    IFUSE_FCT_ENTRIES, fct_num_sets, fct_num_ways,
+                    fct_num_entries);
+            exit(1);
+        }
+        if (IFUSE_FCT_EVICT_POLICY != 0U) {
+            fprintf(stderr,
+                    "FCT: only evict_policy=0 (tree PLRU) is supported for "
+                    "realistic mode (got %u)\n",
+                    IFUSE_FCT_EVICT_POLICY);
+            exit(1);
+        }
+    } else {
+        fct_num_hash_table_rows = 1U << IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS;
+        fct_num_sets = 0U;
+        fct_num_ways = 0U;
+        fct_num_entries = 0U;
+    }
+
     fct_rows = (FCT_Row*)calloc(fct_num_hash_table_rows, sizeof(FCT_Row));
     if (!fct_rows) {
-        fprintf(stderr, "FCT: calloc failed for %zu ideal rows\n",
+        fprintf(stderr, "FCT: calloc failed for %zu rows\n",
                 fct_num_hash_table_rows);
         exit(1);
     }
+
+    if (IFUSE_REALISTIC_FCT) {
+        fct_plru = (uint8_t*)calloc(fct_num_sets, sizeof(uint8_t));
+        if (!fct_plru) {
+            fprintf(stderr, "FCT: calloc failed for %u PLRU sets\n",
+                    fct_num_sets);
+            exit(1);
+        }
+        fct_init_set_stats();
+    }
+
+    fct_live_row_count = 0;
+    fct_live_row_peak  = 0;
     fct_is_initialized = true;
     fct_delta_update_timestamp = 0;
 
     training_table_init();
+}
+
+static uint64_t fct_fold_pc(Addr pc_addr) {
+    return (uint64_t)pc_addr & FCT_PC_MASK;
+}
+
+static uint64_t fct_xor_rotate_fold_set_key(Addr ld1_pc_addr) {
+    uint64_t fold = fct_fold_pc(ld1_pc_addr);
+    uint64_t mix  = fold ^ (fold << 17U) ^ (fold >> 15U);
+
+    mix ^= mix >> 32U;
+    mix ^= mix >> 16U;
+    mix ^= mix >> 8U;
+
+    return mix;
+}
+
+static unsigned int fct_get_set_index(Addr ld1_pc_addr) {
+    return (unsigned int)(fct_xor_rotate_fold_set_key(ld1_pc_addr) &
+                          (fct_num_sets - 1U));
+}
+
+static uint64_t fct_get_ld1_tag(Addr ld1_pc_addr) {
+    return fct_fold_pc(ld1_pc_addr);
 }
 
 static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
@@ -360,6 +516,7 @@ static void fct_write_row_metadata(FCT_Row* row,
                                    unsigned int ld1_micro_op_num,
                                    unsigned int ld2_micro_op_num) {
     row->ld1_pc_addr        = ld1_pc_addr;
+    row->ld1_tag            = fct_get_ld1_tag(ld1_pc_addr);
     row->ld2_pc_addr        = ld2_pc_addr;
     row->ld1_effective_addr = ld1_effective_addr;
     row->ld2_effective_addr = ld2_effective_addr;
@@ -512,7 +669,7 @@ int fct_select_delta_slot(const FCT_Row* row) {
     return best_slot_idx;
 }
 
-static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
+static FCT_Row* fct_lookup_row_ideal(Addr ld1_pc_addr) {
     if (!fct_rows || fct_num_hash_table_rows == 0U) {
         return NULL;
     }
@@ -534,7 +691,33 @@ static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
     return NULL;
 }
 
-static FCT_Row* fct_find_empty_row(Addr ld1_pc_addr) {
+static FCT_Row* fct_lookup_row_realistic(Addr ld1_pc_addr) {
+    if (!fct_rows || fct_num_sets == 0U) {
+        return NULL;
+    }
+
+    unsigned int set_idx = fct_get_set_index(ld1_pc_addr);
+    uint64_t     ld1_tag = fct_get_ld1_tag(ld1_pc_addr);
+
+    for (unsigned int way = 0; way < fct_num_ways; way++) {
+        FCT_Row* row = fct_row_at(set_idx, way);
+        if (row->valid && row->ld1_tag == ld1_tag) {
+            ifuse_plru_touch(fct_plru, set_idx, way, fct_num_ways);
+            return row;
+        }
+    }
+
+    return NULL;
+}
+
+static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
+    if (IFUSE_REALISTIC_FCT) {
+        return fct_lookup_row_realistic(ld1_pc_addr);
+    }
+    return fct_lookup_row_ideal(ld1_pc_addr);
+}
+
+static FCT_Row* fct_find_empty_row_ideal(Addr ld1_pc_addr) {
     if (!fct_rows || fct_num_hash_table_rows == 0U) {
         return NULL;
     }
@@ -553,19 +736,58 @@ static FCT_Row* fct_find_empty_row(Addr ld1_pc_addr) {
     return NULL;
 }
 
-static FCT_Row* fct_allocate_row_for_load1_pc(Addr ld1_pc_addr) {
+static FCT_Row* fct_allocate_row_realistic(Addr ld1_pc_addr,
+                                           unsigned int proc_id) {
+    unsigned int set_idx = fct_get_set_index(ld1_pc_addr);
+    unsigned int invalid_way = fct_num_ways;
+
+    for (unsigned int way = 0; way < fct_num_ways; way++) {
+        FCT_Row* row = fct_row_at(set_idx, way);
+        if (!row->valid && invalid_way == fct_num_ways) {
+            invalid_way = way;
+        }
+    }
+
+    if (invalid_way < fct_num_ways) {
+        FCT_Row* row = fct_row_at(set_idx, invalid_way);
+        ifuse_plru_touch(fct_plru, set_idx, invalid_way, fct_num_ways);
+        fct_note_new_live_row(proc_id);
+        fct_update_set_stats(set_idx);
+        return row;
+    }
+
+    unsigned int victim_way =
+        ifuse_plru_victim(fct_plru, set_idx, fct_num_ways);
+    FCT_Row* victim = fct_row_at(set_idx, victim_way);
+    fct_clear_delta_slots(victim);
+    victim->valid = false;
+    fct_note_live_remove();
+    fct_note_set_eviction(set_idx);
+    STAT_EVENT(proc_id, FCT_EVICTED);
+    ifuse_plru_touch(fct_plru, set_idx, victim_way, fct_num_ways);
+    fct_update_set_stats(set_idx);
+    return victim;
+}
+
+static FCT_Row* fct_allocate_row_for_load1_pc(Addr ld1_pc_addr,
+                                              unsigned int proc_id) {
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
     if (row) {
         return row;
     }
 
-    row = fct_find_empty_row(ld1_pc_addr);
+    if (IFUSE_REALISTIC_FCT) {
+        return fct_allocate_row_realistic(ld1_pc_addr, proc_id);
+    }
+
+    row = fct_find_empty_row_ideal(ld1_pc_addr);
     if (!row) {
         fprintf(stderr,
                 "FCT: ideal backing hash table exhausted; increase "
                 "IFUSE_IDEAL_FCT_DEFAULT_HASH_BITS\n");
         exit(1);
     }
+    fct_note_new_live_row(proc_id);
     return row;
 }
 
@@ -742,7 +964,7 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
             return;
         }
 
-        row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
+        row = fct_allocate_row_for_load1_pc(ld1_pc_addr, proc_id);
         fct_write_new_row_with_delta(row, ld1_pc_addr, ld2_pc_addr,
                                      ld1_effective_addr, ld2_effective_addr,
                                      offset_delta, direction, ld2_mem_size,
@@ -807,7 +1029,7 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
 
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
     if (!row) {
-        row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
+        row = fct_allocate_row_for_load1_pc(ld1_pc_addr, proc_id);
         fct_write_new_row_with_delta(row, ld1_pc_addr, ld2_pc_addr,
                                      ld1_effective_addr, ld2_effective_addr,
                                      offset_delta, direction, ld2_mem_size,

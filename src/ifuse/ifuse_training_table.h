@@ -66,4 +66,10 @@ void training_table_retrain_fusible_pair(
     unsigned int ld2_micro_op_num,
     unsigned int proc_id);
 
+/**
+ * Writes per-set occupancy/eviction histograms for realistic mode.
+ * Called automatically at process exit when realistic mode is enabled.
+ */
+void training_table_dump_set_stats(void);
+
 #endif /* IFUSE_TRAINING_TABLE_H */

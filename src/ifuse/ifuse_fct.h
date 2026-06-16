@@ -16,9 +16,8 @@
  * Fusion Candidate Table (FCT)
  * ============================
  * The FCT predicts load fusion candidates by mapping each LD1 PC to a
- * corresponding LD2 candidate. The current implementation models an ideal
- * runtime structure and serves as the baseline prior to introducing realistic
- * capacity constraints.
+ * corresponding LD2 candidate. Ideal mode uses a large open-addressed hash
+ * table; realistic mode uses a set-associative table with tree PLRU replacement.
  *
  * Each LD1 row stores up to four cache-line offset deltas for the same LD2 PC.
  * Fetch selects a delta slot according to the configured selection policy.
@@ -47,6 +46,7 @@ typedef struct FCT_DeltaSlot {
 typedef struct FCT_Row {
     // Load identification
     Addr         ld1_pc_addr;
+    uint64_t     ld1_tag;
     Addr         ld2_pc_addr;
 
     // Memory access information
@@ -64,6 +64,9 @@ typedef struct FCT_Row {
 } FCT_Row;
 
 void fct_init(void);
+
+/** Dumps realistic-mode per-set occupancy histograms at exit. */
+void fct_dump_set_stats(void);
 
 /**
  * Looks up the FCT row for ld1_pc_addr.
