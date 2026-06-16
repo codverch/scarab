@@ -21,16 +21,18 @@
  * capacity constraints.
  *
  * Each LD1 row stores up to two cache-line offset deltas for the same LD2 PC.
- * Fetch selects the delta slot with the highest prediction-validated
- * confidence that meets the prediction threshold. Retire-time observations
- * only bootstrap a slot to the threshold; frontend outcomes decide which
- * eligible delta is chosen when multiple candidates exist.
+ * Fetch selects a delta slot according to the configured selection policy.
+ * Retire-time observations only bootstrap a slot to the threshold; frontend
+ * outcomes decide which eligible delta is chosen when multiple candidates
+ * exist. Selection penalties are separate from learned confidence so a slot
+ * can be temporarily suppressed without forgetting the trained offset delta.
  */
 
 typedef struct FCT_DeltaSlot {
     unsigned int offset_delta;
     bool         direction;
     unsigned int confidence_score;
+    unsigned int selection_penalty;
     uint64_t     last_correct_timestamp;
     bool         valid;
 } FCT_DeltaSlot;
@@ -69,8 +71,9 @@ void fct_init(void);
 FCT_Row* fct_lookup(Addr ld1_pc_addr);
 
 /**
- * Returns the delta slot index with the highest confidence that meets the
- * prediction threshold. Tie-break: most recently correct slot.
+ * Returns the delta slot index selected by the configured policy. Slot
+ * eligibility uses learned confidence; slot ranking uses effective selection
+ * score, which is learned confidence minus any temporary selection penalty.
  *
  * @return A slot index in [0, FCT_NUM_DELTA_SLOTS), or -1 if none qualify.
  */
@@ -103,7 +106,8 @@ void fct_update_delta_confidence_on_offset_misprediction(
     Addr ld1_pc_addr,
     unsigned int mispredicted_slot_idx,
     Addr ld1_effective_addr,
-    Addr ld2_effective_addr);
+    Addr ld2_effective_addr,
+    unsigned int proc_id);
 
 /**
  * TRUE if the FCT already holds a row for this load1 PC.

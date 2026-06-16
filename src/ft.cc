@@ -293,7 +293,8 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
                   waiting_pair->ld1_pc_addr,
                   waiting_pair->fct_delta_slot_idx,
                   waiting_pair->ld1_effective_addr,
-                  op->oracle_info.va);
+                  op->oracle_info.va,
+                  proc_id);
             } else {
               fct_update_delta_confidence(
                   waiting_pair->ld1_pc_addr,
