@@ -9,7 +9,7 @@
 #ifndef IFUSE_FCT_H
 #define IFUSE_FCT_H
 
-#define FCT_NUM_DELTA_SLOTS 2
+#define FCT_NUM_DELTA_SLOTS 4
 #define FCT_INVALID_DELTA_SLOT_IDX 0xFFFFFFFFU
 
 /**
@@ -20,12 +20,15 @@
  * runtime structure and serves as the baseline prior to introducing realistic
  * capacity constraints.
  *
- * Each LD1 row stores up to two cache-line offset deltas for the same LD2 PC.
+ * Each LD1 row stores up to four cache-line offset deltas for the same LD2 PC.
  * Fetch selects a delta slot according to the configured selection policy.
- * Retire-time observations only bootstrap a slot to the threshold; frontend
- * outcomes decide which eligible delta is chosen when multiple candidates
- * exist. Selection penalties are separate from learned confidence so a slot
- * can be temporarily suppressed without forgetting the trained offset delta.
+ * Retire-time observations only bootstrap a slot to the prediction
+ * threshold. Frontend outcomes decide which eligible delta is chosen when
+ * multiple candidates exist. Learned confidence gates eligibility; selection
+ * penalties affect ranking and retire bootstrap blocking. Untracked offset
+ * mispredictions install the observed delta into a new slot when possible so
+ * the chooser can learn among alternates instead of overwriting the predicted
+ * slot in place.
  */
 
 typedef struct FCT_DeltaSlot {
@@ -38,7 +41,7 @@ typedef struct FCT_DeltaSlot {
 } FCT_DeltaSlot;
 
 /**
- * One FCT row contains one LD2 candidate and up to two offset deltas for a
+ * One FCT row contains one LD2 candidate and up to four offset deltas for a
  * single LD1 PC.
  */
 typedef struct FCT_Row {

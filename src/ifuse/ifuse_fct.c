@@ -210,6 +210,23 @@ static void fct_offset_delta_from_addresses(Addr ld1_effective_addr,
     }
 }
 
+static void fct_stat_delta_slot_promotion(unsigned int proc_id,
+                                          int target_slot_idx) {
+    switch (target_slot_idx) {
+    case 1:
+        STAT_EVENT(proc_id, FCT_SECOND_DELTA_PROMOTIONS);
+        break;
+    case 2:
+        STAT_EVENT(proc_id, FCT_THIRD_DELTA_PROMOTIONS);
+        break;
+    case 3:
+        STAT_EVENT(proc_id, FCT_FOURTH_DELTA_PROMOTIONS);
+        break;
+    default:
+        break;
+    }
+}
+
 static void fct_penalize_delta_slot_confidence(FCT_DeltaSlot* slot) {
     if (!slot || !slot->valid) {
         return;
@@ -266,6 +283,33 @@ static int fct_find_weakest_delta_slot(const FCT_Row* row) {
     return weakest_slot_idx;
 }
 
+static int fct_find_weakest_delta_slot_excluding(const FCT_Row* row,
+                                                 int exclude_slot_idx) {
+    int weakest_slot_idx = -1;
+    unsigned int weakest_confidence = 0;
+
+    for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
+        if ((int)slot_idx == exclude_slot_idx) {
+            continue;
+        }
+
+        const FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
+        if (!slot->valid) {
+            continue;
+        }
+        if (weakest_slot_idx < 0 ||
+            slot->confidence_score < weakest_confidence ||
+            (slot->confidence_score == weakest_confidence &&
+             slot->last_correct_timestamp <
+                 row->delta_slots[weakest_slot_idx].last_correct_timestamp)) {
+            weakest_slot_idx = (int)slot_idx;
+            weakest_confidence = slot->confidence_score;
+        }
+    }
+
+    return weakest_slot_idx;
+}
+
 static bool fct_delta_tie_prefers_candidate(const FCT_DeltaSlot* candidate,
                                             unsigned int candidate_idx,
                                             const FCT_DeltaSlot* best,
@@ -288,7 +332,23 @@ static bool fct_delta_tie_prefers_candidate(const FCT_DeltaSlot* candidate,
 
 static bool fct_delta_slot_is_selectable(const FCT_DeltaSlot* slot) {
     return slot->valid &&
-        fct_delta_slot_selection_score(slot) >= IFUSE_FCT_CONF_THRESHOLD;
+        slot->confidence_score >= IFUSE_FCT_CONF_THRESHOLD;
+}
+
+static unsigned int fct_count_selectable_delta_slots(const FCT_Row* row) {
+    unsigned int num_selectable_slots = 0;
+
+    if (!row || !row->valid) {
+        return 0U;
+    }
+
+    for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
+        if (fct_delta_slot_is_selectable(&row->delta_slots[slot_idx])) {
+            num_selectable_slots++;
+        }
+    }
+
+    return num_selectable_slots;
 }
 
 static void fct_write_row_metadata(FCT_Row* row,
@@ -349,8 +409,8 @@ static void fct_install_or_reinforce_delta(FCT_Row* row,
             return;
         }
         STAT_EVENT(proc_id, FCT_DELTA_SLOT_REPLACEMENTS);
-    } else if (target_slot_idx == 1 && track_second_promotion) {
-        STAT_EVENT(proc_id, FCT_SECOND_DELTA_PROMOTIONS);
+    } else if (track_second_promotion && target_slot_idx > 0) {
+        fct_stat_delta_slot_promotion(proc_id, target_slot_idx);
     }
 
     fct_init_delta_slot(&row->delta_slots[target_slot_idx],
@@ -376,8 +436,8 @@ static void fct_install_validated_delta_slot(FCT_Row* row,
             return;
         }
         STAT_EVENT(proc_id, FCT_DELTA_SLOT_REPLACEMENTS);
-    } else if (target_slot_idx == 1) {
-        STAT_EVENT(proc_id, FCT_SECOND_DELTA_PROMOTIONS);
+    } else if (target_slot_idx > 0) {
+        fct_stat_delta_slot_promotion(proc_id, target_slot_idx);
     }
 
     fct_init_delta_slot(&row->delta_slots[target_slot_idx],
@@ -573,14 +633,25 @@ void fct_update_delta_confidence_on_offset_misprediction(
         (mispredicted_slot->offset_delta != observed_offset_delta ||
          mispredicted_slot->direction != observed_direction);
 
+    unsigned int num_selectable_slots =
+        fct_count_selectable_delta_slots(row);
+    if (num_selectable_slots > 1U) {
+        STAT_EVENT(proc_id, FCT_OFFSET_MISPRED_MULTI_DELTA_ROW);
+    } else {
+        STAT_EVENT(proc_id, FCT_OFFSET_MISPRED_SINGLE_DELTA_ROW);
+    }
+
     int observed_slot_idx = fct_find_delta_slot(
         row, observed_offset_delta, observed_direction);
     if (observed_slot_idx >= 0 &&
         (unsigned int)observed_slot_idx != mispredicted_slot_idx) {
-        fct_penalize_delta_slot_selection_on_offset_mispred(mispredicted_slot);
+        STAT_EVENT(proc_id, FCT_OFFSET_MISPRED_KNOWN_ALT_DELTA);
+        fct_penalize_delta_slot_selection_on_offset_mispred(
+            mispredicted_slot);
         if (wrong_delta_in_mispredicted_slot) {
             mispredicted_slot->confidence_score = 0U;
-            mispredicted_slot->selection_penalty = fct_max_confidence_score();
+            mispredicted_slot->selection_penalty =
+                fct_max_confidence_score();
         } else {
             fct_penalize_delta_slot_confidence(mispredicted_slot);
         }
@@ -589,15 +660,53 @@ void fct_update_delta_confidence_on_offset_misprediction(
         return;
     }
 
-    if (wrong_delta_in_mispredicted_slot) {
-        fct_init_delta_slot(mispredicted_slot, observed_offset_delta,
+    if (observed_slot_idx < 0) {
+        STAT_EVENT(proc_id, FCT_OFFSET_MISPRED_UNTRACKED_DELTA);
+
+        if (mispredicted_slot->valid) {
+            fct_penalize_delta_slot_selection_on_offset_mispred(
+                mispredicted_slot);
+            if (wrong_delta_in_mispredicted_slot) {
+                mispredicted_slot->confidence_score = 0U;
+                mispredicted_slot->selection_penalty =
+                    fct_max_confidence_score();
+            } else {
+                fct_penalize_delta_slot_confidence(mispredicted_slot);
+            }
+        }
+
+        int target_slot_idx = fct_find_empty_delta_slot(row);
+        if (target_slot_idx < 0) {
+            target_slot_idx =
+                fct_find_weakest_delta_slot_excluding(row,
+                                                      (int)mispredicted_slot_idx);
+            if (target_slot_idx < 0) {
+                if (wrong_delta_in_mispredicted_slot) {
+                    fct_init_delta_slot(mispredicted_slot,
+                                        observed_offset_delta,
+                                        observed_direction,
+                                        IFUSE_FCT_CONF_THRESHOLD);
+                }
+                return;
+            }
+            STAT_EVENT(proc_id, FCT_DELTA_SLOT_REPLACEMENTS);
+        } else if (target_slot_idx > 0) {
+            fct_stat_delta_slot_promotion(proc_id, target_slot_idx);
+        }
+
+        FCT_DeltaSlot* observed_slot =
+            &row->delta_slots[target_slot_idx];
+        fct_init_delta_slot(observed_slot, observed_offset_delta,
                             observed_direction, IFUSE_FCT_CONF_THRESHOLD);
-        fct_penalize_delta_slot_selection_on_offset_mispred(mispredicted_slot);
+        fct_increment_delta_slot_confidence(observed_slot, true);
         return;
     }
 
+    STAT_EVENT(proc_id, FCT_OFFSET_MISPRED_SAME_SLOT_DELTA);
+
     if (mispredicted_slot->valid) {
-        fct_penalize_delta_slot_selection_on_offset_mispred(mispredicted_slot);
+        fct_penalize_delta_slot_selection_on_offset_mispred(
+            mispredicted_slot);
         fct_penalize_delta_slot_confidence(mispredicted_slot);
     }
 

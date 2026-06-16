@@ -327,10 +327,21 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
                   op->oracle_info.va + delta_slot->offset_delta :
                   op->oracle_info.va - delta_slot->offset_delta;
 
-          if (delta_slot_idx == 0) {
-            STAT_EVENT(proc_id, FCT_DELTA_SLOT0_PREDICTIONS);
-          } else {
-            STAT_EVENT(proc_id, FCT_DELTA_SLOT1_PREDICTIONS);
+          switch (delta_slot_idx) {
+            case 0:
+              STAT_EVENT(proc_id, FCT_DELTA_SLOT0_PREDICTIONS);
+              break;
+            case 1:
+              STAT_EVENT(proc_id, FCT_DELTA_SLOT1_PREDICTIONS);
+              break;
+            case 2:
+              STAT_EVENT(proc_id, FCT_DELTA_SLOT2_PREDICTIONS);
+              break;
+            case 3:
+              STAT_EVENT(proc_id, FCT_DELTA_SLOT3_PREDICTIONS);
+              break;
+            default:
+              break;
           }
 
           // APT records the expected future LD2 PC.
