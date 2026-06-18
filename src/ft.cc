@@ -299,6 +299,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
               fct_update_delta_confidence(
                   waiting_pair->ld1_pc_addr,
                   waiting_pair->fct_delta_slot_idx,
+                  waiting_pair->ld1_effective_addr,
                   false);
             }
           }
@@ -308,6 +309,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
             fct_update_delta_confidence(
                 waiting_pair->ld1_pc_addr,
                 waiting_pair->fct_delta_slot_idx,
+                waiting_pair->ld1_effective_addr,
                 true);
           }
         }
@@ -315,7 +317,8 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
       } else {
         // If this load has a trained FCT entry, classify it as LD1 and predict LD2.
         FCT_Row* candidate = fct_lookup(op->inst_info->addr);
-        int delta_slot_idx = candidate ? fct_select_delta_slot(candidate) : -1;
+        int delta_slot_idx = candidate ?
+            fct_select_delta_slot(candidate, op->oracle_info.va) : -1;
 
         if (candidate && delta_slot_idx >= 0) {
           op->ifuse_load_role = LOAD1;

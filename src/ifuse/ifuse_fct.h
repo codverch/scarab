@@ -10,6 +10,7 @@
 #define IFUSE_FCT_H
 
 #define FCT_NUM_DELTA_SLOTS 4
+#define FCT_NUM_CONTEXT_BUCKETS 8
 #define FCT_INVALID_DELTA_SLOT_IDX 0xFFFFFFFFU
 
 /**
@@ -25,10 +26,14 @@
  * Retire-time observations only bootstrap a slot to the prediction
  * threshold. Frontend outcomes decide which eligible delta is chosen when
  * multiple candidates exist. Learned confidence gates eligibility; selection
- * penalties affect ranking and retire bootstrap blocking. Untracked offset
- * mispredictions install the observed delta into a new slot when possible so
- * the chooser can learn among alternates instead of overwriting the predicted
- * slot in place.
+ * penalties affect ranking and retire bootstrap blocking. A contextual
+ * selector learns which delta works for each LD1 cache-line offset bucket so
+ * multi-modal rows are not forced through one global delta. A dominant-delta
+ * fast path can also keep stable single-delta rows pinned to their current
+ * primary unless another eligible delta wins by a configurable margin.
+ * Untracked offset mispredictions install the observed delta into a new slot
+ * when possible so the chooser can learn among alternates instead of
+ * overwriting the predicted slot in place.
  */
 
 typedef struct FCT_DeltaSlot {
@@ -36,6 +41,9 @@ typedef struct FCT_DeltaSlot {
     bool         direction;
     unsigned int confidence_score;
     unsigned int selection_penalty;
+    unsigned int correct_streak;
+    unsigned int context_correct[FCT_NUM_CONTEXT_BUCKETS];
+    unsigned int context_wrong[FCT_NUM_CONTEXT_BUCKETS];
     uint64_t     last_correct_timestamp;
     bool         valid;
 } FCT_DeltaSlot;
@@ -60,6 +68,9 @@ typedef struct FCT_Row {
 
     // Prediction metadata
     bool              valid;
+    bool              dominant_delta_mode;
+    unsigned int      primary_delta_slot_idx;
+    unsigned int      recent_primary_offset_mispreds;
     FCT_DeltaSlot     delta_slots[FCT_NUM_DELTA_SLOTS];
 } FCT_Row;
 
@@ -74,13 +85,13 @@ void fct_init(void);
 FCT_Row* fct_lookup(Addr ld1_pc_addr);
 
 /**
- * Returns the delta slot index selected by the configured policy. Slot
- * eligibility uses learned confidence; slot ranking uses effective selection
- * score, which is learned confidence minus any temporary selection penalty.
+ * Returns the delta slot index selected by the configured policy for this
+ * dynamic LD1 address. Slot eligibility uses learned confidence; slot ranking
+ * uses effective selection score plus optional LD1-offset-bucket feedback.
  *
  * @return A slot index in [0, FCT_NUM_DELTA_SLOTS), or -1 if none qualify.
  */
-int fct_select_delta_slot(const FCT_Row* row);
+int fct_select_delta_slot(const FCT_Row* row, Addr ld1_effective_addr);
 
 /**
  * Updates the confidence score for one delta slot after a frontend prediction
@@ -88,9 +99,11 @@ int fct_select_delta_slot(const FCT_Row* row);
  *
  * @param ld1_pc_addr The PC of the predicted first load.
  * @param slot_idx The delta slot used for the prediction.
+ * @param ld1_effective_addr The effective address produced by LD1.
  * @param prediction_correct TRUE if the fused prediction was correct.
  */
 void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
+                                 Addr ld1_effective_addr,
                                  bool prediction_correct);
 
 /**
