@@ -6,10 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ifuse_fct.h"
 #include "ifuse_ideal_alloc.h"
 #include "ifuse_ideal_limits.h"
 #include "../map_rename.h"
 #include "../op_info.h"
+#include "../statistics.h"
 
 #define IFUSE_EXEC_PAIR_NUM_BUCKETS 4096U
 
@@ -158,6 +160,7 @@ static void ifuse_exec_pair_signal_ld2(
     // by LOAD1. Update Scarab's register metadata at the same modeled event.
     reg_file_produce(ld2_op);
 
+    unsigned int consumer_wakeups = 0U;
     for (Wake_Up_Entry* wake = ld2_op->wake_up_head; wake; wake = wake->next) {
         Op* dep_op = wake->op;
 
@@ -171,7 +174,24 @@ static void ifuse_exec_pair_signal_ld2(
         if (op_sources_test_not_rdy(dep_op, wake->rdy_bit)) {
             op_sources_clear_not_rdy(dep_op, wake->rdy_bit);
             wake_action(ld2_op, dep_op, wake->rdy_bit);
+            consumer_wakeups++;
         }
+    }
+
+    STAT_EVENT(ld2_op->proc_id, IFUSE_EARLY_WAKE_ATTEMPTS);
+    INC_STAT_EVENT(ld2_op->proc_id, IFUSE_EARLY_WAKE_CONSUMER_WAKEUPS,
+                   consumer_wakeups);
+    if (consumer_wakeups == 0U) {
+        STAT_EVENT(ld2_op->proc_id, IFUSE_EARLY_WAKE_ZERO_CONSUMER);
+        STAT_EVENT(ld2_op->proc_id, IFUSE_USELESS_SLOT_UPDATES);
+    } else {
+        STAT_EVENT(ld2_op->proc_id, IFUSE_USEFULNESS_SLOT_UPDATES);
+    }
+    if (ld2_op->ifuse_partner_ld1_pc != 0 &&
+        ld2_op->ifuse_fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
+        fct_update_delta_usefulness(ld2_op->ifuse_partner_ld1_pc,
+                                    ld2_op->ifuse_fct_delta_slot_idx,
+                                    consumer_wakeups);
     }
 
     ld2_op->wake_up_signaled[REG_DATA_DEP] = TRUE;

@@ -114,10 +114,67 @@ static unsigned int fct_delta_slot_selection_score(
     return slot->confidence_score - slot->selection_penalty;
 }
 
+static unsigned int fct_delta_slot_usefulness_samples(
+    const FCT_DeltaSlot* slot) {
+    if (!slot || !slot->valid) {
+        return 0U;
+    }
+
+    if (slot->useful_wake_count >
+        0xFFFFFFFFU - slot->useless_wake_count) {
+        return 0xFFFFFFFFU;
+    }
+    return slot->useful_wake_count + slot->useless_wake_count;
+}
+
+static bool fct_delta_slot_is_usefulness_gated(
+    const FCT_DeltaSlot* slot) {
+    if (!IFUSE_FCT_USEFULNESS_GATE_ENABLED || !slot || !slot->valid) {
+        return false;
+    }
+
+    const unsigned int min_samples =
+        IFUSE_FCT_USEFULNESS_GATE_MIN_SAMPLES;
+    const unsigned int samples =
+        fct_delta_slot_usefulness_samples(slot);
+    if (min_samples == 0U || samples < min_samples) {
+        return false;
+    }
+
+    unsigned int max_useless_pct =
+        IFUSE_FCT_USEFULNESS_GATE_MAX_USELESS_PCT;
+    if (max_useless_pct > 100U) {
+        max_useless_pct = 100U;
+    }
+
+    return slot->useless_wake_count * 100U >
+           samples * max_useless_pct;
+}
+
+static int fct_delta_slot_usefulness_score(
+    const FCT_DeltaSlot* slot) {
+    if (!IFUSE_FCT_USEFULNESS_GATE_ENABLED || !slot || !slot->valid) {
+        return 0;
+    }
+
+    int score = 0;
+    score += (int)(IFUSE_FCT_USEFULNESS_REWARD_WEIGHT *
+                   slot->useful_wake_count);
+    score -= (int)(IFUSE_FCT_USEFULNESS_PENALTY_WEIGHT *
+                   slot->useless_wake_count);
+    return score;
+}
+
+static int fct_delta_slot_effective_selection_score(
+    const FCT_DeltaSlot* slot) {
+    return (int)fct_delta_slot_selection_score(slot) +
+           fct_delta_slot_usefulness_score(slot);
+}
+
 static int fct_delta_slot_contextual_selection_score(
     const FCT_DeltaSlot* slot,
     unsigned int context_bucket) {
-    int score = (int)fct_delta_slot_selection_score(slot);
+    int score = fct_delta_slot_effective_selection_score(slot);
     score += (int)(IFUSE_FCT_CONTEXTUAL_DELTA_CORRECT_WEIGHT *
                    slot->context_correct[context_bucket]);
     score -= (int)(IFUSE_FCT_CONTEXTUAL_DELTA_WRONG_WEIGHT *
@@ -497,6 +554,10 @@ static bool fct_delta_slot_is_selectable(const FCT_DeltaSlot* slot) {
         return false;
     }
 
+    if (fct_delta_slot_is_usefulness_gated(slot)) {
+        return false;
+    }
+
     const unsigned int min_corrects = fct_min_frontend_corrects_required();
     if (slot->confidence_score >= IFUSE_FCT_CONF_THRESHOLD &&
         slot->correct_streak >= min_corrects) {
@@ -697,9 +758,9 @@ int fct_select_delta_slot(const FCT_Row* row, Addr ld1_effective_addr) {
             &row->delta_slots[row->primary_delta_slot_idx];
 
         if (fct_delta_slot_is_selectable(primary_slot)) {
-            const unsigned int primary_score =
-                fct_delta_slot_selection_score(primary_slot);
-            unsigned int best_alt_score = 0U;
+            const int primary_score =
+                fct_delta_slot_effective_selection_score(primary_slot);
+            int best_alt_score = 0;
             bool has_selectable_alt = false;
 
             for (unsigned int slot_idx = 0;
@@ -715,15 +776,16 @@ int fct_select_delta_slot(const FCT_Row* row, Addr ld1_effective_addr) {
                 }
 
                 has_selectable_alt = true;
-                unsigned int slot_score =
-                    fct_delta_slot_selection_score(slot);
+                int slot_score =
+                    fct_delta_slot_effective_selection_score(slot);
                 if (slot_score > best_alt_score) {
                     best_alt_score = slot_score;
                 }
             }
 
             if (!has_selectable_alt ||
-                primary_score + IFUSE_FCT_DOMINANT_DELTA_SWITCH_MARGIN >=
+                primary_score +
+                    (int)IFUSE_FCT_DOMINANT_DELTA_SWITCH_MARGIN >=
                     best_alt_score) {
                 return (int)row->primary_delta_slot_idx;
             }
@@ -731,7 +793,7 @@ int fct_select_delta_slot(const FCT_Row* row, Addr ld1_effective_addr) {
     }
 
     int best_slot_idx = -1;
-    unsigned int best_score = 0;
+    int best_score = 0;
 
     for (unsigned int slot_idx = 0; slot_idx < FCT_NUM_DELTA_SLOTS; slot_idx++) {
         const FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
@@ -743,8 +805,8 @@ int fct_select_delta_slot(const FCT_Row* row, Addr ld1_effective_addr) {
             return (int)slot_idx;
         }
 
-        const unsigned int slot_score =
-            fct_delta_slot_selection_score(slot);
+        const int slot_score =
+            fct_delta_slot_effective_selection_score(slot);
         if (best_slot_idx < 0) {
             best_slot_idx = (int)slot_idx;
             best_score = slot_score;
@@ -884,6 +946,41 @@ void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
     fct_record_wrong_delta_slot(row, slot_idx, false);
     fct_penalize_delta_slot_selection(slot);
     fct_penalize_delta_slot_confidence(slot);
+}
+
+void fct_update_delta_usefulness(Addr ld1_pc_addr, unsigned int slot_idx,
+                                 unsigned int consumer_wakeups) {
+    if (!fct_is_initialized || slot_idx >= FCT_NUM_DELTA_SLOTS) {
+        return;
+    }
+
+    FCT_Row* row = fct_lookup_row(ld1_pc_addr);
+    if (!row) {
+        return;
+    }
+
+    FCT_DeltaSlot* slot = &row->delta_slots[slot_idx];
+    if (!slot->valid) {
+        return;
+    }
+
+    const unsigned int max_counter = 255U;
+    if (consumer_wakeups > 0U) {
+        if (slot->useful_wake_count < max_counter) {
+            slot->useful_wake_count++;
+        }
+        if (slot->useless_wake_count > 0U) {
+            slot->useless_wake_count--;
+        }
+        return;
+    }
+
+    if (slot->useless_wake_count < max_counter) {
+        slot->useless_wake_count++;
+    }
+    if (slot->useful_wake_count > 0U) {
+        slot->useful_wake_count--;
+    }
 }
 
 void fct_update_delta_confidence_on_offset_misprediction(

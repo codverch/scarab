@@ -177,6 +177,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->ifuse_load_role = NOT_FUSION_CANDIDATE;
     op->ifuse_partner_op_num = 0;
     op->ifuse_partner_ld1_pc = 0;
+    op->ifuse_fct_delta_slot_idx = FCT_INVALID_DELTA_SLOT_IDX;
     op->ifuse_ld2_physical_reg_id = OP_REG_ID_INVALID;
     op->ifuse_ld2_early_wake_signaled = FALSE;
     op->ifuse_ld2_agu_completed = FALSE;
@@ -233,6 +234,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
         op->ifuse_load_role = LOAD2;
         op->ifuse_partner_op_num = waiting_pair->ld1_micro_op_num;
         op->ifuse_partner_ld1_pc = waiting_pair->ld1_pc_addr;
+        op->ifuse_fct_delta_slot_idx = waiting_pair->fct_delta_slot_idx;
 
         // ACI verifies that LD2 accessed the cache block predicted by LD1.
         // The matching ACI entry is consumed when validation succeeds.

@@ -44,6 +44,8 @@ typedef struct FCT_DeltaSlot {
     unsigned int correct_streak;
     unsigned int context_correct[FCT_NUM_CONTEXT_BUCKETS];
     unsigned int context_wrong[FCT_NUM_CONTEXT_BUCKETS];
+    unsigned int useful_wake_count;
+    unsigned int useless_wake_count;
     uint64_t     last_correct_timestamp;
     bool         valid;
 } FCT_DeltaSlot;
@@ -105,6 +107,20 @@ int fct_select_delta_slot(const FCT_Row* row, Addr ld1_effective_addr);
 void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
                                  Addr ld1_effective_addr,
                                  bool prediction_correct);
+
+/**
+ * Updates usefulness feedback after a validated fused LOAD2 reaches the
+ * early-wake datapath.
+ *
+ * Address confidence answers whether the prediction was correct. Usefulness
+ * feedback answers whether the correct fusion actually woke dependent work.
+ *
+ * @param ld1_pc_addr The PC of the predicting first load.
+ * @param slot_idx The delta slot used for the prediction.
+ * @param consumer_wakeups Number of dependent REG_DATA edges made ready.
+ */
+void fct_update_delta_usefulness(Addr ld1_pc_addr, unsigned int slot_idx,
+                                 unsigned int consumer_wakeups);
 
 /**
  * Applies offset-delta-specific confidence feedback after a frontend mispred.
