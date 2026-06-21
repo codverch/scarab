@@ -61,6 +61,9 @@ typedef struct FCT_Row {
     // Prediction metadata
     bool              valid;
     FCT_DeltaSlot     delta_slots[FCT_NUM_DELTA_SLOTS];
+
+    /** Skip frontend fusion for this LD1 until this on-path load number. */
+    uint64_t          fusion_cooldown_until_load_num;
 } FCT_Row;
 
 void fct_init(void);
@@ -84,6 +87,21 @@ FCT_Row* fct_lookup(Addr ld1_pc_addr);
  * @return A slot index in [0, FCT_NUM_DELTA_SLOTS), or -1 if none qualify.
  */
 int fct_select_delta_slot(const FCT_Row* row);
+
+/**
+ * Suppresses frontend fusion for ld1_pc_addr until cooldown_loads on-path
+ * loads have retired after a fusion misprediction. No-op when the param is 0.
+ */
+void fct_note_mispred_fusion_cooldown(Addr ld1_pc_addr,
+                                      uint64_t current_load_num,
+                                      unsigned int proc_id);
+
+/**
+ * TRUE when ld1_pc_addr is still in a post-misprediction fusion cooldown.
+ */
+Flag fct_is_fusion_gated_by_cooldown(Addr ld1_pc_addr,
+                                     uint64_t current_load_num,
+                                     unsigned int proc_id);
 
 /**
  * Updates the confidence score for one delta slot after a frontend prediction

@@ -3,6 +3,8 @@
 #include "ifuse_apt.h"
 #include "../map.h"
 #include "../map_rename.h"
+#include "../statistics.h"
+#include "ifuse.param.h"
 
 /**
  * IFuse speculative-register lifecycle:

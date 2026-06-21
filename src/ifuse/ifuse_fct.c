@@ -524,6 +524,7 @@ static void fct_write_row_metadata(FCT_Row* row,
     row->ld1_micro_op_num   = ld1_micro_op_num;
     row->ld2_micro_op_num   = ld2_micro_op_num;
     row->valid              = true;
+    row->fusion_cooldown_until_load_num = 0;
 }
 
 static void fct_write_new_row_with_delta(FCT_Row* row,
@@ -760,6 +761,7 @@ static FCT_Row* fct_allocate_row_realistic(Addr ld1_pc_addr,
         ifuse_plru_victim(fct_plru, set_idx, fct_num_ways);
     FCT_Row* victim = fct_row_at(set_idx, victim_way);
     fct_clear_delta_slots(victim);
+    victim->fusion_cooldown_until_load_num = 0;
     victim->valid = false;
     fct_note_live_remove();
     fct_note_set_eviction(set_idx);
@@ -796,6 +798,44 @@ FCT_Row* fct_lookup(Addr ld1_pc_addr) {
         return NULL;
     }
     return fct_lookup_row(ld1_pc_addr);
+}
+
+void fct_note_mispred_fusion_cooldown(Addr ld1_pc_addr,
+                                      uint64_t current_load_num,
+                                      unsigned int proc_id) {
+    unsigned int cooldown_loads = IFUSE_FUSION_MISPRED_COOLDOWN_LOADS;
+
+    if (!fct_is_initialized || ld1_pc_addr == 0 || cooldown_loads == 0U) {
+        return;
+    }
+
+    FCT_Row* row = fct_lookup_row(ld1_pc_addr);
+    if (!row) {
+        return;
+    }
+
+    uint64_t cooldown_until = current_load_num + cooldown_loads;
+    if (cooldown_until > row->fusion_cooldown_until_load_num) {
+        row->fusion_cooldown_until_load_num = cooldown_until;
+    }
+    (void)proc_id;
+}
+
+Flag fct_is_fusion_gated_by_cooldown(Addr ld1_pc_addr,
+                                     uint64_t current_load_num,
+                                     unsigned int proc_id) {
+    if (!fct_is_initialized || ld1_pc_addr == 0 ||
+        IFUSE_FUSION_MISPRED_COOLDOWN_LOADS == 0U) {
+        return FALSE;
+    }
+
+    FCT_Row* row = fct_lookup_row(ld1_pc_addr);
+    if (!row || current_load_num >= row->fusion_cooldown_until_load_num) {
+        return FALSE;
+    }
+
+    STAT_EVENT(proc_id, IFUSE_FUSION_GATED_MISPRED_COOLDOWN);
+    return TRUE;
 }
 
 void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,

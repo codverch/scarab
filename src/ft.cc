@@ -261,6 +261,9 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
           op->ifuse_load_role = PREDICTED_NOT_FUSED;
           op->ifuse_ld2_prediction_failed = TRUE;
           STAT_EVENT(proc_id, IFUSE_MISPREDICTED_LOADS);
+          fct_note_mispred_fusion_cooldown(waiting_pair->ld1_pc_addr,
+                                          current_load_num,
+                                          proc_id);
           /*
            * Cause counters intentionally overlap: predicting the wrong cache
            * block also means that LD1's stored offset delta produced the wrong
@@ -317,7 +320,10 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
         FCT_Row* candidate = fct_lookup(op->inst_info->addr);
         int delta_slot_idx = candidate ? fct_select_delta_slot(candidate) : -1;
 
-        if (candidate && delta_slot_idx >= 0) {
+        if (candidate && delta_slot_idx >= 0 &&
+            !fct_is_fusion_gated_by_cooldown(op->inst_info->addr,
+                                             current_load_num,
+                                             proc_id)) {
           op->ifuse_load_role = LOAD1;
 
           const FCT_DeltaSlot* delta_slot =
