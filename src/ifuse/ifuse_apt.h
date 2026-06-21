@@ -105,23 +105,12 @@ bool apt_reopen_matched_entry(Addr ld2_pc_addr,
                               unsigned int ld1_micro_op_num);
 
 /**
- * Records the speculative physical register allocated by LD1 for LD2's result.
+ * Removes a matched APT entry after LOAD2 reaches rename.
  *
- * @return TRUE if the matching live LD1 entry was found.
+ * @return TRUE if the matching live entry was found.
  */
-bool apt_set_ld2_physical_reg_id(unsigned int ld1_micro_op_num,
-                                 unsigned int ld2_physical_reg_id);
-
-/**
- * Transfers LOAD1's speculative physical register from APT to LOAD2.
- *
- * The APT entry is removed after ownership transfers to LOAD2.
- *
- * @return TRUE if the matching entry owned a speculative register.
- */
-bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
-                                  unsigned int ld1_micro_op_num,
-                                  unsigned int* ld2_physical_reg_id);
+bool apt_consume_matched_entry(Addr ld2_pc_addr,
+                               unsigned int ld1_micro_op_num);
 
 /**
  * Observes the current number of live APT LD2 predictions.

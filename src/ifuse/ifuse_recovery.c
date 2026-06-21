@@ -52,8 +52,7 @@ void ifuse_recover_flushed_op(const Op* op) {
     if (op->ifuse_load_role == LOAD1) {
         /*
          * LOAD1 is leaving the machine, so its prediction can no longer be
-         * fulfilled. APT removal also invalidates ACI and frees any extra
-         * physical register that LOAD1 allocated before being squashed.
+         * fulfilled. APT removal also invalidates ACI.
          */
         apt_remove_entry_by_ld1_micro_op_any_pc((unsigned int)op->op_num);
         return;
