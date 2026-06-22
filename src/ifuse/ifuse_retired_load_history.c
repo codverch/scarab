@@ -30,7 +30,6 @@ typedef struct RetiredLoadHistoryRow {
     Addr         load_cacheblock_addr;
     unsigned int load_memory_access_size;
     unsigned int load_micro_op_num;
-    uint64_t     load_num;
     int          next_bucket_row;
     bool         valid;
 } RetiredLoadHistoryRow;
@@ -146,16 +145,16 @@ static void retired_load_history_discard_oldest_row(void) {
 /**
  * Removes rows whose dynamic distance is beyond IFUSE_FUSION_DISTANCE.
  *
- * @param current_load_num The newest retiring load's dynamic load number.
+ * @param current_micro_op_num The newest retiring load's dynamic micro-op number.
  */
-static void retired_load_history_prune(uint64_t current_load_num) {
-    uint64_t min_load_num =
-        (current_load_num > IFUSE_FUSION_DISTANCE) ?
-            (current_load_num - IFUSE_FUSION_DISTANCE) : 1U;
+static void retired_load_history_prune(unsigned int current_micro_op_num) {
+    unsigned int min_micro_op_num =
+        (current_micro_op_num > IFUSE_FUSION_DISTANCE) ?
+            (current_micro_op_num - IFUSE_FUSION_DISTANCE) : 1U;
 
     while (retired_load_history_num_rows > 0 &&
            retired_load_history_rows[retired_load_history_first_row]
-                   .load_num < min_load_num) {
+                   .load_micro_op_num < min_micro_op_num) {
         retired_load_history_discard_oldest_row();
     }
 }
@@ -182,12 +181,11 @@ void retired_load_history_clear(void) {
 void retired_load_history_insert(Addr load_pc_addr,
                                  Addr load_effective_addr,
                                  unsigned int load_memory_access_size,
-                                 unsigned int load_micro_op_num,
-                                 uint64_t load_num) {
+                                 unsigned int load_micro_op_num) {
     if (!retired_load_history_initialized) {
         retired_load_history_clear();
     }
-    retired_load_history_prune(load_num);
+    retired_load_history_prune(load_micro_op_num);
 
     if (retired_load_history_num_rows >= RETIRED_LOAD_HISTORY_CAPACITY) {
         retired_load_history_discard_oldest_row();
@@ -203,7 +201,6 @@ void retired_load_history_insert(Addr load_pc_addr,
         retired_load_history_cacheblock_addr(load_effective_addr);
     row->load_memory_access_size = load_memory_access_size;
     row->load_micro_op_num       = load_micro_op_num;
-    row->load_num                = load_num;
     row->next_bucket_row         = -1;
     row->valid                   = true;
 
@@ -216,12 +213,11 @@ void retired_load_history_insert(Addr load_pc_addr,
 bool retired_load_history_find_and_remove_match(
     Addr current_load_effective_addr,
     unsigned int current_load_micro_op_num,
-    uint64_t current_load_num,
     RetiredLoadHistoryEntry* matched_load) {
     if (!retired_load_history_initialized) {
         retired_load_history_clear();
     }
-    retired_load_history_prune(current_load_num);
+    retired_load_history_prune(current_load_micro_op_num);
 
     Addr current_load_cacheblock_addr =
         retired_load_history_cacheblock_addr(current_load_effective_addr);
@@ -243,7 +239,7 @@ bool retired_load_history_find_and_remove_match(
         if (row->load_micro_op_num >= current_load_micro_op_num) {
             continue;
         }
-        if (current_load_num - row->load_num >
+        if (current_load_micro_op_num - row->load_micro_op_num >
             IFUSE_FUSION_DISTANCE) {
             continue;
         }

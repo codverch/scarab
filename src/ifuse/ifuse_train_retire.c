@@ -5,10 +5,7 @@
 
 #define IFUSE_TRAIN_CACHE_LINE_SIZE 64U
 
-static uint64_t ifuse_retired_load_num = 0;
-
 void ifuse_train_retire_init(void) {
-    ifuse_retired_load_num = 0;
     retired_load_history_clear();
 }
 
@@ -33,10 +30,6 @@ void ifuse_train_retired_op(Op* op) {
         return;
     }
 
-    // Fusion distance counts loads, not all micro-ops. Advance this sequence
-    // for every valid retiring on-path load, including already-predicted loads.
-    uint64_t current_load_num = ++ifuse_retired_load_num;
-
     // Predicted LOAD1/LOAD2 pairs are already resolved by frontend validation.
     // Discovery training scans ordinary retired loads only, avoiding duplicate
     // training observations for a pair that the FCT already predicted.
@@ -46,8 +39,7 @@ void ifuse_train_retired_op(Op* op) {
 
     RetiredLoadHistoryEntry matched_load;
     if (retired_load_history_find_and_remove_match(
-            op->oracle_info.va, (unsigned int)op->op_num,
-            current_load_num, &matched_load)) {
+            op->oracle_info.va, (unsigned int)op->op_num, &matched_load)) {
         // A prior retired load touched the same cache block, remained within
         // fusion distance, and was not invalidated by an intervening store.
         // Record the newly discovered LD1-to-LD2 pattern for FCT training.
@@ -70,6 +62,5 @@ void ifuse_train_retired_op(Op* op) {
         op->inst_info->addr,
         op->oracle_info.va,
         op->oracle_info.mem_size,
-        (unsigned int)op->op_num,
-        current_load_num);
+        (unsigned int)op->op_num);
 }

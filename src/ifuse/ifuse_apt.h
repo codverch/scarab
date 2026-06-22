@@ -20,7 +20,6 @@ typedef struct APT_Entry {
     Addr         ld1_pc_addr;
     Addr         ld1_effective_addr;
     unsigned int ld1_micro_op_num;
-    uint64_t     ld1_load_num;
     unsigned int ld2_physical_reg_id;
 
     // Predicted LD2 memory access
@@ -61,7 +60,6 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr);
  * @param ld1_pc_addr The PC address of the predicting LD1.
  * @param ld1_effective_addr The effective memory address accessed by LD1.
  * @param ld1_micro_op_num The dynamic micro-op number of LD1.
- * @param ld1_load_num The dynamic on-path load number of LD1.
  * @param predicted_ld2_memory_access_size The predicted LD2 access size.
  * @param ld2_pc_addr The predicted LD2 PC address.
  * @param predicted_ld2_effective_addr The predicted LD2 effective address.
@@ -71,7 +69,6 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr);
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
-                            uint64_t ld1_load_num,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
                             Addr predicted_ld2_effective_addr,
@@ -134,8 +131,8 @@ void apt_observe_live_ld2_predictions(void);
 /**
  * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
  *
- * @param current_load_num The current dynamic on-path load number.
+ * @param current_micro_op_num The current dynamic on-path micro-op number.
  */
-void apt_cleanup_stale(uint64_t current_load_num);
+void apt_cleanup_stale(uint64_t current_micro_op_num);
 
 #endif /* IFUSE_APT_H */

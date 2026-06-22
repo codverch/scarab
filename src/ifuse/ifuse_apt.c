@@ -233,7 +233,6 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr) {
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
-                            uint64_t ld1_load_num,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
                             Addr predicted_ld2_effective_addr,
@@ -256,7 +255,6 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
     node->entry.ld1_pc_addr                      = ld1_pc_addr;
     node->entry.ld1_effective_addr               = ld1_effective_addr;
     node->entry.ld1_micro_op_num                 = ld1_micro_op_num;
-    node->entry.ld1_load_num                     = ld1_load_num;
     node->entry.ld2_physical_reg_id              = 0xFFFF;
     node->entry.predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
     node->entry.predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
@@ -331,8 +329,7 @@ bool apt_reopen_matched_entry(Addr ld2_pc_addr,
              */
             node->entry.matched = false;
             aci_insert_prediction(node->entry.predicted_ld2_effective_addr,
-                                  node->entry.ld1_micro_op_num,
-                                  node->entry.ld1_load_num);
+                                  node->entry.ld1_micro_op_num);
             return true;
         }
     }
@@ -389,7 +386,7 @@ bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
 /**
  * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
  */
-void apt_cleanup_stale(uint64_t current_load_num) {
+void apt_cleanup_stale(uint64_t current_micro_op_num) {
     if (!apt_initialized) {
         return;
     }
@@ -402,9 +399,9 @@ void apt_cleanup_stale(uint64_t current_load_num) {
             APT_Node* next = node->next;
             // A matched entry remains live until LOAD2 reaches rename and
             // consumes its speculative register. Unmatched entries expire
-            // after the configured number of subsequently fetched loads.
+            // after the configured number of subsequently fetched micro-ops.
             if (node->entry.valid && !node->entry.matched &&
-                current_load_num - node->entry.ld1_load_num >
+                current_micro_op_num - node->entry.ld1_micro_op_num >
                 IFUSE_FUSION_DISTANCE) {
                 apt_remove_node(bucket, prev, node, false);
             } else {

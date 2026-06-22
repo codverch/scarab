@@ -9,12 +9,12 @@
  *
  * 1. LOAD1 reaches rename and allocates one extra physical register.
  * 2. The register ID is stored in LOAD1's APT entry.
- * 3. If the matching LOAD2 reaches rename within the allowed load distance,
+ * 3. If the matching LOAD2 reaches rename within the allowed fusion distance,
  *    it consumes that register ID and the APT entry is removed.
  * 4. If no matching LOAD2 arrives in time, stale APT cleanup removes the entry
  *    and frees the extra register.
  *
- * Fusion distance counts dynamic on-path loads, not all micro-ops.
+ * Fusion distance counts dynamic on-path micro-ops, not loads alone.
  */
 
 /**
