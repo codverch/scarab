@@ -187,13 +187,6 @@ static void ifuse_exec_pair_signal_ld2(
     } else {
         STAT_EVENT(ld2_op->proc_id, IFUSE_USEFULNESS_SLOT_UPDATES);
     }
-    if (ld2_op->ifuse_partner_ld1_pc != 0 &&
-        ld2_op->ifuse_fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
-        fct_update_delta_usefulness(ld2_op->ifuse_partner_ld1_pc,
-                                    ld2_op->ifuse_fct_delta_slot_idx,
-                                    consumer_wakeups);
-    }
-
     ld2_op->wake_up_signaled[REG_DATA_DEP] = TRUE;
     ld2_op->ifuse_ld2_early_wake_signaled = TRUE;
     ifuse_exec_pair_finalize_ld2(ld2_op);

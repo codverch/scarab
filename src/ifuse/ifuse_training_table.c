@@ -23,8 +23,10 @@
  * This starts the realistic-table path while keeping capacity ideal for now.
  * Storage is a large simulator hash table keyed by the exact runtime pattern:
  * LD1 PC, LD2 PC, offset delta, direction, and LD2 memory access size. Once a
- * pattern reaches IFUSE_TRAINING_INSERT_THRESHOLD observations, it is
- * promoted into the FCT with high confidence.
+ * pattern reaches its per-entry insert threshold, it is promoted into the FCT
+ * at IFUSE_FCT_CONF_THRESHOLD. The first offset delta for an LD1-LD2 row uses
+ * IFUSE_TRAINING_INSERT_THRESHOLD; additional deltas use
+ * IFUSE_TRAINING_SECONDARY_INSERT_THRESHOLD.
  */
 
 #define TRAINING_TABLE_NUM_ENTRIES IFUSE_IDEAL_TRAINING_TABLE_MAX_ENTRIES
@@ -35,6 +37,7 @@ typedef struct TrainingTableEntry {
     unsigned int offset_delta;
     unsigned int ld2_memory_access_size;
     unsigned int observation_count;
+    unsigned int insert_threshold;
     bool         direction;
     bool         valid;
 } TrainingTableEntry;
@@ -108,6 +111,9 @@ static TrainingTableEntry* training_table_find_entry(
             entry->direction                = direction;
             entry->ld2_memory_access_size   = ld2_memory_access_size;
             entry->observation_count        = 0;
+            entry->insert_threshold         = fct_get_training_insert_threshold(
+                ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
+                ld2_memory_access_size);
             entry->valid                    = true;
             STAT_EVENT(0, TRAINING_TABLE_INSERTS);
             return entry;
@@ -225,15 +231,11 @@ static void training_table_observe_pair(
         entry->observation_count++;
     }
 
-    unsigned int insert_threshold = IFUSE_TRAINING_INSERT_THRESHOLD;
-    if (insert_threshold == 0U) {
-        insert_threshold = 1U;
-    }
-
-    if (entry->observation_count < insert_threshold) {
+    if (entry->observation_count < entry->insert_threshold) {
         return;
     }
-    if (entry->observation_count > insert_threshold && !promote_existing_row) {
+    if (entry->observation_count > entry->insert_threshold &&
+        !promote_existing_row) {
         fct_reinforce_ld2_candidate_for_ld1(ld1_pc_addr, ld2_pc_addr,
                                             offset_delta, direction,
                                             ld2_memory_access_size);
