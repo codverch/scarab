@@ -44,7 +44,6 @@ extern "C" {
   #include "ifuse/ifuse_aci.h"
   #include "ifuse/ifuse_apt.h"
   #include "ifuse/ifuse_fct.h"
-  #include "ifuse/ifuse_load_tracker.h"
   #include "ifuse/ifuse_training_table.h"
   #include "ifuse/ifuse.param.h"
   }
@@ -190,13 +189,13 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     // consume live APT entries.
     if (!off_path && op->inst_info->table_info.mem_type == MEM_LD &&
         op->oracle_info.va != 0 && op->oracle_info.mem_size != 0) {
-      // IFuse distance is measured in dynamic on-path loads, not in all fetched
-      // micro-ops. Periodically discard predictions whose LOAD2 never arrived.
-      uint64_t current_load_num = ifuse_next_load_num();
+      // IFuse distance is measured in dynamic on-path micro-ops. Periodically
+      // discard predictions whose LOAD2 never arrived.
+      const uint64_t current_micro_op_num = (uint64_t)op->op_num;
       if (IFUSE_FUSION_DISTANCE != 0 &&
-          current_load_num % IFUSE_FUSION_DISTANCE == 0) {
-        apt_cleanup_stale(current_load_num);
-        aci_cleanup_stale(current_load_num);
+          current_micro_op_num % IFUSE_FUSION_DISTANCE == 0) {
+        apt_cleanup_stale(current_micro_op_num);
+        aci_cleanup_stale(current_micro_op_num);
       }
 
       // Check whether a prior LD1 expects this load PC to appear as LD2.
@@ -217,7 +216,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
       }
 
       if (waiting_pair &&
-          current_load_num - waiting_pair->ld1_load_num >
+          current_micro_op_num - waiting_pair->ld1_micro_op_num >
               IFUSE_FUSION_DISTANCE) {
         // apt_lookup() claims the entry immediately. Reject a claim found just
         // after its deadline and release LOAD1's unconsumed extra register.
@@ -354,7 +353,6 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
               op->inst_info->addr,
               op->oracle_info.va,
               (unsigned int)op->op_num,
-              current_load_num,
               candidate->ld2_mem_size,
               candidate->ld2_pc_addr,
               predicted_ld2_effective_addr,
@@ -363,8 +361,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
           // ACI records the predicted LD2 cache block.
           if (inserted_pair) {
             aci_insert_prediction(predicted_ld2_effective_addr,
-                                  (unsigned int)op->op_num,
-                                  current_load_num);
+                                  (unsigned int)op->op_num);
           }
         }
       }
