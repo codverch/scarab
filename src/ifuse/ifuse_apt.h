@@ -20,6 +20,7 @@ typedef struct APT_Entry {
     Addr         ld1_pc_addr;
     Addr         ld1_effective_addr;
     unsigned int ld1_micro_op_num;
+    unsigned int ld1_memory_access_size;
     unsigned int ld2_physical_reg_id;
 
     // Predicted LD2 memory access
@@ -69,6 +70,7 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr);
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
+                            unsigned int ld1_memory_access_size,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
                             Addr predicted_ld2_effective_addr,

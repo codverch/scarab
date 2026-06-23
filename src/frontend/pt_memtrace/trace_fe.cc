@@ -387,7 +387,13 @@ void ext_trace_fetch_op(uns proc_id, uns bp_id, Op *op) {
 
 Flag ext_trace_can_fetch_op(uns proc_id, uns bp_id) {
   if (!bp_id && !off_path_mode[proc_id])
-    return !trace_read_done[proc_id];
+    /*
+     * Allow draining the final uops of the last on-path instruction after
+     * trace_read_done is set. Blocking all fetches once EOF is recorded
+     * strands the frontend mid-instruction and triggers the decoupled-FE
+     * forward-progress watchdog.
+     */
+    return !(uop_generator_get_eom(proc_id) && trace_read_done[proc_id]);
   else if (bp_id && !off_path_mode[proc_id][bp_id])
     return FALSE;
   else

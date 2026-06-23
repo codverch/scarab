@@ -233,6 +233,7 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr) {
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
+                            unsigned int ld1_memory_access_size,
                             unsigned int predicted_ld2_memory_access_size,
                             Addr ld2_pc_addr,
                             Addr predicted_ld2_effective_addr,
@@ -255,6 +256,7 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
     node->entry.ld1_pc_addr                      = ld1_pc_addr;
     node->entry.ld1_effective_addr               = ld1_effective_addr;
     node->entry.ld1_micro_op_num                 = ld1_micro_op_num;
+    node->entry.ld1_memory_access_size           = ld1_memory_access_size;
     node->entry.ld2_physical_reg_id              = 0xFFFF;
     node->entry.predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
     node->entry.predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
@@ -397,12 +399,12 @@ void apt_cleanup_stale(uint64_t current_micro_op_num) {
 
         while (node) {
             APT_Node* next = node->next;
-            // A matched entry remains live until LOAD2 reaches rename and
-            // consumes its speculative register. Unmatched entries expire
-            // after the configured number of subsequently fetched micro-ops.
+            // Only unmatched predictions expire here. A matched LOAD2 has
+            // already arrived at fetch; its extra register stays live until
+            // LOAD2 renames or the prediction is explicitly removed.
             if (node->entry.valid && !node->entry.matched &&
                 current_micro_op_num - node->entry.ld1_micro_op_num >
-                IFUSE_FUSION_DISTANCE) {
+                    IFUSE_FUSION_DISTANCE) {
                 apt_remove_node(bucket, prev, node, false);
             } else {
                 prev = node;

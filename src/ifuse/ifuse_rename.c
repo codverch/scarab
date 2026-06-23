@@ -7,14 +7,15 @@
 /**
  * IFuse speculative-register lifecycle:
  *
- * 1. LOAD1 reaches rename and allocates one extra physical register.
+ * 1. LOAD1 reaches rename and allocates one extra physical register from the
+ *    same integer rename pool used by ordinary instructions.
  * 2. The register ID is stored in LOAD1's APT entry.
- * 3. If the matching LOAD2 reaches rename within the allowed fusion distance,
- *    it consumes that register ID and the APT entry is removed.
- * 4. If no matching LOAD2 arrives in time, stale APT cleanup removes the entry
- *    and frees the extra register.
- *
- * Fusion distance counts dynamic on-path micro-ops, not loads alone.
+ * 3. When the matching LOAD2 reaches rename, it takes that register and the
+ *    APT entry is removed.
+ * 4. If LOAD2 never arrives (fetch) within IFUSE_FUSION_DISTANCE, stale APT
+ *    cleanup frees the extra register.
+ * 5. If no physical register is available at LOAD1 rename, the APT prediction
+ *    is dropped so rename pressure stays realistic.
  */
 
 /**
@@ -41,7 +42,7 @@ static int ifuse_alloc_ld2_physical_reg(Op* ld1_op) {
 }
 
 /**
- * Releases an IFuse-only general-purpose physical register.
+ * Releases an IFuse-only physical register.
  */
 void ifuse_free_ld2_physical_reg(unsigned int ld2_physical_reg_id) {
     if (ld2_physical_reg_id == REG_TABLE_REG_ID_INVALID) {
@@ -61,12 +62,15 @@ void ifuse_rename_op(Op* op) {
     if (op->ifuse_load_role == LOAD1) {
         int ld2_physical_reg_id = ifuse_alloc_ld2_physical_reg(op);
 
-        // The live APT entry owns this extra register while LOAD1 waits for its
-        // predicted LOAD2. Stale APT cleanup will free it if LOAD2 never arrives.
-        if (ld2_physical_reg_id != REG_TABLE_REG_ID_INVALID &&
-            !apt_set_ld2_physical_reg_id((unsigned int)op->op_num,
+        if (ld2_physical_reg_id == REG_TABLE_REG_ID_INVALID) {
+            apt_remove_entry_by_ld1_micro_op_any_pc((unsigned int)op->op_num);
+            return;
+        }
+
+        if (!apt_set_ld2_physical_reg_id((unsigned int)op->op_num,
                                          ld2_physical_reg_id)) {
             ifuse_free_ld2_physical_reg(ld2_physical_reg_id);
+            apt_remove_entry_by_ld1_micro_op_any_pc((unsigned int)op->op_num);
         }
         return;
     }

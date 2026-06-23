@@ -176,6 +176,8 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->ifuse_load_role = NOT_FUSION_CANDIDATE;
     op->ifuse_partner_op_num = 0;
     op->ifuse_partner_ld1_pc = 0;
+    op->ifuse_partner_ld1_va = 0;
+    op->ifuse_partner_ld1_mem_size = 0;
     op->ifuse_fct_delta_slot_idx = FCT_INVALID_DELTA_SLOT_IDX;
     op->ifuse_ld2_physical_reg_id = OP_REG_ID_INVALID;
     op->ifuse_ld2_early_wake_signaled = FALSE;
@@ -189,13 +191,14 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     // consume live APT entries.
     if (!off_path && op->inst_info->table_info.mem_type == MEM_LD &&
         op->oracle_info.va != 0 && op->oracle_info.mem_size != 0) {
-      // IFuse distance is measured in dynamic on-path micro-ops. Periodically
-      // discard predictions whose LOAD2 never arrived.
+      // IFuse distance is measured in dynamic on-path micro-ops. Discard
+      // predictions whose LOAD2 never arrived before the fusion window closes.
       const uint64_t current_micro_op_num = (uint64_t)op->op_num;
-      if (IFUSE_FUSION_DISTANCE != 0 &&
-          current_micro_op_num % IFUSE_FUSION_DISTANCE == 0) {
+      if (IFUSE_FUSION_DISTANCE != 0) {
         apt_cleanup_stale(current_micro_op_num);
-        aci_cleanup_stale(current_micro_op_num);
+        if (current_micro_op_num % IFUSE_FUSION_DISTANCE == 0) {
+          aci_cleanup_stale(current_micro_op_num);
+        }
       }
 
       // Check whether a prior LD1 expects this load PC to appear as LD2.
@@ -233,6 +236,9 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
         op->ifuse_load_role = LOAD2;
         op->ifuse_partner_op_num = waiting_pair->ld1_micro_op_num;
         op->ifuse_partner_ld1_pc = waiting_pair->ld1_pc_addr;
+        op->ifuse_partner_ld1_va = waiting_pair->ld1_effective_addr;
+        op->ifuse_partner_ld1_mem_size =
+            waiting_pair->ld1_memory_access_size;
         op->ifuse_fct_delta_slot_idx = waiting_pair->fct_delta_slot_idx;
 
         // ACI verifies that LD2 accessed the cache block predicted by LD1.
@@ -261,6 +267,12 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
           // by flushing younger consumers after this LOAD2 reaches its FU.
           op->ifuse_load_role = PREDICTED_NOT_FUSED;
           op->ifuse_ld2_prediction_failed = TRUE;
+          /*
+           * apt_lookup() already marked this entry matched. Drop it now so
+           * LOAD1's extra physical register returns before LOAD2 reaches map.
+           */
+          apt_remove_entry_by_ld1_micro_op(op->inst_info->addr,
+                                           waiting_pair->ld1_micro_op_num);
           STAT_EVENT(proc_id, IFUSE_MISPREDICTED_LOADS);
           /*
            * Cause counters intentionally overlap: predicting the wrong cache
@@ -304,8 +316,17 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
                   false);
             }
           }
+          {
+            const bool offset_only_mispred =
+                aci_result == ACI_LOOKUP_MATCH &&
+                op->oracle_info.va !=
+                    waiting_pair->predicted_ld2_effective_addr;
+            if (!offset_only_mispred) {
+              fct_update_pair_confidence(waiting_pair->ld1_pc_addr, false);
+            }
+          }
         } else {
-          // Reinforce accurate LD1-to-LD2 predictions.
+          // Reinforce accurate LD1-to-LD2 offset predictions (pair conf unchanged).
           if (waiting_pair->fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
             fct_update_delta_confidence(
                 waiting_pair->ld1_pc_addr,
@@ -321,7 +342,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
         int delta_slot_idx = candidate ?
             fct_select_delta_slot(candidate, op->oracle_info.va) : -1;
 
-        if (candidate && delta_slot_idx >= 0) {
+        if (candidate && fct_row_is_fusible(candidate) && delta_slot_idx >= 0) {
           op->ifuse_load_role = LOAD1;
 
           const FCT_DeltaSlot* delta_slot =
@@ -353,6 +374,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
               op->inst_info->addr,
               op->oracle_info.va,
               (unsigned int)op->op_num,
+              op->oracle_info.mem_size,
               candidate->ld2_mem_size,
               candidate->ld2_pc_addr,
               predicted_ld2_effective_addr,

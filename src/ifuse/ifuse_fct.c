@@ -17,12 +17,10 @@
  * Ideal Fusion Candidate Table (FCT).
  *
  * Each LD1 PC maps to one LD2 candidate and up to four cache-line offset
- * deltas. Each delta keeps a saturating confidence counter. At fetch, I-Fuse
- * selects the highest-confidence delta whose confidence is at or above
- * IFUSE_FCT_CONF_THRESHOLD. Training promotion installs deltas at that
- * threshold; correct frontend predictions increment confidence and
- * mispredictions decrement confidence. Ties favor the most recently correct
- * delta.
+ * deltas. The row keeps pair-fusion confidence (LD1 fuses with this LD2 PC)
+ * capped at IFUSE_FCT_PAIR_MAX_CONF. Promotion installs pair confidence at
+ * that level; mispredictions decrement pair confidence without increasing it
+ * on correct predictions. Offset-delta confidence is per delta slot.
  */
 
 static FCT_Row* fct_rows = NULL;
@@ -77,6 +75,50 @@ static unsigned int fct_normalized_training_threshold(unsigned int threshold) {
 
 static unsigned int fct_promoted_delta_confidence(void) {
     return fct_saturating_confidence_score(IFUSE_FCT_CONF_THRESHOLD);
+}
+
+static unsigned int fct_max_pair_confidence_score(void) {
+    unsigned int max_confidence_score = IFUSE_FCT_PAIR_MAX_CONF;
+    if (max_confidence_score < IFUSE_FCT_PAIR_CONF_THRESHOLD) {
+        max_confidence_score = IFUSE_FCT_PAIR_CONF_THRESHOLD;
+    }
+    return max_confidence_score;
+}
+
+static unsigned int fct_saturating_pair_confidence_score(
+    unsigned int confidence_score) {
+    const unsigned int max_confidence_score = fct_max_pair_confidence_score();
+    return (confidence_score > max_confidence_score) ?
+        max_confidence_score : confidence_score;
+}
+
+static unsigned int fct_promoted_pair_confidence(void) {
+    return fct_saturating_pair_confidence_score(IFUSE_FCT_PAIR_CONF_THRESHOLD);
+}
+
+static bool fct_pair_is_selectable(const FCT_Row* row) {
+    if (!row || !row->valid) {
+        return false;
+    }
+
+    if (IFUSE_FCT_PAIR_CONF_THRESHOLD == 0U) {
+        return true;
+    }
+
+    return row->pair_confidence_score >= IFUSE_FCT_PAIR_CONF_THRESHOLD;
+}
+
+static void fct_penalize_pair_confidence(FCT_Row* row) {
+    unsigned int confidence_penalty;
+
+    if (!row || !row->valid) {
+        return;
+    }
+
+    confidence_penalty = IFUSE_FCT_PAIR_MISPRED_CONF_PENALTY;
+    row->pair_confidence_score =
+        (row->pair_confidence_score <= confidence_penalty) ?
+        0U : row->pair_confidence_score - confidence_penalty;
 }
 
 static void fct_clear_delta_slots(FCT_Row* row) {
@@ -277,6 +319,12 @@ static void fct_write_row_metadata(FCT_Row* row,
     row->valid              = true;
 }
 
+static void fct_set_pair_confidence(FCT_Row* row,
+                                    unsigned int confidence_score) {
+    row->pair_confidence_score =
+        fct_saturating_pair_confidence_score(confidence_score);
+}
+
 static void fct_write_new_row_with_delta(FCT_Row* row,
                                          Addr ld1_pc_addr,
                                          Addr ld2_pc_addr,
@@ -287,11 +335,13 @@ static void fct_write_new_row_with_delta(FCT_Row* row,
                                          unsigned int ld2_mem_size,
                                          unsigned int ld1_micro_op_num,
                                          unsigned int ld2_micro_op_num,
-                                         unsigned int confidence_score) {
+                                         unsigned int confidence_score,
+                                         unsigned int pair_confidence_score) {
     fct_clear_delta_slots(row);
     fct_write_row_metadata(row, ld1_pc_addr, ld2_pc_addr,
                            ld1_effective_addr, ld2_effective_addr,
                            ld2_mem_size, ld1_micro_op_num, ld2_micro_op_num);
+    fct_set_pair_confidence(row, pair_confidence_score);
     fct_init_delta_slot(&row->delta_slots[0], offset_delta, direction,
                         confidence_score);
 }
@@ -441,6 +491,25 @@ FCT_Row* fct_lookup(Addr ld1_pc_addr) {
         return NULL;
     }
     return fct_lookup_row(ld1_pc_addr);
+}
+
+Flag fct_row_is_fusible(const FCT_Row* row) {
+    return fct_pair_is_selectable(row) ? TRUE : FALSE;
+}
+
+void fct_update_pair_confidence(Addr ld1_pc_addr, bool prediction_correct) {
+    FCT_Row* row;
+
+    if (!fct_is_initialized || prediction_correct) {
+        return;
+    }
+
+    row = fct_lookup_row(ld1_pc_addr);
+    if (!row) {
+        return;
+    }
+
+    fct_penalize_pair_confidence(row);
 }
 
 unsigned int fct_get_training_insert_threshold(Addr ld1_pc_addr,
@@ -594,7 +663,8 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                      ld1_effective_addr, ld2_effective_addr,
                                      offset_delta, direction, ld2_mem_size,
                                      ld1_micro_op_num, ld2_micro_op_num,
-                                     IFUSE_FCT_INITIAL_CONF);
+                                     IFUSE_FCT_INITIAL_CONF,
+                                     IFUSE_FCT_PAIR_INITIAL_CONF);
         return;
     }
 
@@ -611,7 +681,8 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                  ld1_effective_addr, ld2_effective_addr,
                                  offset_delta, direction, ld2_mem_size,
                                  ld1_micro_op_num, ld2_micro_op_num,
-                                 IFUSE_FCT_INITIAL_CONF);
+                                 IFUSE_FCT_INITIAL_CONF,
+                                 IFUSE_FCT_PAIR_INITIAL_CONF);
 }
 
 void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
@@ -664,7 +735,8 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                      ld1_effective_addr, ld2_effective_addr,
                                      offset_delta, direction, ld2_mem_size,
                                      ld1_micro_op_num, ld2_micro_op_num,
-                                     fct_promoted_delta_confidence());
+                                     fct_promoted_delta_confidence(),
+                                     fct_promoted_pair_confidence());
         return;
     }
 
@@ -675,7 +747,8 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                      ld1_effective_addr, ld2_effective_addr,
                                      offset_delta, direction, ld2_mem_size,
                                      ld1_micro_op_num, ld2_micro_op_num,
-                                     fct_promoted_delta_confidence());
+                                     fct_promoted_delta_confidence(),
+                                     fct_promoted_pair_confidence());
         return;
     }
 

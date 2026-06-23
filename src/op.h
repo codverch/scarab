@@ -251,6 +251,8 @@ struct Op_struct {
   Fusion_Candidate_Type ifuse_load_role;
   Counter               ifuse_partner_op_num;
   Addr                  ifuse_partner_ld1_pc;
+  Addr                  ifuse_partner_ld1_va;
+  uns                   ifuse_partner_ld1_mem_size;
   uns                   ifuse_fct_delta_slot_idx;
   uns16                 ifuse_ld2_physical_reg_id;
   Flag                  ifuse_ld2_early_wake_signaled;

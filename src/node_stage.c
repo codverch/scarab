@@ -59,6 +59,7 @@
 #include "ifuse/ifuse_recovery.h"
 #include "ifuse/ifuse_rename.h"
 #include "ifuse/ifuse_train_retire.h"
+#include "ifuse/ifuse_fusion_log.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map.h"
@@ -570,6 +571,7 @@ void node_retire() {
     // Count completed fusions, not speculative frontend classifications.
     if (op->ifuse_load_role == LOAD2) {
       STAT_EVENT(op->proc_id, IFUSE_FUSED_LOADS);
+      ifuse_fusion_log_retired_pair(op);
     }
 
     // free the previous register entries with same architectural destination
