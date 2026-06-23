@@ -9,13 +9,13 @@
 #ifndef IFUSE_FCT_H
 #define IFUSE_FCT_H
 
-#define FCT_NUM_DELTA_SLOTS 4
+#define FCT_NUM_DELTA_SLOTS 6
 #define FCT_INVALID_DELTA_SLOT_IDX 0xFFFFFFFFU
 
 /**
  * Fusion Candidate Table (FCT)
  * ============================
- * Each LD1 PC maps to one LD2 candidate and up to four cache-line offset
+ * Each LD1 PC maps to one LD2 candidate and up to six cache-line offset
  * deltas. The row keeps pair-fusion confidence (LD1 fuses with this LD2 PC)
  * capped at IFUSE_FCT_PAIR_MAX_CONF (default 100). Promotion installs pair
  * confidence at that level; mispredictions decrement by
@@ -32,7 +32,7 @@ typedef struct FCT_DeltaSlot {
 } FCT_DeltaSlot;
 
 /**
- * One FCT row contains one LD2 candidate and up to four offset deltas for a
+ * One FCT row contains one LD2 candidate and up to six offset deltas for a
  * single LD1 PC.
  */
 typedef struct FCT_Row {

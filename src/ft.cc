@@ -365,6 +365,12 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
             case 3:
               STAT_EVENT(proc_id, FCT_DELTA_SLOT3_PREDICTIONS);
               break;
+            case 4:
+              STAT_EVENT(proc_id, FCT_DELTA_SLOT4_PREDICTIONS);
+              break;
+            case 5:
+              STAT_EVENT(proc_id, FCT_DELTA_SLOT5_PREDICTIONS);
+              break;
             default:
               break;
           }
