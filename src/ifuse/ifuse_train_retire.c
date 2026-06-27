@@ -5,6 +5,11 @@
 
 #define IFUSE_TRAIN_CACHE_LINE_SIZE 64U
 
+static Flag ifuse_train_load_mem_critical(const Op* op) {
+    return op && (op->engine_info.l1_miss || op->engine_info.dcmiss) ?
+        TRUE : FALSE;
+}
+
 static uint64_t ifuse_retired_load_num = 0;
 
 void ifuse_train_retire_init(void) {
@@ -60,6 +65,7 @@ void ifuse_train_retired_op(Op* op) {
             op->oracle_info.mem_size,
             matched_load.load_micro_op_num,
             (unsigned int)op->op_num,
+            matched_load.load_mem_critical,
             op->proc_id);
         return;
     }
@@ -71,5 +77,6 @@ void ifuse_train_retired_op(Op* op) {
         op->oracle_info.va,
         op->oracle_info.mem_size,
         (unsigned int)op->op_num,
-        current_load_num);
+        current_load_num,
+        ifuse_train_load_mem_critical(op));
 }

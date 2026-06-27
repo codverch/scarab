@@ -287,6 +287,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
                 op->oracle_info.mem_size,
                 waiting_pair->ld1_micro_op_num,
                 (unsigned int)op->op_num,
+                FALSE,
                 proc_id);
           }
           if (waiting_pair->fct_delta_slot_idx < FCT_NUM_DELTA_SLOTS) {
@@ -323,7 +324,8 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
         if (candidate && delta_slot_idx >= 0 &&
             !fct_is_fusion_gated_by_cooldown(op->inst_info->addr,
                                              current_load_num,
-                                             proc_id)) {
+                                             proc_id) &&
+            fct_is_fusion_mem_critical_eligible(candidate, proc_id)) {
           op->ifuse_load_role = LOAD1;
 
           const FCT_DeltaSlot* delta_slot =

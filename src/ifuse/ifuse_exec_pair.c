@@ -6,9 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ifuse.param.h"
 #include "ifuse_ideal_alloc.h"
 #include "ifuse_ideal_limits.h"
+#include "../map.h"
 #include "../map_rename.h"
+#include "../memory/memory.param.h"
 #include "../op_info.h"
 
 #define IFUSE_EXEC_PAIR_NUM_BUCKETS 4096U
@@ -25,6 +28,7 @@ typedef struct IFuse_Exec_Pair {
     Op*     ld2_op;
     Counter ld1_wake_cycle;
     Flag    ld1_completed;
+    Flag    ld1_slow_memory;
     struct IFuse_Exec_Pair* next;
 } IFuse_Exec_Pair;
 
@@ -122,16 +126,52 @@ static void ifuse_exec_pair_remove_ld2_if_current(const Op* ld2_op) {
     }
 }
 
-static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
-    if (!ld2_op->ifuse_ld2_early_wake_signaled ||
-        !ld2_op->ifuse_ld2_agu_completed) {
+/*
+ * LOAD1 paid real memory latency when it missed or its access took longer than
+ * a simple L1 hit. Fast-hit LOAD1s defer LOAD2 dependent wake to LOAD2's AGU.
+ */
+static Flag ifuse_load1_had_slow_memory(const Op* load1) {
+    if (load1->oracle_info.dcmiss) {
+        return TRUE;
+    }
+
+    Counter mem_latency = load1->wake_cycle - load1->issue_cycle;
+    return mem_latency >
+           (Counter)(DCACHE_CYCLES + load1->inst_info->extra_ld_latency);
+}
+
+static Flag ifuse_should_early_wake_ld2(const IFuse_Exec_Pair* pair) {
+    if (!IFUSE_LD2_EARLY_WAKEUP_ON_MISS_ONLY) {
+        return TRUE;
+    }
+
+    return pair->ld1_slow_memory;
+}
+
+static void ifuse_exec_pair_signal_ld2(
+    IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns));
+
+static void ifuse_exec_pair_maybe_signal_ld2(
+    IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns)) {
+    if (!pair->ld2_op || !ifuse_should_early_wake_ld2(pair)) {
         return;
     }
 
-    // The fused LOAD2 is complete only after its data path and AGU accounting
-    // have both completed. It can now retire normally from the ROB.
-    ld2_op->done_cycle =
-        MAX2(ld2_op->wake_cycle, ld2_op->dcache_cycle);
+    ifuse_exec_pair_signal_ld2(pair, wake_action);
+    ifuse_exec_pair_remove(pair->ld1_op_num);
+}
+
+static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
+    if (!ld2_op->ifuse_ld2_agu_completed) {
+        return;
+    }
+
+    if (ld2_op->ifuse_ld2_early_wake_signaled) {
+        ld2_op->done_cycle =
+            MAX2(ld2_op->wake_cycle, ld2_op->dcache_cycle);
+    } else {
+        ld2_op->done_cycle = ld2_op->wake_cycle;
+    }
     ld2_op->state = OS_DONE;
 }
 
@@ -215,16 +255,16 @@ void ifuse_exec_pair_track_mapped_load(Op* op,
 
     pair->ld2_op = op;
 
-    // LOAD1 may have completed before LOAD2 reached map. Its wake-up links are
-    // installed now, so the fused result can be signaled immediately.
+    // LOAD1 may have completed before LOAD2 reached map.
     if (pair->ld1_completed) {
-        ifuse_exec_pair_signal_ld2(pair, wake_action);
-        ifuse_exec_pair_remove(pair->ld1_op_num);
+        ifuse_exec_pair_maybe_signal_ld2(pair, wake_action);
     }
 }
 
 void ifuse_exec_pair_handle_producer_wakeup(
     Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
+    IFuse_Exec_Pair* pair;
+
     if (!op || op->off_path || op->ifuse_load_role != LOAD1 ||
         type != REG_DATA_DEP) {
         return;
@@ -232,19 +272,16 @@ void ifuse_exec_pair_handle_producer_wakeup(
 
     ifuse_exec_pair_init();
 
-    IFuse_Exec_Pair* pair = ifuse_exec_pair_get_or_insert(op->op_num);
+    pair = ifuse_exec_pair_get_or_insert(op->op_num);
     if (!pair) {
         return;
     }
 
     pair->ld1_completed = TRUE;
     pair->ld1_wake_cycle = op->wake_cycle;
+    pair->ld1_slow_memory = ifuse_load1_had_slow_memory(op);
 
-    // LOAD2 may already be waiting in the map-stage-created pair entry.
-    if (pair->ld2_op) {
-        ifuse_exec_pair_signal_ld2(pair, wake_action);
-        ifuse_exec_pair_remove(pair->ld1_op_num);
-    }
+    ifuse_exec_pair_maybe_signal_ld2(pair, wake_action);
 }
 
 Flag ifuse_exec_pair_skip_duplicate_wakeup(const Op* op, Dep_Type type) {
@@ -262,6 +299,10 @@ Flag ifuse_exec_pair_bypass_ld2_memory_pipeline(const Op* op) {
         return TRUE;
     }
 
+    if (op->ifuse_ld2_agu_completed) {
+        return TRUE;
+    }
+
     /*
      * Replay can invalidate the live execution-side pair after frontend
      * classification. Without that pair there is no LOAD1 completion event
@@ -276,7 +317,8 @@ Flag ifuse_exec_pair_bypass_ld2_memory_pipeline(const Op* op) {
     return pair && pair->ld2_op == op;
 }
 
-void ifuse_exec_pair_complete_ld2_agu(Op* op) {
+void ifuse_exec_pair_complete_ld2_agu(Op* op,
+                                      void (*wake_action)(Op*, Op*, uns)) {
     if (!ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
         return;
     }
@@ -286,6 +328,17 @@ void ifuse_exec_pair_complete_ld2_agu(Op* op) {
     // access and memory request.
     op->dcache_cycle = cycle_count;
     op->ifuse_ld2_agu_completed = TRUE;
+
+    if (!op->ifuse_ld2_early_wake_signaled) {
+        op->done_cycle =
+            cycle_count + DCACHE_CYCLES + op->inst_info->extra_ld_latency;
+        op->wake_cycle = op->done_cycle;
+        wake_up_ops(op, REG_DATA_DEP, wake_action);
+        ifuse_exec_pair_finalize_ld2(op);
+        ifuse_exec_pair_remove(op->ifuse_partner_op_num);
+        return;
+    }
+
     ifuse_exec_pair_finalize_ld2(op);
 }
 

@@ -525,6 +525,21 @@ static void fct_write_row_metadata(FCT_Row* row,
     row->ld2_micro_op_num   = ld2_micro_op_num;
     row->valid              = true;
     row->fusion_cooldown_until_load_num = 0;
+    row->pair_mem_obs = 0;
+    row->pair_mem_critical_obs = 0;
+}
+
+static void fct_note_pair_mem_observation(FCT_Row* row, Flag ld1_mem_critical) {
+    if (!row) {
+        return;
+    }
+
+    if (row->pair_mem_obs < 0xFFFFU) {
+        row->pair_mem_obs++;
+    }
+    if (ld1_mem_critical && row->pair_mem_critical_obs < 0xFFFFU) {
+        row->pair_mem_critical_obs++;
+    }
 }
 
 static void fct_write_new_row_with_delta(FCT_Row* row,
@@ -838,6 +853,40 @@ Flag fct_is_fusion_gated_by_cooldown(Addr ld1_pc_addr,
     return TRUE;
 }
 
+Flag fct_is_fusion_mem_critical_eligible(const FCT_Row* row,
+                                         unsigned int proc_id) {
+    unsigned int min_obs;
+    unsigned int min_pct;
+    unsigned int critical_pct;
+
+    if (!IFUSE_FUSION_MEM_CRITICAL_GATE || !row || !row->valid) {
+        return TRUE;
+    }
+
+    min_obs = IFUSE_FUSION_MEM_CRITICAL_MIN_OBS;
+    if (min_obs == 0U) {
+        min_obs = 1U;
+    }
+    min_pct = IFUSE_FUSION_MEM_CRITICAL_MIN_PCT;
+    if (min_pct > 100U) {
+        min_pct = 100U;
+    }
+
+    if (row->pair_mem_obs < min_obs) {
+        return TRUE;
+    }
+
+    critical_pct =
+        (unsigned int)(((uint64_t)row->pair_mem_critical_obs * 100ULL) /
+                       (uint64_t)row->pair_mem_obs);
+    if (critical_pct >= min_pct) {
+        return TRUE;
+    }
+
+    STAT_EVENT(proc_id, IFUSE_FUSION_GATED_MEM_CRITICAL);
+    return FALSE;
+}
+
 void fct_update_delta_confidence(Addr ld1_pc_addr, unsigned int slot_idx,
                                  bool prediction_correct) {
     if (!fct_is_initialized || slot_idx >= FCT_NUM_DELTA_SLOTS) {
@@ -1032,7 +1081,8 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
 void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                          unsigned int offset_delta,
                                          bool direction,
-                                         unsigned int ld2_mem_size) {
+                                         unsigned int ld2_mem_size,
+                                         Flag ld1_mem_critical) {
     if (!fct_is_initialized || ld1_pc_addr == 0 || ld2_pc_addr == 0) {
         return;
     }
@@ -1042,6 +1092,8 @@ void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
         row->ld2_mem_size != ld2_mem_size) {
         return;
     }
+
+    fct_note_pair_mem_observation(row, ld1_mem_critical);
 
     int slot_idx = fct_find_delta_slot(row, offset_delta, direction);
     if (slot_idx < 0) {
@@ -1059,6 +1111,7 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                        unsigned int ld2_mem_size,
                                        unsigned int ld1_micro_op_num,
                                        unsigned int ld2_micro_op_num,
+                                       Flag ld1_mem_critical,
                                        unsigned int proc_id) {
     if (!fct_is_initialized) {
         fct_init();
@@ -1075,6 +1128,7 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                      offset_delta, direction, ld2_mem_size,
                                      ld1_micro_op_num, ld2_micro_op_num,
                                      IFUSE_FCT_INITIAL_CONF);
+        fct_note_pair_mem_observation(row, ld1_mem_critical);
         return;
     }
 
@@ -1086,9 +1140,11 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                      offset_delta, direction, ld2_mem_size,
                                      ld1_micro_op_num, ld2_micro_op_num,
                                      IFUSE_FCT_INITIAL_CONF);
+        fct_note_pair_mem_observation(row, ld1_mem_critical);
         return;
     }
 
+    fct_note_pair_mem_observation(row, ld1_mem_critical);
     fct_install_or_reinforce_delta(row, offset_delta, direction,
                                    IFUSE_FCT_INITIAL_CONF, proc_id, true);
 }

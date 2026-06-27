@@ -24,6 +24,7 @@ typedef struct RetiredLoadHistoryEntry {
     Addr         load_effective_addr;
     unsigned int load_memory_access_size;
     unsigned int load_micro_op_num;
+    Flag         load_mem_critical;
 } RetiredLoadHistoryEntry;
 
 /**
@@ -44,7 +45,8 @@ void retired_load_history_insert(Addr load_pc_addr,
                                  Addr load_effective_addr,
                                  unsigned int load_memory_access_size,
                                  unsigned int load_micro_op_num,
-                                 uint64_t load_num);
+                                 uint64_t load_num,
+                                 Flag load_mem_critical);
 
 /**
  * Finds and removes the most recent older load that can pair with current LD2.

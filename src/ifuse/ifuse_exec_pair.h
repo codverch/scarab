@@ -38,7 +38,8 @@ Flag ifuse_exec_pair_bypass_ld2_memory_pipeline(const Op* op);
  * LOAD2 can retire only after both LOAD1 data production and LOAD2 address
  * generation have completed.
  */
-void ifuse_exec_pair_complete_ld2_agu(Op* op);
+void ifuse_exec_pair_complete_ld2_agu(Op* op,
+                                      void (*wake_action)(Op*, Op*, uns));
 
 /**
  * Removes the execution-side record owned by one LOAD1 prediction.

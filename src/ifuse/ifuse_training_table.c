@@ -495,6 +495,7 @@ static void training_table_observe_pair(
     unsigned int ld2_memory_access_size,
     unsigned int ld1_micro_op_num,
     unsigned int ld2_micro_op_num,
+    Flag ld1_mem_critical,
     unsigned int proc_id,
     bool promote_existing_row) {
     (void)ld1_memory_access_size;
@@ -541,7 +542,8 @@ static void training_table_observe_pair(
     if (entry->observation_count > insert_threshold && !promote_existing_row) {
         fct_reinforce_ld2_candidate_for_ld1(ld1_pc_addr, ld2_pc_addr,
                                             offset_delta, direction,
-                                            ld2_memory_access_size);
+                                            ld2_memory_access_size,
+                                            ld1_mem_critical);
         return;
     }
 
@@ -550,7 +552,7 @@ static void training_table_observe_pair(
                                       offset_delta, direction,
                                       ld2_memory_access_size,
                                       ld1_micro_op_num, ld2_micro_op_num,
-                                      proc_id);
+                                      ld1_mem_critical, proc_id);
     STAT_EVENT(proc_id, TRAINING_TABLE_PROMOTIONS);
 }
 
@@ -563,13 +565,14 @@ void training_table_observe_fusible_pair(
     unsigned int ld2_memory_access_size,
     unsigned int ld1_micro_op_num,
     unsigned int ld2_micro_op_num,
+    Flag ld1_mem_critical,
     unsigned int proc_id) {
     training_table_observe_pair(ld1_pc_addr, ld2_pc_addr,
                                 ld1_effective_addr, ld2_effective_addr,
                                 ld1_memory_access_size,
                                 ld2_memory_access_size,
                                 ld1_micro_op_num, ld2_micro_op_num,
-                                proc_id, false);
+                                ld1_mem_critical, proc_id, false);
 }
 
 void training_table_retrain_fusible_pair(
@@ -581,11 +584,12 @@ void training_table_retrain_fusible_pair(
     unsigned int ld2_memory_access_size,
     unsigned int ld1_micro_op_num,
     unsigned int ld2_micro_op_num,
+    Flag ld1_mem_critical,
     unsigned int proc_id) {
     training_table_observe_pair(ld1_pc_addr, ld2_pc_addr,
                                 ld1_effective_addr, ld2_effective_addr,
                                 ld1_memory_access_size,
                                 ld2_memory_access_size,
                                 ld1_micro_op_num, ld2_micro_op_num,
-                                proc_id, true);
+                                ld1_mem_critical, proc_id, true);
 }

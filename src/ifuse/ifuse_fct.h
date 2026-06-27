@@ -64,6 +64,10 @@ typedef struct FCT_Row {
 
     /** Skip frontend fusion for this LD1 until this on-path load number. */
     uint64_t          fusion_cooldown_until_load_num;
+
+    /** Retire-time LD1 memory profile for fusion gating. */
+    unsigned int      pair_mem_obs;
+    unsigned int      pair_mem_critical_obs;
 } FCT_Row;
 
 void fct_init(void);
@@ -102,6 +106,14 @@ void fct_note_mispred_fusion_cooldown(Addr ld1_pc_addr,
 Flag fct_is_fusion_gated_by_cooldown(Addr ld1_pc_addr,
                                      uint64_t current_load_num,
                                      unsigned int proc_id);
+
+/**
+ * TRUE when the FCT row's learned LD1 memory profile allows frontend fusion.
+ *
+ * When IFUSE_FUSION_MEM_CRITICAL_GATE is disabled, always returns TRUE.
+ */
+Flag fct_is_fusion_mem_critical_eligible(const FCT_Row* row,
+                                         unsigned int proc_id);
 
 /**
  * Updates the confidence score for one delta slot after a frontend prediction
@@ -181,7 +193,8 @@ void fct_update_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
 void fct_reinforce_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                          unsigned int offset_delta,
                                          bool direction,
-                                         unsigned int ld2_mem_size);
+                                         unsigned int ld2_mem_size,
+                                         Flag ld1_mem_critical);
 
 /**
  * Promotes a training-table validated LD1->LD2 candidate into the FCT.
@@ -210,6 +223,7 @@ void fct_promote_ld2_candidate_for_ld1(Addr ld1_pc_addr, Addr ld2_pc_addr,
                                        unsigned int ld2_mem_size,
                                        unsigned int ld1_micro_op_num,
                                        unsigned int ld2_micro_op_num,
+                                       Flag ld1_mem_critical,
                                        unsigned int proc_id);
 
 #endif /* IFUSE_FCT_H */

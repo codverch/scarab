@@ -24,6 +24,7 @@ void training_table_init(void);
  * @param ld2_memory_access_size The memory access size of LD2.
  * @param ld1_micro_op_num The dynamic micro-op number of LD1.
  * @param ld2_micro_op_num The dynamic micro-op number of LD2.
+ * @param ld1_mem_critical TRUE when LD1 retired with an L1 or DC miss.
  * @param proc_id The core id used for statistics.
  */
 void training_table_observe_fusible_pair(
@@ -35,6 +36,7 @@ void training_table_observe_fusible_pair(
     unsigned int ld2_memory_access_size,
     unsigned int ld1_micro_op_num,
     unsigned int ld2_micro_op_num,
+    Flag ld1_mem_critical,
     unsigned int proc_id);
 
 /**
@@ -53,6 +55,7 @@ void training_table_observe_fusible_pair(
  * @param ld2_memory_access_size The memory access size of LD2.
  * @param ld1_micro_op_num The dynamic micro-op number of LD1.
  * @param ld2_micro_op_num The dynamic micro-op number of LD2.
+ * @param ld1_mem_critical TRUE when LD1 retired with an L1 or DC miss.
  * @param proc_id The core id used for statistics.
  */
 void training_table_retrain_fusible_pair(
@@ -64,6 +67,7 @@ void training_table_retrain_fusible_pair(
     unsigned int ld2_memory_access_size,
     unsigned int ld1_micro_op_num,
     unsigned int ld2_micro_op_num,
+    Flag ld1_mem_critical,
     unsigned int proc_id);
 
 /**

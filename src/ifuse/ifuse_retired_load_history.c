@@ -32,6 +32,7 @@ typedef struct RetiredLoadHistoryRow {
     unsigned int load_micro_op_num;
     uint64_t     load_num;
     int          next_bucket_row;
+    Flag         load_mem_critical;
     bool         valid;
 } RetiredLoadHistoryRow;
 
@@ -183,7 +184,8 @@ void retired_load_history_insert(Addr load_pc_addr,
                                  Addr load_effective_addr,
                                  unsigned int load_memory_access_size,
                                  unsigned int load_micro_op_num,
-                                 uint64_t load_num) {
+                                 uint64_t load_num,
+                                 Flag load_mem_critical) {
     if (!retired_load_history_initialized) {
         retired_load_history_clear();
     }
@@ -204,6 +206,7 @@ void retired_load_history_insert(Addr load_pc_addr,
     row->load_memory_access_size = load_memory_access_size;
     row->load_micro_op_num       = load_micro_op_num;
     row->load_num                = load_num;
+    row->load_mem_critical       = load_mem_critical;
     row->next_bucket_row         = -1;
     row->valid                   = true;
 
@@ -264,6 +267,7 @@ bool retired_load_history_find_and_remove_match(
     matched_load->load_effective_addr     = best_row->load_effective_addr;
     matched_load->load_memory_access_size = best_row->load_memory_access_size;
     matched_load->load_micro_op_num       = best_row->load_micro_op_num;
+    matched_load->load_mem_critical       = best_row->load_mem_critical;
 
     unsigned int best_logical_row =
         (best_row_num + RETIRED_LOAD_HISTORY_CAPACITY -

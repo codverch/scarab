@@ -199,7 +199,7 @@ void update_dcache_stage(Stage_Data* src_sd) {
     // supplied its data. Complete AGU bookkeeping without issuing a redundant
     // d-cache access or memory request.
     if (ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
-      ifuse_exec_pair_complete_ld2_agu(op);
+      ifuse_exec_pair_complete_ld2_agu(op, model->wake_hook);
       dcache_stage_remove_src_op(src_sd, ii);
       continue;
     }
