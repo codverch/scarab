@@ -9,7 +9,7 @@
 #ifndef IFUSE_FCT_H
 #define IFUSE_FCT_H
 
-#define FCT_NUM_DELTA_SLOTS 4
+#define FCT_NUM_DELTA_SLOTS 2
 #define FCT_INVALID_DELTA_SLOT_IDX 0xFFFFFFFFU
 
 /**

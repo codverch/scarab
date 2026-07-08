@@ -383,6 +383,30 @@ static TrainingTableEntry* training_table_find_entry(
         ld2_memory_access_size);
 }
 
+static void training_table_release_promoted_entry(
+    TrainingTableEntry* entry,
+    Addr ld1_pc_addr,
+    Addr ld2_pc_addr,
+    unsigned int offset_delta,
+    bool direction,
+    unsigned int ld2_memory_access_size) {
+    if (!entry || !entry->valid) {
+        return;
+    }
+
+    entry->valid              = false;
+    entry->observation_count  = 0;
+
+    training_table_note_live_remove();
+
+    if (IFUSE_REALISTIC_TRAINING_TABLE) {
+        unsigned int set_idx = training_table_get_set_index(
+            ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
+            ld2_memory_access_size);
+        training_table_update_set_stats(set_idx);
+    }
+}
+
 static void training_table_get_offset_prediction(Addr ld1_effective_addr,
                                                  Addr ld2_effective_addr,
                                                  unsigned int* offset_delta,
@@ -554,6 +578,9 @@ static void training_table_observe_pair(
                                       ld1_micro_op_num, ld2_micro_op_num,
                                       ld1_mem_critical, proc_id);
     STAT_EVENT(proc_id, TRAINING_TABLE_PROMOTIONS);
+    training_table_release_promoted_entry(
+        entry, ld1_pc_addr, ld2_pc_addr, offset_delta, direction,
+        ld2_memory_access_size);
 }
 
 void training_table_observe_fusible_pair(
