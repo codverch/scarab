@@ -504,10 +504,10 @@ static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
 
     match_count++;
     /* DEBUG: list every qualifying LOAD1 the policy gets to choose between. */
-    printf("[IDEAL_FUSION] candidate load1 micro_op=%llu (block=0x%llx) for "
-           "load2 micro_op=%llu\n",
-           load1->micro_op_num, (uns64)cache_block_addr,
-           load2->ideal_fusion_micro_op_num);
+    // printf("[IDEAL_FUSION] candidate load1 micro_op=%llu (block=0x%llx) for "
+    //        "load2 micro_op=%llu\n",
+    //        load1->micro_op_num, (uns64)cache_block_addr,
+    //        load2->ideal_fusion_micro_op_num);
 
     if (!best_match) {
       best_match = load1;
@@ -524,13 +524,13 @@ static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
 
   /* DEBUG: only interesting when the policy actually had a choice to make. */
   if (match_count > 1 && best_match) {
-    printf("[IDEAL_FUSION] policy=%s chose load1 micro_op=%llu out of %u "
-           "candidates for load2 micro_op=%llu\n",
-           IDEAL_FUSION_TYPE == IDEAL_FUSION_MOST_RECENT ? "most-recent"
-                                                         : "oldest-first",
-           best_match->micro_op_num, match_count,
-           load2->ideal_fusion_micro_op_num);
-    fflush(stdout);
+    // printf("[IDEAL_FUSION] policy=%s chose load1 micro_op=%llu out of %u "
+    //        "candidates for load2 micro_op=%llu\n",
+    //        IDEAL_FUSION_TYPE == IDEAL_FUSION_MOST_RECENT ? "most-recent"
+    //                                                      : "oldest-first",
+    //        best_match->micro_op_num, match_count,
+    //        load2->ideal_fusion_micro_op_num);
+    // fflush(stdout);
   }
 
   return best_match;
