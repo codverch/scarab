@@ -1,0 +1,52 @@
+Scarab gitrev: 2de46e10
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Thu Jul  9 17:49:31 2026
+
+Initialized Ramulator. 
+Expected data2 but found type 'instr'
+Stray memory record detected at seq. 181733: PC: 0x7f53b4bf5ce1, PID: 397553, TID: 397553, Addr: 0x7ffcb2283f40. Suppressing further messages.
+Patching gap in trace by injecting a Jmp, prior PC: 7f53b4bf5cd4 next PC: 7f53b4bf5ce5
+Expected data2 but found type 'instr'
+Patching gap in trace by injecting a Jmp, prior PC: 7f53b4bf5cd4 next PC: 7f53b4bf5ce5
+** Heartbeat:   1% -- { 1000000 } -- 0.00 KIPS (111.11 KIPS)
+** Heartbeat:   2% -- { 2000000 } -- 125.00 KIPS (117.65 KIPS)
+** Heartbeat:   3% -- { 3000000 } -- 142.86 KIPS (125.00 KIPS)
+** Heartbeat:   4% -- { 4000004 } -- 142.86 KIPS (129.03 KIPS)
+** Heartbeat:   5% -- { 5000011 } -- 142.86 KIPS (131.58 KIPS)
+** Heartbeat:   6% -- { 6000013 } -- 125.00 KIPS (130.44 KIPS)
+** Heartbeat:   7% -- { 7000018 } -- 142.86 KIPS (132.08 KIPS)
+** Heartbeat:   8% -- { 8000020 } -- 142.86 KIPS (133.33 KIPS)
+** Heartbeat:   9% -- { 9000022 } -- 125.00 KIPS (132.35 KIPS)
+Patching gap in trace by injecting a Jmp, prior PC: 7f53b41ba749 next PC: 7f53abc0052f
+** Heartbeat:  10% -- { 10000023 } -- 142.86 KIPS (133.33 KIPS)
+** Heartbeat:  11% -- { 11000024 } -- 45.45 KIPS (113.40 KIPS)
+** Heartbeat:  12% -- { 12000024 } -- 47.62 KIPS (101.70 KIPS)
+** Heartbeat:  13% -- { 13000025 } -- 45.45 KIPS (92.86 KIPS)
+** Heartbeat:  14% -- { 14000025 } -- 47.62 KIPS (86.96 KIPS)
+** Heartbeat:  15% -- { 15000027 } -- 45.45 KIPS (81.97 KIPS)
+** Heartbeat:  16% -- { 16000030 } -- 47.62 KIPS (78.43 KIPS)
+** Heartbeat:  17% -- { 17000033 } -- 45.45 KIPS (75.22 KIPS)
+** Heartbeat:  18% -- { 18000037 } -- 47.62 KIPS (72.87 KIPS)
+** Heartbeat:  19% -- { 19000039 } -- 47.62 KIPS (70.90 KIPS)
+** Heartbeat:  20% -- { 20000046 } -- 45.45 KIPS (68.97 KIPS)
+** Heartbeat:  21% -- { 21000049 } -- 45.45 KIPS (67.31 KIPS)
+** Heartbeat:  22% -- { 22000051 } -- 47.62 KIPS (66.07 KIPS)
+** Heartbeat:  23% -- { 23000051 } -- 47.62 KIPS (64.97 KIPS)
+** Heartbeat:  24% -- { 24000054 } -- 45.45 KIPS (63.83 KIPS)
+** Heartbeat:  25% -- { 25000057 } -- 47.62 KIPS (62.97 KIPS)
+** Heartbeat:  26% -- { 26000058 } -- 45.45 KIPS (62.05 KIPS)
+** Heartbeat:  27% -- { 27000058 } -- 47.62 KIPS (61.36 KIPS)
+** Heartbeat:  28% -- { 28000058 } -- 45.45 KIPS (60.61 KIPS)
+** Heartbeat:  29% -- { 29000062 } -- 47.62 KIPS (60.04 KIPS)
+Reached end of trace (last_inst) pc=0x7f53abc00520
+sh: 1: Syntax error: word unexpected (expecting ")")
+** Core 0 Finished:    insts:29999995    cycles:67332394    time:21041373125000      -- 0.45 IPC (0.45 IPC) --  N/A  KIPS (59.52 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=31766738  I=30000383  C=67332394):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=31766738  I=30000383  C=67332394):  Command "python3 (null)/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x26b7e6) [0x5555557bf7e6]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x3009ee) [0x5555558549ee]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x1e4193) [0x555555738193]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x1e861e) [0x55555573c61e]
