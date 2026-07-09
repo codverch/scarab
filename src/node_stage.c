@@ -558,8 +558,19 @@ void node_retire() {
     }
     // Count real loads plus converted LOAD2 ops (ideal fusion), which retire
     // as nops but still represent a load we want to account for.
-    if (op->inst_info->table_info.mem_type == MEM_LD || ideal_fusion_load2_is_nop(op)) {
+    if (op->inst_info->table_info.mem_type == MEM_LD || op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2) {
       STAT_EVENT(op->proc_id, LD_NO_DEPENDENTS + (op->wake_up_head ? 1 : 0));
+
+      // Total on-path memory loads (retire guarantees on-path); includes the
+      // converted LOAD2 ops since they are still real program loads.
+      STAT_EVENT(op->proc_id, ONPATH_MEM_LOADS);
+
+      // Fused-load accounting: each retired LOAD2 is one fused load; count both
+      // members of the pair (LOAD1 + LOAD2) toward loads participating in fusion.
+      if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2) {
+        STAT_EVENT(op->proc_id, IDEAL_FUSION_FUSED_LOADS);
+        INC_STAT_EVENT(op->proc_id, IDEAL_FUSION_LOADS_PARTICIPATED, 2);
+      }
 
       // Accumulate on-path load latency (retire guarantees on-path here).
       INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
