@@ -556,8 +556,10 @@ void wake_up_ops(Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
   // write back the register value for the dependent ops
   reg_file_produce(op);
 
-  if (type == REG_DATA_DEP)
+  if (type == REG_DATA_DEP) {
     ideal_fusion_on_load1_wake(op, wake_action);
+    ideal_fusion_measure_on_wake(op);
+  }
 
   ASSERT(op->proc_id, wake_action);
   for (temp = op->wake_up_head; temp; temp = temp->next) {

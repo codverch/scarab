@@ -50,6 +50,10 @@ void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns));
 void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns));
 Flag ideal_fusion_load2_is_nop(const Op* op);
 
+/* Measurement mode (IDEAL_FUSION_PASS == 3): log real completion cycles of
+ * paired loads without applying fusion. */
+void ideal_fusion_measure_on_wake(Op* op);
+
 #ifdef __cplusplus
 }
 #endif

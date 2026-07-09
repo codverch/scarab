@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "../general.param.h"
+#include "../globals/global_vars.h"
 #include "../map.h"
 #include "../memory/memory.param.h"
 #include "../op.h"
@@ -151,6 +152,68 @@ static Ideal_Fusion_Pair* lookup_load2_pair(Counter micro_op_num) {
   }
 
   return NULL;
+}
+
+/*
+ * MEASUREMENT MODE (IDEAL_FUSION_PASS == 3): do not fuse anything. Load the
+ * same pair set pass 2 would fuse, let both loads execute normally, and log the
+ * real completion (wake/done) cycle of each LOAD1 and LOAD2 as it writes back.
+ * Joining these rows by (load1,load2) offline shows whether the program-order
+ * older LOAD1 actually finishes before the younger LOAD2 -- the assumption the
+ * pass-2 forwarding relies on.
+ */
+static void load_pair_indexes(void);
+static FILE* measure_log = NULL;
+
+static void open_measure_log(void) {
+  const char* path;
+
+  if (measure_log)
+    return;
+
+  path = getenv("IDEAL_FUSION_MEASURE_OUT");
+  if (!path || !path[0])
+    path = "ideal_fusion_measure.csv";
+
+  measure_log = fopen(path, "w");
+  if (!measure_log) {
+    fprintf(stderr, "Ideal fusion measure: could not open '%s': %s\n", path,
+            strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+  fprintf(measure_log,
+          "role,this_micro_op_num,load1_micro_op_num,load2_micro_op_num,"
+          "done_cycle,wake_cycle,cur_cycle\n");
+}
+
+void ideal_fusion_measure_on_wake(Op* op) {
+  Ideal_Fusion_Pair* pair;
+  const char* role = NULL;
+
+  if (!op || op->off_path || IDEAL_FUSION_PASS != 3)
+    return;
+  if (op->ideal_fusion_micro_op_num == 0 ||
+      op->inst_info->table_info.mem_type != MEM_LD)
+    return;
+
+  load_pair_indexes();
+
+  pair = lookup_load1_pair(op->ideal_fusion_micro_op_num);
+  if (pair) {
+    role = "LOAD1";
+  } else {
+    pair = lookup_load2_pair(op->ideal_fusion_micro_op_num);
+    if (pair)
+      role = "LOAD2";
+  }
+  if (!role)
+    return;
+
+  open_measure_log();
+  fprintf(measure_log, "%s,%llu,%llu,%llu,%llu,%llu,%llu\n", role,
+          op->ideal_fusion_micro_op_num, pair->load1_micro_op_num,
+          pair->load2_micro_op_num, op->done_cycle, op->wake_cycle,
+          cycle_count);
 }
 
 /*
