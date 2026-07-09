@@ -191,6 +191,8 @@ void debug_map_stage() {
 /* map_cycle: */
 
 void update_map_stage(Stage_Data* src_sd) {
+  reg_file_collect_utilization_stat();
+
   /* stall if the renaming table is full */
   if (!reg_file_available(STAGE_MAX_OP_COUNT)) {
     map->reg_file_stall = TRUE;

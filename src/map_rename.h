@@ -220,5 +220,6 @@ void reg_file_produce(Op *op);                // write back the dst registers
 void reg_file_recover(Op *op);                // flush registers of misprediction operands
 void reg_file_precommit(Op *op);              // update the register metadata when an op is non-spec
 void reg_file_commit(Op *op);                 // release the previous register with same architectural register id
+void reg_file_collect_utilization_stat(void); // sample physical register-file occupancy once per cycle
 
 #endif /* #ifndef __MAP_RENAME_H__ */
