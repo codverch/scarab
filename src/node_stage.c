@@ -556,8 +556,14 @@ void node_retire() {
     if (op->inst_info->table_info.mem_type == MEM_LD && (op->done_cycle - op->sched_cycle) < 5) {
       STAT_EVENT(op->proc_id, LD_EXEC_CYCLES_0 + (op->done_cycle - op->sched_cycle));
     }
-    if (op->inst_info->table_info.mem_type == MEM_LD) {
+    // Count real loads plus converted LOAD2 ops (ideal fusion), which retire
+    // as nops but still represent a load we want to account for.
+    if (op->inst_info->table_info.mem_type == MEM_LD || ideal_fusion_load2_is_nop(op)) {
       STAT_EVENT(op->proc_id, LD_NO_DEPENDENTS + (op->wake_up_head ? 1 : 0));
+
+      // Accumulate on-path load latency (retire guarantees on-path here).
+      INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
+      INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
     }
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
