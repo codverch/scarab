@@ -1,0 +1,17 @@
+DEF_PARAM(ifuse_fusion_distance, IFUSE_FUSION_DISTANCE, uns, uns, 512, )
+DEF_PARAM(ifuse_apt_match_policy, IFUSE_APT_MATCH_POLICY, uns, uns, 0, )
+
+/* FCT confidence (matches old pgo-ifuse: init 500, predict when > 499, -50 mispred). */
+DEF_PARAM(ifuse_fct_conf_threshold, IFUSE_FCT_CONF_THRESHOLD, uns, uns, 499, )
+DEF_PARAM(ifuse_fct_mispred_conf_penalty, IFUSE_FCT_MISPRED_CONF_PENALTY, uns, uns, 50, )
+DEF_PARAM(ifuse_fct_preload_file, IFUSE_FCT_PRELOAD_FILE, char*, string, NULL, )
+DEF_PARAM(ifuse_fct_preload_conf, IFUSE_FCT_PRELOAD_CONF, uns, uns, 500, )
+
+/* Tunable ideal table capacities. */
+DEF_PARAM(ifuse_fct_hash_bits, IFUSE_FCT_HASH_BITS, uns, uns, 22, )
+DEF_PARAM(ifuse_apt_max_nodes, IFUSE_APT_MAX_NODES, uns, uns, 524288, )
+DEF_PARAM(ifuse_apt_num_buckets, IFUSE_APT_NUM_BUCKETS, uns, uns, 4096, )
+DEF_PARAM(ifuse_aci_max_nodes, IFUSE_ACI_MAX_NODES, uns, uns, 524288, )
+DEF_PARAM(ifuse_aci_num_buckets, IFUSE_ACI_NUM_BUCKETS, uns, uns, 4096, )
+DEF_PARAM(ifuse_exec_pair_max_nodes, IFUSE_EXEC_PAIR_MAX_NODES, uns, uns, 524288, )
+DEF_PARAM(ifuse_exec_pair_num_buckets, IFUSE_EXEC_PAIR_NUM_BUCKETS, uns, uns, 4096, )

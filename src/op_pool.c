@@ -52,6 +52,8 @@ allocates them once and then hands out pointers every time 'alloc_op' is called.
 #include "frontend/frontend_intf.h"
 #include "frontend/pin_trace_fe.h"
 
+#include "ifuse/ifuse_exec_pair.h"
+#include "ifuse/ifuse_recovery.h"
 #include "map.h"
 #include "model.h"
 #include "op_info.h"
@@ -144,6 +146,10 @@ void free_op(Op* op) {
 
   if (PIPEVIEW)
     pipeview_print_op(op);
+
+  // Remove execution-side IFuse state before this Op object can be recycled.
+  ifuse_exec_pair_forget_op(op);
+  ifuse_recover_flushed_op(op);
 
   op->op_pool_valid = FALSE;
   op_pool_active_ops--;
