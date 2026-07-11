@@ -53,6 +53,8 @@
 #include "prefetcher/fdip.h"
 #include "prefetcher/l2l1pref.h"
 #include "prefetcher/pref_common.h"
+#include "prefetcher/rfp.h"
+#include "prefetcher/rfp_prf.h"
 #include "prefetcher/stream_pref.h"
 
 #include "addr_trans.h"
@@ -139,6 +141,7 @@ static Flag mem_complete_l1_access(Mem_Req* req, Mem_Queue_Entry* l1_queue_entry
                                    int* reserved_entry_count);
 
 static inline Mem_Queue_Entry* mem_insert_req_into_queue(Mem_Req* new_req, Mem_Queue* queue, Counter priority);
+static Flag mem_remove_reqbuf_from_queue(Mem_Queue* queue, int reqbuf_id);
 static inline Flag insert_new_req_into_l1_queue(uns proc_id, Mem_Req* new_req);
 static inline Flag insert_new_req_into_mlc_queue(uns proc_id, Mem_Req* new_req);
 
@@ -340,6 +343,7 @@ void init_memory() {
   if (STREAM_PREFETCH_ON)
     init_stream_HWP();
   pref_init();
+  rfp_init();
   mem->pref_replpos = INSERT_REPL_MRU;
   if (PREF_ANALYZE_LOAD) {
     mem->pref_loadPC_hash = (Hash_Table*)malloc(sizeof(Hash_Table));
@@ -584,6 +588,51 @@ void mem_free_reqbuf(Mem_Req* req) {
 }
 
 /**************************************************************************************/
+/* mem_remove_reqbuf_from_queue: */
+static Flag mem_remove_reqbuf_from_queue(Mem_Queue* queue, int reqbuf_id) {
+  int ii;
+  for (ii = 0; ii < queue->entry_count; ii++) {
+    if (queue->base[ii].reqbuf == reqbuf_id) {
+      queue->entry_count--;
+      if (ii != queue->entry_count) {
+        queue->base[ii] = queue->base[queue->entry_count];
+      }
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**************************************************************************************/
+/* Cancel an RFP prefetch request, due to a wrong address prediction or a load beating the prefetch */
+Flag mem_cancel_rfp_prefetch(uns8 proc_id, uns16 prfid, Counter launch_cycle, Counter owner_unique) {
+  int ii;
+  /* Iterate through all the request buffers */
+  for (ii = 0; ii < mem->total_mem_req_buffers; ii++) {
+    Mem_Req* req = &mem->req_buffer[ii];
+
+    /* Check if the request is valid and matches the RFP prefetch request */
+    if (req->state == MRS_INV || req->proc_id != proc_id || !req->rfp_prefetch)
+      continue;
+    if (req->rfp_prfid != prfid || req->rfp_launch_cycle != launch_cycle || req->rfp_owner_unique != owner_unique)
+      continue;
+
+    /* return false if the request is not in the L1 or MLC new queue */
+    if (req->state != MRS_L1_NEW && req->state != MRS_MLC_NEW)
+      return FALSE;
+
+    if (!req->queue || !mem_remove_reqbuf_from_queue(req->queue, req->id))
+      return FALSE;
+
+    /* Remove the request from the queue and free the request buffer */
+    req->queue = NULL;
+    mem_free_reqbuf(req);
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**************************************************************************************/
 /* queue_full: */
 
 static inline Flag queue_full(Mem_Queue* queue) {
@@ -598,6 +647,12 @@ static inline Flag queue_full(Mem_Queue* queue) {
 
 static inline uns queue_num_free(Mem_Queue* queue) {
   return (queue->size - queue->reserved_entry_count) - queue->entry_count;
+}
+
+/* Number of currently-free request buffers in the shared pool. Used by the RFP demand-reserve
+ * gate to throttle RFP prefetches under buffer pressure. */
+uns mem_num_free_req_buffers(void) {
+  return (uns)mem->req_buffer_free_list.count;
 }
 
 /**************************************************************************************/
@@ -880,6 +935,13 @@ void mem_start_mlc_access(Mem_Req* req) {
 
     avail = TRUE;
     req->state = MRS_MLC_WAIT;
+
+    /* If the request is an RFP prefetch, mark it as inflight */
+    if (RFP_ON && req->rfp_prefetch && req->rfp_launch_cycle &&
+        !rfp_prf_is_inflight(req->proc_id, req->rfp_prfid, req->rfp_owner_unique)) {
+      rfp_prf_set_inflight(req->proc_id, req->rfp_prfid, req->rfp_owner_unique);
+      STAT_EVENT(req->proc_id, RFP_PREFETCH_INFLIGHT);
+    }
     req->rdy_cycle = cycle_count + MLC_CYCLES;
   }
 
@@ -908,6 +970,13 @@ void mem_start_l1_access(Mem_Req* req) {
 
     avail = TRUE;
     req->state = MRS_L1_WAIT;
+
+    /* If the request is an RFP prefetch, mark it as inflight */
+    if (RFP_ON && req->rfp_prefetch && req->rfp_launch_cycle &&
+        !rfp_prf_is_inflight(req->proc_id, req->rfp_prfid, req->rfp_owner_unique)) {
+      rfp_prf_set_inflight(req->proc_id, req->rfp_prfid, req->rfp_owner_unique);
+      STAT_EVENT(req->proc_id, RFP_PREFETCH_INFLIGHT);
+    }
     if (L1_USE_CORE_FREQ) {
       // model cache as being in the requesting core's frequency domain
       // useful for modeling per-core DVFS with private LLCs
@@ -3353,6 +3422,7 @@ Flag new_mem_req(Mem_Req_Type type, uns8 proc_id, Addr addr, uns size, uns delay
   Flag ramulator_match = FALSE;
   Counter priority_offset = freq_cycle_count(FREQ_DOMAIN_L1);
   Counter new_priority;
+  Op* op_for_adjust = (pref_info && pref_info->rfp_prefetch) ? NULL : op;
   Flag to_mlc = MLC_PRESENT && (!pref_info || pref_info->dest != DEST_L1);
   Destination destination = (pref_info ? pref_info->dest : DEST_NONE);
 
@@ -3430,7 +3500,7 @@ Flag new_mem_req(Mem_Req_Type type, uns8 proc_id, Addr addr, uns size, uns delay
     }
 
     // cmp FIXME cmp support
-    return (mem_adjust_matching_request(matching_req, type, addr, size, destination, delay, op, done_func, unique_num,
+    return (mem_adjust_matching_request(matching_req, type, addr, size, destination, delay, op_for_adjust, done_func, unique_num,
                                         demand_hit_prefetch, demand_hit_writeback, &queue_entry, new_priority,
                                         ramulator_match));
   }
@@ -3553,6 +3623,24 @@ Flag new_mem_req(Mem_Req_Type type, uns8 proc_id, Addr addr, uns size, uns delay
   new_req->global_hist = (pref_info ? pref_info->global_hist : 0);
   new_req->bw_prefetch = (pref_info ? pref_info->bw_limited : FALSE);
   new_req->destination = destination;
+  /* If the request is an RFP prefetch, set the RFP metadata */
+  new_req->rfp_prefetch = (pref_info ? pref_info->rfp_prefetch : FALSE);
+  new_req->rfp_prfid = (pref_info ? pref_info->rfp_prfid : 0);
+  new_req->rfp_predicted_va = (pref_info ? pref_info->rfp_predicted_va : 0);
+  new_req->rfp_launch_cycle = (pref_info ? pref_info->rfp_launch_cycle : 0);
+  new_req->rfp_owner_unique = (pref_info ? pref_info->rfp_owner_unique : 0);
+
+  /* Remove owner context from the request */
+  if (new_req->rfp_prefetch && op && new_req->op_count) {
+    clear_list(&new_req->op_ptrs);
+    clear_list(&new_req->op_uniques);
+    new_req->op_count = 0;
+    new_req->oldest_op_unique_num = 0;
+    new_req->oldest_op_op_num = 0;
+    new_req->oldest_op_addr = 0;
+    if (op->req == new_req)
+      op->req = NULL;
+  }
   if (type == MRT_FDIPPRFON || type == MRT_FDIPPRFOFF) {
     if (fdip_off_path(proc_id, 0))
       new_req->fdip_pref_off_path = 1;

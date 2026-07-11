@@ -1,104 +1,125 @@
-# Scarab Quick Start Guide
-Install:
-1. Install exact PIN version ([PIN 3.15](https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-binary-instrumentation-tool-downloads.html))
-2. Export the following paths
-  - `export PIN_ROOT=/path/to/pin-3.15`
-  - `export SCARAB_ENABLE_PT_MEMTRACE=1`
-3. `cd src && make`
+# Register File Prefetching - Scarab Fork
 
-Run:
-1. Copy: `src/PARAMS.sunny_cove` into your run directory and rename to `PARAMS.in`
-2. Run: `src/scarab --frontend memtrace --cbp_trace_r0=<MEMTRACE_FILE>`
+Fork of [litz-lab/scarab](https://github.com/litz-lab/scarab) with an implementation of Register File Prefetching (ISCA 2022).
 
-# Scarab
+## About
 
-Scarab is a cycle accurate simulator for state-of-the-art, high performance,
-multicore chips. Scarab's goal is to be highly accurate, while also being
-fast and easy to work with.
+The main idea behind Register File Prefetching (RFP) is to speed up the processing of load instructions by making use of the time between the Rename and Issue stages in the pipeline to prefetch data from the L1 cache into the Physical Register File (PRF), so that when the load begins execution, we can access the data quickly.
 
-##### Simulator Features:
-* Accurate: Scarab is detailed cycle accurate uArchitecture model
-* Fast: 600 KIPS trace-driven, 100 KIPS exec-driven
-* SimPoint Support: Checkpoints, Fast-Forward, Marker Instructions
-* Execute-at-Fetch: Easier support for oracle features, faster development of new features
+Normally, a load would take multiple cycles (5 cycles in Intel Skylake) to access the L1 for data. Previously proposed methods such as load address prediction in conjunction with load value prediction attempt to speed up this process by predicting load address patterns and speculatively fetching them. However, this method has major penalties on incorrect predictions, resulting in pipeline stalls or flushes. RFP, on the other hand, is designed such that incorrect predictions do not result in penalties.
 
-##### v.2.0 Release Features:
-* Support for Dynomrio Memtrace and Intel Processor Trace (PT) frontends
-* Wrong-path execution for trace-based frontends (instruction replay)
+The RFP implementation in Scarab consists of three sub-units: the RFP prediction table (PT), the RFP FIFO in the LSU, and a PRF tracker.
 
-##### What Code Can Scarab Run?
-* Single-threaded x86\_64 programs that can be run on Intel's [PIN](https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool)
+### RFP Prediction Table (`rfp.c`, `rfp.h`)
 
-##### Scarab uArchitecture:
-* All typical pipeline stages and out-of-order structures (Fetch, Decode, Rename, Retire, ROB, R/S, and more...)
-* Multicore 
-* Wrong path simulation
-* Cache Hierarchy (Private L1, Private MLC, Private/Shared LLC)
-* Ramulator Memory Simulator (DDR3/4, LPDDR3/4, GDDR5, HBM, WideIO/2, and more...)  
-* Interface to McPat and CACTI for system level power/energy modeling
-* Support for DVFS
-* Latest Branch Predictors and Data Prefetchers (TAGE-SC-L, Stride, Stream, 2dc, GHB, Markov, and more...)
+The RFP prediction table (PT) is a 1K-entry table based on conventional stride predictors used by prefetchers. When a load retires, it is added to the PT, and the stride predictor attempts to predict its load address on successive retires to build confidence. If the predictor predicts the address correctly on successive attempts, the load is **eligible** for RFP prefetching. Once eligible, the load's address is predicted at fetch and an RFP prefetch packet is launched at rename.
 
-##### v.2.0 uArchitecture Extensions:
-* Decoupled Frontend
-* Micro-op Cache
-* Register Renaming (limited GRF/rename stalls)
-* Updated branch predictor and increased recovery accuracy
-* FDIP/UDP prefetcher
+> **Note:** Confidence is a 1-bit entry. It is incremented with 1/16 probability whenever the stride predictor accurately guesses the load address, and reset to 0 on a mispredict.
 
-##### Code Limitations
-* 32-bit binaries not supported (work in progress)
-* Performance of System Code not modeled
-* No cooperative multithreaded code
+### RFP PRF Tracker (`rfp_prf.c`, `rfp_prf.h`)
 
-##### uArch Limitations
-* No SMT
-* No real OS virtual to physical address translation
-* Shared bus interconnect only (ring, mesh, and others are in progress.)
+At rename, the load instruction's destination is assigned a PRF register — this is where the load data will be written. In RFP, we prefetch data from the L1 and write it into this PRF register. The PRF tracker holds per-register state for loads, including:
 
-##### Credits 
-Scarab was created in collaboration with HPS and SAFARI. This project was sponsored by Intel Labs.
-Scarab v.2.0 was created and is currently maintained by UCSC.
+- Validity and predicted address
+- Whether the prefetch is inflight
+- Whether the prefetch was dropped
 
-The Scarab v.2.0 artifact is the result of our UDP ISCA 2024 paper. If you are using Scarab v.2.0 in your research please cite:
+### RFP FIFO (`lsq.cc`)
 
+Once the RFP prefetch request is created at rename, it is enqueued into a 64-entry RFP FIFO ordered by age — older requests at the head, younger ones near the tail. RFP requests at the head are dequeued when attempting to access the L1.
+
+The RFP prefetch request is similar to a load request in the load queue, with two differences:
+
+- It carries the destination PRF register the result will be written to
+- It is a low-priority request — a demand load of the same age always wins L1 port arbitration first
+
+A given load can therefore have both a conventional load request in the LSQ and an RFP request in the FIFO at the same time. If the demand load is processed before its corresponding RFP request, the RFP request is dropped and the load executes normally.
+
+When an RFP request is dequeued:
+
+- **L1 hit:** data is written into the corresponding PRF register and the PRF tracker entry is marked valid and ready
+- **L1 miss:** the RFP request is dropped — RFP hides L1-*hit* latency only. The paper's optional L1-miss-to-memory path is intentionally not modeled (a ~0.02% effect, §5.5.5; the same class of simplification as the DTLB-miss drop), which keeps RFP deadlock-free on every workload.
+
+### Load Execution Stage (`dcache_stage.c`)
+
+While the RFP request is processed in the background, the load moves through the pipeline normally until it is issued and begins execution in the LSU. The first step is calculating the actual load address, then comparing it with the predicted address from the RFP PT:
+
+- **Mismatch:** clear the PRF entry, reset PT confidence, and process the load normally (5 cycles)
+- **Match:** check whether the PRF entry is ready
+  - **Not ready** (RFP request not processed in time): drop the RFP request and process the load normally (5 cycles)
+  - **Ready:** 1-cycle fast access by reading from the PRF Register instead of the 5-cycle L1 path; wake dependents
+
+In the best case, an RFP request saves up to 4 cycles. In the worst case, the load proceeds normally — there is no penalty.
+
+### RFP flow for a given load
+
+1. Train the RFP PT on a given load at retire.
+   - Confidence is incremented with 1/16 probability; once confident, the load is RFP-eligible.
+2. At rename, look up the load in the RFP PT and get the predicted address from the stride pattern. Create an RFP prefetch request and enqueue it into the RFP FIFO.
+3. The RFP prefetch request moves up in the FIFO and is serviced at the head. On completion, data is written into the PRF register and the corresponding PRF tracker entry is marked valid.
+4. Meanwhile, the load moves through rename, operand ready, pick, and dispatch. At execution, compare the computed load address with the predicted address:
+   - **Mismatch:** drop RFP request; process load normally (5 cycles).
+   - **Match:** check if the PRF entry is ready.
+     - **Not ready:** drop RFP request; process load normally (5 cycles).
+     - **Ready:** read data from the PRF register; 1-cycle fast access; wake dependents.
+
+## Build
+
+1. Install [Intel PIN 3.15](https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-binary-instrumentation-tool-downloads.html) and set:
+
+```bash
+export PIN_ROOT=/path/to/pin-3.15
+export SCARAB_ENABLE_PT_MEMTRACE=1
 ```
-@inproceedings{oh2024udp,
-  author = {Oh, Surim and Xu, Mingsheng and Khan, Tanvir Ahmed and Kasikci, Baris and Litz, Heiner},
-  title = {UDP: Utility-Driven Fetch Directed Instruction Prefetching},
-  booktitle = {Proceedings of the 51st International Symposium on Computer Architecture (ISCA)},
-  series = {ISCA 2024},
-  year = {2024},
-  month = jun,
-}
+
+2. Build the optimized binary:
+
+```bash
+cd src
+make opt
 ```
 
-## License & Copyright
-Please see the [LICENSE](LICENSE) for more information.
+The simulator binary is `src/scarab`. Use `make dbg` for a debug build.
 
-## Getting Started
+## Run
 
-1. [System requirements and software prerequisites.](docs/system_requirements.md)
-2. [Compiling Scarab.](docs/compiling-scarab.md)
-3. [Setting up and running auto-verification on Scarab.](docs/verification.md)
-4. Running a single program on Scarab.
-5. Running multiple jobs locally or on a batch system. (coming soon!)
-6. Viewing batch job status and results. (coming soon!)
-7. [Simulating dynamorio memtraces](docs/memtrace.md)
-8. Solutions to common Scarab problems.
+Simulations use the memtrace frontend. From a run directory:
 
-## Contributing to Scarab
+1. Copy a params file and rename it:
 
-Found a bug? [File a bug report.](https://github.com/hpsresearchgroup/scarab/issues/new/choose)
+```bash
+cp /path/to/scarab/src/PARAMS.golden_cove ./PARAMS.in
+```
 
-Request a new feature? [File a feature request.](https://github.com/hpsresearchgroup/scarab/issues/new/choose)
+2. Run Scarab on a memtrace (`.zip` trace + matching `modules.log` in the trace directory):
 
-Have code you would like to commit? [Create a pull request.](https://github.com/hpsresearchgroup/scarab/pulls)
+```bash
+/path/to/scarab/src/scarab \
+  --frontend memtrace \
+  --fetch_off_path_ops 1 \
+  --inst_limit 100000000 \
+  --cbp_trace_r0=/path/to/trace.zip
+```
 
-## Other Resources
+RFP is enabled by default. To compare against a no-RFP baseline:
 
+```bash
+--rfp_on=0          # disable RFP
+--rfp_on=1          # enable RFP (default)
+--rfp_model=1       # PRF model (default)
+```
 
-1) Auto-generated software documentation can be found [here](docs/doxygen/index.html).
+See `docs/memtrace.md` and `docs/compiling-scarab.md` for trace capture and additional options.
 
-* Please run this command in this directory to auto-generate documentation files.
-> make -C docs
+## Results
+
+A baseline-vs-RFP sweep over 20 datacenter workloads (all SimPoints, no warmup) lives in
+[`results/`](results/) — graphs, summary CSVs, the full stats capture, and self-contained plot
+scripts. Headline: **+2.85% geomean IPC speedup** (paper +3.1%), 0 deadlocks. See
+[`results/README.md`](results/README.md) for per-workload numbers and reproduction steps (the
+scarab-infra sweep descriptor `rfp_sweep.json` is committed in the scarab-infra repo at
+`json/rfp_sweep.json`).
+
+## References
+
+- Shukla, S., Bandishte, S., Gaur, J., and Subramoney, S. *Register File Prefetching.* ISCA 2022. [PDF](https://dl.acm.org/doi/pdf/10.1145/3470496.3527398)

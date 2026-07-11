@@ -1,0 +1,26 @@
+DEF_STAT(RFP_PREDICTED_AT_RENAME, COUNT, NO_RATIO)               /* Predicted loads observed at rename stage */
+DEF_STAT(RFP_ALL_LOADS, COUNT, NO_RATIO)                         /* All on-path loads observed at rename */
+DEF_STAT(RFP_PREDICTION_MADE, COUNT, NO_RATIO)                   /* Predictions made by PT at rename */
+DEF_STAT(RFP_RETIRE_LOAD, COUNT, NO_RATIO)                       /* Loads used to train PT at retire */
+DEF_STAT(RFP_PT_ALLOC, COUNT, NO_RATIO)                          /* New PT entries allocated */
+DEF_STAT(RFP_PT_HIT, COUNT, NO_RATIO)                            /* PT lookups that hit an existing entry */
+DEF_STAT(RFP_STRIDE_CONFIRM, COUNT, NO_RATIO)                    /* Retire-time observed stride matched entry */
+DEF_STAT(RFP_STRIDE_CHANGE, COUNT, NO_RATIO)                     /* Retire-time observed stride changed */
+DEF_STAT(RFP_CONF_INC, COUNT, NO_RATIO)                          /* Times confidence was increased */
+DEF_STAT(RFP_PREFETCH_INJECTED, COUNT, NO_RATIO)                 /* Launch attempt that successfully created a request */
+DEF_STAT(RFP_PREFETCH_INFLIGHT, COUNT, NO_RATIO)                 /* Prefetch actually started cache lookup */
+DEF_STAT(RFP_PREFETCH_EXECUTED, COUNT, NO_RATIO)                 /* RFP prefetches that completed and wrote to PRF */
+DEF_STAT(RFP_DROPPED_SINCE_LOAD_BEAT_PREFETCH, COUNT, NO_RATIO)  /* Dropped because load launched before prefetch start */
+DEF_STAT(RFP_PREFETCH_USEFUL, COUNT, NO_RATIO)                   /* Loads that consumed prefetched data via PRF */
+DEF_STAT(RFP_SAVED_CYCLES, COUNT, NO_RATIO)                      /* Aggregate cycles saved by PRF fast-serve */
+DEF_STAT(RFP_PREDICTION_WRONG, COUNT, NO_RATIO)                  /* Wrong-address predictions detected */
+DEF_STAT(RFP_PRF_LAUNCH, COUNT, NO_RATIO)                        /* Launch attempts after obtaining a valid destination */
+DEF_STAT(RFP_PRF_LAUNCH_NO_DEST, COUNT, NO_RATIO)                /* Launches skipped: no valid destination reg */
+DEF_STAT(RFP_PRF_SERVED, COUNT, NO_RATIO)                        /* Loads served by PRF-ready fast path */
+DEF_STAT(RFP_PRF_CLEARED_DUE_TO_MISPRED, COUNT, NO_RATIO)        /* PRF entry cleared due to address misprediction */
+DEF_STAT(RFP_PRF_CLEARED_DUE_TO_RECOVERY, COUNT, NO_RATIO)       /* PRF entry cleared due to squash/recovery */
+DEF_STAT(RFP_PRF_OWNER_MISMATCH, COUNT, NO_RATIO)                /* Ready-check owner mismatch (stale PRF state) */
+DEF_STAT(RFP_LSQ_FIFO_FULL, COUNT, NO_RATIO)                     /* Launch dropped because dedicated RFP FIFO was full */
+DEF_STAT(RFP_DROPPED_ON_L1_MISS, COUNT, NO_RATIO)                /* RFP request dropped after missing the L1 (no lower-level req issued) */
+DEF_STAT(RFP_PARTIAL_MITIGATED, COUNT, NO_RATIO)                 /* Served loads that waited a few cycles for in-flight prefetch data (partial latency mitigation, §3.3) */
+DEF_STAT(RFP_DROPPED_MEM_PRESSURE, COUNT, NO_RATIO)              /* L1-miss RFP prefetch dropped: too few free mem-req buffers (demand reserve) */

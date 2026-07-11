@@ -1,0 +1,52 @@
+{
+  "descriptor_type": "simulation",
+  "architecture": "golden_cove",
+  "experiment": "rfp_sweep",
+  "workload_manager": "manual",
+  "root_dir": "/users/vedlaksh",
+  "application_dir": "/users/vedlaksh/applications",
+  "scarab_path": "/users/vedlaksh/RFP",
+  "scarab_build": "opt",
+  "traces_dir": "/dev/shm/baseline/simpoint_traces",
+  "top_simpoint": false,
+  "simulations": [
+    {
+      "suite": "datacenter",
+      "subsuite": "datacenter",
+      "workload": ["bc", "bfs", "cc", "cd", "chemcrow", "dfs", "haystack", "langchain", "memcached", "mongodb", "mysql", "pagerank", "postgres", "pytorch", "redis", "sssp_ego_fb", "sweRepair", "tc", "tensorflow", "toolformer"],
+      "cluster_id": null,
+      "simulation_type": "memtrace",
+      "warmup": 0
+    }
+  ],
+  "configurations": {
+    "baseline": {
+      "params": "--rfp_on 0",
+      "binary": "scarab_current",
+      "slurm_options": "",
+      "memory_overhead_mb": 0
+    },
+    "rfp": {
+      "params": "--rfp_on 1",
+      "binary": "scarab_current",
+      "slurm_options": "",
+      "memory_overhead_mb": 0
+    }
+  },
+  "collect_stats": {
+    "configs": null
+  },
+  "visualize": {
+    "baseline": "baseline",
+    "configs": [
+      "rfp"
+    ],
+    "counters": [
+      "IPC"
+    ]
+  },
+  "mem": {
+    "collection_baseline": null,
+    "fallback_mb": 16384
+  }
+}

@@ -1,0 +1,19 @@
+/* Register File Prefetch (RFP) parameters */
+
+DEF_PARAM(rfp_on, RFP_ON, Flag, Flag, TRUE, )
+/* RFP is PRF-only now; keep this param for backwards-compatible CLI parsing. */
+DEF_PARAM(rfp_model, RFP_MODEL, uns, uns, 1, )
+/* Size of the dedicated RFP request FIFO. RFP requests live here instead of in
+ * the demand load queue, so they never consume demand load-queue capacity
+ * (paper uses a separate 64-entry RFP FIFO). */
+DEF_PARAM(rfp_lsq_fifo_size, RFP_LSQ_FIFO_SIZE, uns, uns, 64, )
+/* Ved: DEPRECATED / IGNORED — kept only for backwards-compatible CLI parsing.
+ * An RFP that misses the L1 is ALWAYS dropped now: the L1-miss-to-memory path was discarded because
+ * the paper itself rates it at ~0.02% (§3.2.2/§5.5.5, the same class of simplification as the
+ * DTLB-miss drop) and the in-flight RFP memory requests deadlocked Scarab's shared mem-req buffer
+ * pool on write-heavy traces. RFP now hides L1-HIT latency only (the paper's core thesis: 92.8% of
+ * loads hit L1, §2), deadlock-free on every workload. */
+DEF_PARAM(rfp_drop_on_l1_miss, RFP_DROP_ON_L1_MISS, Flag, Flag, TRUE, )
+/* Ved: DEPRECATED / IGNORED — kept only for backwards-compatible CLI parsing. Was the demand-reserve
+ * gate for the now-discarded L1-miss-to-memory path. */
+DEF_PARAM(rfp_mem_buf_reserve, RFP_MEM_BUF_RESERVE, uns, uns, 4, )

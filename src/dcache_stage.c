@@ -41,9 +41,13 @@
 #include "debug/debug_print.h"
 
 #include "core.param.h"
+#include "memory/memory.h"
 #include "memory/memory.param.h"
 #include "prefetcher//stream.param.h"
 #include "prefetcher/pref.param.h"
+#include "prefetcher/rfp.param.h"
+#include "prefetcher/rfp.h"
+#include "prefetcher/rfp_prf.h"
 
 #include "bp/bp.h"
 #include "prefetcher/l2l1pref.h"
@@ -51,6 +55,7 @@
 #include "prefetcher/stream_pref.h"
 
 #include "cmp_model.h"
+#include "lsq.h"
 #include "map.h"
 #include "model.h"
 #include "statistics.h"
@@ -81,6 +86,7 @@ static inline void dcache_fill_wp_collect_stats(Dcache_Data* line, Mem_Req* req)
 static inline void dcache_hit_wp_collect_stats(Dcache_Data* line, Op* op);
 static inline Flag dcache_miss_new_mem_req(Op* op, Addr line_addr, Mem_Req_Type mem_req_type);
 static inline void dcache_miss_extra_access(Op* op, Cache* cache, Addr line_addr, uns8 proc_id, uns8 cache_cycle);
+static inline Flag dcache_process_lsq_rfp_queue(void);
 
 static inline Dcache_Data* dcache_fill_get_cacheline(Mem_Req* req);
 static inline void dcache_fill_process_cacheline(Mem_Req* req, Dcache_Data* data);
@@ -238,8 +244,37 @@ void update_dcache_stage(Stage_Data* src_sd) {
     uns bank = BANK(op->oracle_info.va, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR);
     DEBUG(dc->proc_id, "check_read and write port availiabilty mem_type:%s bank:%d \n",
           (op->inst_info->table_info.mem_type == MEM_ST) ? "ST" : "LD", bank);
-    if (!PERFECT_DCACHE && ((op->inst_info->table_info.mem_type == MEM_ST && !get_write_port(&dc->ports[bank])) ||
-                            (op->inst_info->table_info.mem_type != MEM_ST && !get_read_port(&dc->ports[bank])))) {
+
+    /* Ved: resolve RFP serve status BEFORE the port gate so a PRF-served load consumes no L1 read
+       port (ISCA'22 §3.2/§5.6). A served load completes when the prefetched data is available, which
+       drives full vs partial latency mitigation; see the dispatch logic below. */
+    Flag rfp_try_serve = RFP_ON && op->rfp_predicted && !op->off_path &&
+                         op->inst_info->table_info.mem_type == MEM_LD && op->rfp_launch_cycle;
+    Flag rfp_valid = FALSE;
+    Flag rfp_exact_match = FALSE;
+    Counter rfp_ready_cycle = 0;
+
+    if (rfp_try_serve) {
+      /* Ved: M3 — RFP prefetches the load's VALUE into the register, so faithfulness demands an EXACT
+         virtual-address match (paper §3.5: the predicted address "is later checked against the load
+         address"), not just a same-cache-line match. A correct-line/wrong-offset prediction would have
+         brought the wrong value and must count as a misprediction. (Store-to-load ordering is left to
+         Scarab's existing oracle + memory-dependence mechanism, exactly as for normal L1-hit demand
+         loads, which likewise do not re-scan the store buffer on a hit.) */
+      rfp_exact_match = (op->rfp_predicted_addr == op->oracle_info.va);
+      rfp_valid = rfp_prf_ready(op->proc_id, op->rfp_prfid, op->oracle_info.va, op->rfp_launch_cycle,
+                                op->unique_num, &rfp_ready_cycle);
+    }
+    /* The prefetch has won L1 arbitration and will deliver the value (rfp_valid = the paper's
+       RFP-inflight bit is set), and the prediction is exactly correct -> serve from the PRF with NO L1
+       access. The load completes when the prefetched data is actually available (rfp_ready_cycle). */
+    Flag rfp_serve = rfp_try_serve && rfp_valid && rfp_exact_match &&
+                     !op->rfp_dropped_load_first && !op->rfp_mispred_accounted;
+
+    /* Ved: F2 — a PRF-served load never touches the L1 data array, so it reserves no read/write port. */
+    if (!PERFECT_DCACHE && !rfp_serve &&
+        ((op->inst_info->table_info.mem_type == MEM_ST && !get_write_port(&dc->ports[bank])) ||
+         (op->inst_info->table_info.mem_type != MEM_ST && !get_read_port(&dc->ports[bank])))) {
       op->state = OS_WAIT_DCACHE;
       STAT_EVENT(dc->proc_id, DCACHE_READ_PORT_UNAVAILABLE_ONPATH + op->off_path);
       continue;
@@ -251,9 +286,65 @@ void update_dcache_stage(Stage_Data* src_sd) {
     if (IDEAL_L2_L1_PREFETCHER)
       ideal_l2l1_prefetcher(op);
 
+    /* Ved: RFP timeliness dispatch (paper §3.3). Cases when the load is NOT served from the PRF: */
+    if (rfp_try_serve && !op->rfp_dropped_load_first && !op->rfp_mispred_accounted && !rfp_serve) {
+      if (!rfp_exact_match) {
+        /* Misprediction (exact-address mismatch): the prefetched value is wrong. Clear it, cancel the
+           in-flight request, count the wrong prediction (the extra-L1-bandwidth case the paper charges),
+           and re-fetch via the normal demand path below. */
+        rfp_prf_clear(op->proc_id, op->rfp_prfid);
+        mem_cancel_rfp_prefetch(op->proc_id, op->rfp_prfid, op->rfp_launch_cycle, op->unique_num);
+        STAT_EVENT(op->proc_id, RFP_PREDICTION_WRONG);
+        STAT_EVENT(op->proc_id, RFP_PRF_CLEARED_DUE_TO_MISPRED);
+        op->rfp_mispred_accounted = TRUE;
+      } else {
+        /* The prefetch had NOT won L1 arbitration by the time the load dispatched (the RFP-inflight bit
+           is not set): the paper drops it and the load runs as a normal demand load ("if the load
+           becomes ready, the prefetch will get dropped and the load will continue", §3.3 p6). Cancel to
+           free the buffer / suppress a late writeback. */
+        op->rfp_dropped_load_first = TRUE;
+        rfp_prf_mark_dropped(op->proc_id, op->rfp_prfid, op->unique_num);
+        mem_cancel_rfp_prefetch(op->proc_id, op->rfp_prfid, op->rfp_launch_cycle, op->unique_num);
+        STAT_EVENT(op->proc_id, RFP_DROPPED_SINCE_LOAD_BEAT_PREFETCH);
+      }
+    }
+
+    /* Serve from the PRF — NO L1 access. The load's dependents are woken exactly when the prefetched
+     * data becomes available (rfp_ready_cycle). In Scarab's timing model a dependent's rdy_cycle == the
+     * producer's wake_cycle (no separate speculative-wakeup pipeline), so setting done_cycle to the
+     * data-available cycle reproduces the paper's Fig 9 timing directly:
+     *   - FULL mitigation: the data is already in the PRF (rfp_ready_cycle <= now), so done_cycle = now+1
+     *     and the entire L1-access latency is hidden.
+     *   - PARTIAL mitigation: the prefetch won arbitration only a few cycles ago and the data is still in
+     *     flight (rfp_ready_cycle > now), so the load completes at rfp_ready_cycle — a fraction of the L1
+     *     latency is saved, exactly the paper's "RFP-inflight gets triggered sometime after load wake-up".
+     * The load never blocks/polls and issues no memory request, so this is deadlock-free. */
+    if (rfp_serve) {   // Ved: F2 — reserves no L1 read/write port.
+      Counter normal_done = cycle_count + DCACHE_CYCLES + op->inst_info->extra_ld_latency;
+      Counter serve_done = MAX2(cycle_count + 1, rfp_ready_cycle);
+      uns saved_cycles = (normal_done > serve_done) ? (uns)(normal_done - serve_done) : 0;
+      op->dcache_cycle = cycle_count;
+      op->oracle_info.dcmiss = FALSE;
+      STAT_EVENT(op->proc_id, RFP_PRF_SERVED);
+      STAT_EVENT(op->proc_id, RFP_PREFETCH_USEFUL);
+      if (rfp_ready_cycle > cycle_count)
+        STAT_EVENT(op->proc_id, RFP_PARTIAL_MITIGATED);
+
+      if (saved_cycles > 0)
+        INC_STAT_EVENT(op->proc_id, RFP_SAVED_CYCLES, saved_cycles);
+      op->done_cycle = serve_done;        /* full: now+1; partial: data-available cycle */
+      op->wake_cycle = op->done_cycle;
+      wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
+      continue;
+    }
+
     /* now access the dcache with it */
     Addr line_addr;
-    Dcache_Data* line = (Dcache_Data*)cache_access(&dc->dcache, op->oracle_info.va, &line_addr, TRUE);
+    Dcache_Data* line = NULL;
+
+    line_addr = op->oracle_info.va;
+    line = (Dcache_Data*)cache_access(&dc->dcache, line_addr, &line_addr, TRUE);
+
     op->dcache_cycle = cycle_count;
     dc->idle_cycle = MAX2(dc->idle_cycle, cycle_count + DCACHE_CYCLES);
 
@@ -290,6 +381,10 @@ void update_dcache_stage(Stage_Data* src_sd) {
     }
     dcache_cacheline_miss(op, line_addr);
   }
+
+  /* RFP gets strictly the lowest priority for L1 access, hence it is serviced last. */
+  if (RFP_ON)
+    dcache_process_lsq_rfp_queue();
 
   /* prefetcher update */
   if (STREAM_PREFETCH_ON)
@@ -354,9 +449,13 @@ Flag dcache_fill_line(Mem_Req* req) {
     cycle_count = old_cycle_count;
     return FAILURE;
   }
-
+  
   /* update cacheline fields and wake up dependent ops */
   dcache_fill_process_cacheline(req, data);
+
+  /* Ved: RFP never issues a memory request (the L1-miss-to-memory path is discarded — see
+   * dcache_process_lsq_rfp_queue), so an RFP prefetch never reaches this fill path. RFP-hit
+   * prefetches write the PRF directly in the FIFO drain. */
 
   cycle_count = old_cycle_count;
   return SUCCESS;
@@ -526,6 +625,68 @@ static inline void dcache_miss_extra_access(Op* op, Cache* cache, Addr line_addr
     STAT_EVENT_ALL(ONE_MORE_SUCESS);
   else
     STAT_EVENT_ALL(ONE_MORE_DISCARDED_MEM_REQ_FULL);
+}
+
+/* Check if a given load is still in the RFP FIFO and wants a prefetch */
+static inline Flag rfp_owner_wants_prefetch(const Op* owner, const Lsq_Rfp_Req* req, uns8 proc_id) {
+  return owner && owner->op_pool_valid && owner->proc_id == proc_id && owner->unique_num == req->owner_unique &&
+         owner->op_num == req->owner_op_num && owner->inst_info->table_info.mem_type == MEM_LD && !owner->off_path &&
+         !owner->rfp_dropped_load_first && !owner->rfp_mispred_accounted;
+}
+
+/* Service the RFP FIFO: drop stale or already satisfied requests,
+and service the oldest live one if it can win a read port. */
+static inline Flag dcache_process_lsq_rfp_queue(void) {
+  if (!RFP_ON)
+    return FALSE;
+
+  uns8 proc_id = dc->proc_id;
+  Lsq_Rfp_Req req;
+
+  /* Peek at the oldest request in the RFP FIFO, check if it is still valid and wants a prefetch. */
+  while (lsq_rfp_peek(proc_id, &req)) {
+    Op* owner = req.owner_op;
+    if (!rfp_owner_wants_prefetch(owner, &req, proc_id) ||
+        rfp_prf_ready(proc_id, req.prfid, owner->oracle_info.va, req.launch_cycle, req.owner_unique, NULL)) {
+      lsq_rfp_pop(proc_id);
+      continue;
+    }
+
+    /* Check if the RFP prefetch can win an L1 read port */
+    uns bank = BANK(req.predicted_line_addr, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR);
+    if (!get_read_port(&dc->ports[bank]))
+      return FALSE;
+
+    /* Ved: "started"/inflight is set implicitly by the L1-hit PRF write below (ready set directly,
+       no wait needed). An L1-missing RFP is simply dropped (see below), so it never writes the
+       PRF and is never marked started. */
+
+    /* Check if the RFP prefetch hits the dcache */
+    Addr line_addr = req.predicted_line_addr;
+    Dcache_Data* line = (Dcache_Data*)cache_access(&dc->dcache, line_addr, &line_addr, TRUE);
+
+    if (line) {
+      /* L1 hit: the prefetch has won arbitration (the paper's RFP-inflight bit is now set) and the
+         value becomes usable DCACHE_CYCLES later (the L1-access latency). Recording the real ready
+         cycle is what lets a load that dispatches during this window get PARTIAL mitigation: it serves
+         from the PRF but completes at ready_cycle, while a load that dispatches after ready_cycle gets
+         FULL mitigation (done in 1 cycle). */
+      if (rfp_prf_write(proc_id, req.prfid, req.predicted_line_addr, cycle_count + DCACHE_CYCLES,
+                        req.owner_unique))
+        STAT_EVENT(proc_id, RFP_PREFETCH_EXECUTED);
+      lsq_rfp_pop(proc_id);
+    } else {
+      /* Ved: L1 miss: drop the RFP prefetch. The paper's L1-miss-to-memory path (§3.2.2) is a
+         deliberately-unmodeled simplification here — §5.5.5 measures it at ~0.02%, and it is the
+         same class of paper-sanctioned drop as the DTLB-miss case. RFP therefore hides L1-HIT
+         latency only (the paper's core thesis: 92.8% of loads hit L1). This keeps RFP deadlock-free
+         on every workload. */
+      STAT_EVENT(proc_id, RFP_DROPPED_ON_L1_MISS);
+      lsq_rfp_pop(proc_id);
+    }
+    return TRUE;
+  }
+  return FALSE;
 }
 
 static inline Flag dcache_miss_new_mem_req(Op* op, Addr line_addr, Mem_Req_Type mem_req_type) {

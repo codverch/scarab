@@ -49,6 +49,7 @@
 #include "ft.h"
 #include "map.h"
 #include "map_rename.h"
+#include "prefetcher/rfp.h"
 #include "model.h"
 #include "op_pool.h"
 #include "statistics.h"
@@ -63,26 +64,24 @@
 /**************************************************************************************/
 /* Global Variables */
 
-Map_Stage* map = NULL;
+Map_Stage *map = NULL;
 
 /**************************************************************************************/
 /* Local prototypes */
 
-static inline void stage_process_op(Op*);
+static inline void stage_process_op(Op *);
 static inline void map_stage_collect_stat(Flag, Flag);
-static inline void map_stage_fetch_op(Stage_Data*);
+static inline void map_stage_fetch_op(Stage_Data *);
 
 /**************************************************************************************/
 /* set_map_stage: */
 
-void set_map_stage(Map_Stage* new_map) {
-  map = new_map;
-}
+void set_map_stage(Map_Stage *new_map) { map = new_map; }
 
 /**************************************************************************************/
 /* init_map_stage: */
 
-void init_map_stage(uns8 proc_id, const char* name) {
+void init_map_stage(uns8 proc_id, const char *name) {
   uns ii;
   ASSERT(proc_id, map);
   ASSERT(proc_id, STAGE_MAX_DEPTH > 0);
@@ -91,15 +90,15 @@ void init_map_stage(uns8 proc_id, const char* name) {
   memset(map, 0, sizeof(Map_Stage));
   map->proc_id = proc_id;
 
-  map->sds = (Stage_Data*)malloc(sizeof(Stage_Data) * STAGE_MAX_DEPTH);
+  map->sds = (Stage_Data *)malloc(sizeof(Stage_Data) * STAGE_MAX_DEPTH);
   for (ii = 0; ii < STAGE_MAX_DEPTH; ii++) {
-    Stage_Data* cur = &map->sds[ii];
-    /* Stage_Data::name is only used for debugging/printing; reuse the long-lived
-     * stage name pointer passed into init_map_stage().
+    Stage_Data *cur = &map->sds[ii];
+    /* Stage_Data::name is only used for debugging/printing; reuse the
+     * long-lived stage name pointer passed into init_map_stage().
      */
-    cur->name = (char*)name;
+    cur->name = (char *)name;
     cur->max_op_count = STAGE_MAX_OP_COUNT;
-    cur->ops = (Op**)malloc(sizeof(Op*) * STAGE_MAX_OP_COUNT);
+    cur->ops = (Op **)malloc(sizeof(Op *) * STAGE_MAX_OP_COUNT);
   }
   map->last_sd = &map->sds[0];
   map->off_path = 0;
@@ -114,7 +113,7 @@ void reset_map_stage() {
   uns ii, jj;
   ASSERT(0, map);
   for (ii = 0; ii < STAGE_MAX_DEPTH; ii++) {
-    Stage_Data* cur = &map->sds[ii];
+    Stage_Data *cur = &map->sds[ii];
     cur->op_count = 0;
     for (jj = 0; jj < STAGE_MAX_OP_COUNT; jj++)
       cur->ops[jj] = NULL;
@@ -132,19 +131,23 @@ void recover_map_stage() {
   ASSERT(0, map);
   for (ii = 0; ii < STAGE_MAX_DEPTH; ii++) {
     Flag flushed = FALSE;
-    Stage_Data* cur = &map->sds[ii];
+    Stage_Data *cur = &map->sds[ii];
     cur->op_count = 0;
 
     for (jj = 0, kk = 0; jj < STAGE_MAX_OP_COUNT; jj++) {
       if (cur->ops[jj]) {
         if (IS_FLUSHING_OP(cur->ops[jj])) {
           op_select_bp_pred_info(cur->ops[jj], BP_PRED_MAIN);
-          DEBUG(map->proc_id, "Recovery op found in Map stage:%u slot:%u op_num:%llu off_path:%u addr:0x%llx\n", ii, jj,
-                (unsigned long long)cur->ops[jj]->op_num, cur->ops[jj]->off_path,
+          DEBUG(map->proc_id,
+                "Recovery op found in Map stage:%u slot:%u op_num:%llu "
+                "off_path:%u addr:0x%llx\n",
+                ii, jj, (unsigned long long)cur->ops[jj]->op_num,
+                cur->ops[jj]->off_path,
                 (unsigned long long)cur->ops[jj]->inst_info->addr);
         }
         if (FLUSH_OP(cur->ops[jj])) {
-          DEBUG(map->proc_id, "Map flushing op_num:%llu off_path:%u\n", (unsigned long long)cur->ops[jj]->op_num,
+          DEBUG(map->proc_id, "Map flushing op_num:%llu off_path:%u\n",
+                (unsigned long long)cur->ops[jj]->op_num,
                 cur->ops[jj]->off_path);
           flushed = TRUE;
           ASSERT(map->proc_id, cur->ops[jj]->off_path);
@@ -152,23 +155,25 @@ void recover_map_stage() {
             ft_free_op(cur->ops[jj]);
           cur->ops[jj] = NULL;
         } else {
-          Op* op = cur->ops[jj];
+          Op *op = cur->ops[jj];
           cur->op_count++;
-          cur->ops[jj] = NULL;  // collapse the ops
+          cur->ops[jj] = NULL; // collapse the ops
           cur->ops[kk++] = op;
         }
       }
     }
 
     if (cur->op_count > 0 && flushed) {
-      Op* op = cur->ops[cur->op_count - 1];
-      assert_ft_after_recovery(map->proc_id, op, bp_recovery_info->recovery_fetch_addr);
+      Op *op = cur->ops[cur->op_count - 1];
+      assert_ft_after_recovery(map->proc_id, op,
+                               bp_recovery_info->recovery_fetch_addr);
     }
   }
 
   if (map->next_op_num > bp_recovery_info->recovery_op_num) {
     map->next_op_num = bp_recovery_info->recovery_op_num + 1;
-    DEBUG(map->proc_id, "Recovering map->next_op_num to %llu\n", map->next_op_num);
+    DEBUG(map->proc_id, "Recovering map->next_op_num to %llu\n",
+          map->next_op_num);
   }
 }
 
@@ -178,26 +183,33 @@ void recover_map_stage() {
 void debug_map_stage() {
   uns ii;
   for (ii = 0; ii < STAGE_MAX_DEPTH; ii++) {
-    Stage_Data* cur = &map->sds[STAGE_MAX_DEPTH - ii - 1];
+    Stage_Data *cur = &map->sds[STAGE_MAX_DEPTH - ii - 1];
     DPRINTF("# %-10s  op_count:%d\n", cur->name, cur->op_count);
     DPRINTF("# %-10s  op_nums:", cur->name);
     print_stage_op_nums(GLOBAL_DEBUG_STREAM, cur->ops, cur->op_count);
     DPRINTF("\n");
-    print_op_array(GLOBAL_DEBUG_STREAM, cur->ops, STAGE_MAX_OP_COUNT, STAGE_MAX_OP_COUNT);
+    print_op_array(GLOBAL_DEBUG_STREAM, cur->ops, STAGE_MAX_OP_COUNT,
+                   STAGE_MAX_OP_COUNT);
   }
 }
 
 /**************************************************************************************/
 /* map_cycle: */
 
-void update_map_stage(Stage_Data* src_sd) {
+void update_map_stage(Stage_Data *src_sd) {
   /* stall if the renaming table is full */
   if (!reg_file_available(STAGE_MAX_OP_COUNT)) {
     map->reg_file_stall = TRUE;
     DEBUG(map->proc_id,
-          "Map Stage stalled (reg_file_full) last_sd_op_num:%s last_sd_op_count:%d src_op_num:%s src_op_count:%d\n",
-          (map->last_sd->op_count && map->last_sd->ops[0]) ? unsstr64(map->last_sd->ops[0]->op_num) : "none",
-          map->last_sd->op_count, (src_sd->op_count && src_sd->ops[0]) ? unsstr64(src_sd->ops[0]->op_num) : "none",
+          "Map Stage stalled (reg_file_full) last_sd_op_num:%s "
+          "last_sd_op_count:%d src_op_num:%s src_op_count:%d\n",
+          (map->last_sd->op_count && map->last_sd->ops[0])
+              ? unsstr64(map->last_sd->ops[0]->op_num)
+              : "none",
+          map->last_sd->op_count,
+          (src_sd->op_count && src_sd->ops[0])
+              ? unsstr64(src_sd->ops[0]->op_num)
+              : "none",
           src_sd->op_count);
     STAT_EVENT(map->proc_id, MAP_STAGE_STALL_ITSELF);
     return;
@@ -211,13 +223,13 @@ void update_map_stage(Stage_Data* src_sd) {
 
   /* do all the intermediate stages */
   for (int ii = 0; ii < STAGE_MAX_DEPTH - 1; ii++) {
-    Stage_Data* cur = &map->sds[ii];
-    Stage_Data* prev = &map->sds[ii + 1];
+    Stage_Data *cur = &map->sds[ii];
+    Stage_Data *prev = &map->sds[ii + 1];
 
     if (cur->op_count)
       continue;
 
-    Op** temp = cur->ops;
+    Op **temp = cur->ops;
     cur->ops = prev->ops;
     prev->ops = temp;
     cur->op_count = prev->op_count;
@@ -232,14 +244,16 @@ void update_map_stage(Stage_Data* src_sd) {
   /* if the last map stage is stalled, don't re-process the ops  */
   if (stall) {
     DEBUG(map->proc_id, "Map Stage stalled op_num:%s last_sd_op_count:%d\n",
-          (map->last_sd->op_count && map->last_sd->ops[0]) ? unsstr64(map->last_sd->ops[0]->op_num) : "none",
+          (map->last_sd->op_count && map->last_sd->ops[0])
+              ? unsstr64(map->last_sd->ops[0]->op_num)
+              : "none",
           map->last_sd->op_count);
     return;
   }
 
   /* now map the ops in the last map stage */
   for (int ii = 0; ii < map->last_sd->op_count; ii++) {
-    Op* op = map->last_sd->ops[ii];
+    Op *op = map->last_sd->ops[ii];
     ASSERT(map->proc_id, op != NULL);
     stage_process_op(op);
   }
@@ -248,19 +262,23 @@ void update_map_stage(Stage_Data* src_sd) {
 /**************************************************************************************/
 /* Local methods */
 
-static inline void stage_process_op(Op* op) {
+static inline void stage_process_op(Op *op) {
   ASSERT(map->proc_id, map->proc_id == td->proc_id);
 
   /* add to sequential op list */
   add_to_seq_op_list(td, op);
   ASSERT(map->proc_id, td->seq_op_list.count <= op_pool_active_ops);
 
-  /* map the op based on true dependencies & set information in op->oracle_info */
+  /* map the op based on true dependencies & set information in op->oracle_info
+   */
   thread_map_op(op);
   thread_map_mem_dep(op);
 
   /* register renaming allocation */
   reg_file_rename(op);
+
+  /* RFP: prediction at icache fetch; prefetch launch at rename */
+  rfp_prefetch_launch(op);
 
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);
@@ -283,12 +301,12 @@ static inline void map_stage_collect_stat(Flag stall, Flag starved) {
     STAT_EVENT(map->proc_id, MAP_STAGE_NOT_STARVED);
 }
 
-static inline void map_stage_fetch_op(Stage_Data* src_sd) {
-  Stage_Data* first_sd = &map->sds[STAGE_MAX_DEPTH - 1];
+static inline void map_stage_fetch_op(Stage_Data *src_sd) {
+  Stage_Data *first_sd = &map->sds[STAGE_MAX_DEPTH - 1];
   int op_count_before_fetch = src_sd->op_count;
 
   for (int ii = 0; ii < op_count_before_fetch; ii++) {
-    Op* op = src_sd->ops[ii];
+    Op *op = src_sd->ops[ii];
     ASSERT(map->proc_id, op->op_num == map->next_op_num);
     DEBUG(map->proc_id, "Fetching opnum=%llu at idx=%i\n", op->op_num, ii);
 

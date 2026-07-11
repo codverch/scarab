@@ -44,6 +44,9 @@ extern "C" {
 
 #include "exec_ports.h"
 #include "node_stage.h"
+
+#include "prefetcher/rfp.param.h"
+#include "statistics.h"
 }
 
 #include <deque>
@@ -58,6 +61,10 @@ struct LSQ_Entry {
   Counter unique_num = 0;
   Flag off_path = 0;
   Mem_Type mem_type = {};
+  /* RFP-only fields */
+  Addr rfp_predicted_line_addr = 0;
+  uns16 rfp_prfid = 0;
+  Counter rfp_launch_cycle = 0;
 
   LSQ_Entry() {}
   LSQ_Entry(Op* mem_op)
@@ -66,6 +73,15 @@ struct LSQ_Entry {
         unique_num(mem_op->unique_num),
         off_path(mem_op->off_path),
         mem_type(mem_op->inst_info->table_info.mem_type) {}
+  LSQ_Entry(Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle)
+      : op(owner_op),
+        op_num(owner_op->op_num),
+        unique_num(owner_op->unique_num),
+        off_path(owner_op->off_path),
+        mem_type(MEM_LD),
+        rfp_predicted_line_addr(predicted_line_addr),
+        rfp_prfid(prfid),
+        rfp_launch_cycle(launch_cycle) {}
 };
 
 class LSQ {
@@ -73,27 +89,39 @@ class LSQ {
   uns8 proc_id = 0;
   Mem_Type mem_type = {};
   size_t entry_num = 0;
+  /* Dedicated RFP FIFO capacity (separate from demand entry_num). */
+  size_t rfp_entry_num = 0;
 
   std::deque<LSQ_Entry> entries;
+  /* RFP FIFO */
+  std::deque<LSQ_Entry> rfp_fifo_entries;
 
  public:
   void init(uns8 proc_id, Mem_Type mem_type, size_t entry_num);
   void allocate(Op* mem_op);
+  Flag allocate_rfp(Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle);
   void free(Op* mem_op);
   bool available();
   void recover(Counter flush_op_num);
+  void drop_rfp_upto(Counter op_num);
+  Flag peek_rfp(Lsq_Rfp_Req* out_req) const;
+  void pop_rfp();
 
   LSQ(){};
   const std::deque<LSQ_Entry>& get_entries() const { return entries; }
 };
 
+/* Initialize the LSQ */
 void LSQ::init(const uns8 proc_id, const Mem_Type mem_type, const size_t entry_num) {
   this->proc_id = proc_id;
   this->mem_type = mem_type;
   this->entry_num = entry_num;
+  this->rfp_entry_num = (mem_type == MEM_LD) ? RFP_LSQ_FIFO_SIZE : 0;
   entries.clear();
+  rfp_fifo_entries.clear();
 }
 
+/* Allocate an entry for a load operation */
 void LSQ::allocate(Op* mem_op) {
   ASSERT(proc_id, entries.size() < entry_num);
   ASSERT(proc_id, mem_op->inst_info->table_info.mem_type == this->mem_type);
@@ -101,15 +129,37 @@ void LSQ::allocate(Op* mem_op) {
   entries.emplace_back(mem_op);
 }
 
+/* Allocate an entry in the RFP FIFO for an RFP prefetch request */
+Flag LSQ::allocate_rfp(Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle) {
+  if (!owner_op || owner_op->inst_info->table_info.mem_type != MEM_LD)
+    return FALSE;
+  
+  if (rfp_fifo_entries
+.size() >= rfp_entry_num) {
+    STAT_EVENT(proc_id, RFP_LSQ_FIFO_FULL);
+    return FALSE;
+  }
+  
+  rfp_fifo_entries.emplace_back(owner_op, predicted_line_addr, prfid, launch_cycle);
+  return TRUE;
+}
+
+/* Remove an entry from the LSQ */
 void LSQ::free(Op* mem_op) {
   ASSERT(proc_id, !entries.empty());
   ASSERT(proc_id, mem_op->inst_info->table_info.mem_type == this->mem_type);
   ASSERT(proc_id, !mem_op->off_path);
 
-  ASSERT(proc_id, entries.front().op_num == mem_op->op_num);
-  entries.pop_front();
+  for (auto it = entries.begin(); it != entries.end(); ++it) {
+    if (it->op_num == mem_op->op_num && it->unique_num == mem_op->unique_num) {
+      entries.erase(it);
+      return;
+    }
+  }
+  ASSERT(proc_id, FALSE);
 }
 
+/* Check if the LSQ is available for a load operation */
 bool LSQ::available() {
   ASSERT(proc_id, entries.size() <= entry_num);
   if (entries.size() == entry_num) {
@@ -119,6 +169,7 @@ bool LSQ::available() {
   return true;
 }
 
+/* Recover the LSQ from a flush */
 void LSQ::recover(Counter flush_op_num) {
   while (!entries.empty()) {
     auto& back_entry = entries.back();
@@ -128,13 +179,56 @@ void LSQ::recover(Counter flush_op_num) {
       break;
     }
 
-    // Free this off-path mem op from the back
+    // Free younger demand entries from the back.
     ASSERT(proc_id, !entries.empty());
-    ASSERT(proc_id, back_entry.op->off_path);
-    ASSERT(proc_id, entries.back().op_num == back_entry.op->op_num);
-    ASSERT(proc_id, back_entry.op->inst_info->table_info.mem_type == this->mem_type);
+    ASSERT(proc_id, entries.back().op_num == back_entry.op_num);
+    ASSERT(proc_id, back_entry.mem_type == this->mem_type);
     entries.pop_back();
   }
+
+  /* Scan the RFP FIFO and remove entries that are older than the flush operation */
+  for (auto it = rfp_fifo_entries
+.begin(); it != rfp_fifo_entries.end();) {
+    if (it->op_num >= flush_op_num)
+      it = rfp_fifo_entries
+.erase(it);
+    else
+      ++it;
+  }
+}
+
+/* Drop RFP entries up to a given op number */
+void LSQ::drop_rfp_upto(Counter op_num) {
+  for (auto it = rfp_fifo_entries
+.begin(); it != rfp_fifo_entries.end();) {
+    if (it->op_num <= op_num)
+      it = rfp_fifo_entries
+.erase(it);
+    else
+      ++it;
+  }
+}
+
+/* Peek at the oldest RFP prefetch request in the FIFO */
+Flag LSQ::peek_rfp(Lsq_Rfp_Req* out_req) const {
+  if (!out_req || rfp_fifo_entries
+.empty())
+    return FALSE;
+  const auto& entry = rfp_fifo_entries.front();
+  out_req->owner_op = entry.op;
+  out_req->owner_unique = entry.unique_num;
+  out_req->owner_op_num = entry.op_num;
+  out_req->predicted_line_addr = entry.rfp_predicted_line_addr;
+  out_req->prfid = entry.rfp_prfid;
+  out_req->launch_cycle = entry.rfp_launch_cycle;
+  return TRUE;
+}
+
+/* Pop the oldest RFP prefetch request from the FIFO */
+void LSQ::pop_rfp() {
+  if (!rfp_fifo_entries
+.empty())
+    rfp_fifo_entries.pop_front();
 }
 
 /**************************************************************************************/
@@ -154,6 +248,9 @@ class LSQ_Unit {
   void dispatch(Op* mem_op);
   void recover(Counter flush_op_num);
   void commit(Op* mem_op);
+  Flag rfp_enqueue(Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle);
+  Flag rfp_peek(Lsq_Rfp_Req* out_req) const;
+  void rfp_pop();
 };
 
 LSQ_Unit::LSQ_Unit(uns8 proc_id) {
@@ -222,6 +319,7 @@ void LSQ_Unit::commit(Op* mem_op) {
   switch (mem_op->inst_info->table_info.mem_type) {
     case MEM_LD:
       load_queue.free(mem_op);
+      load_queue.drop_rfp_upto(mem_op->op_num);
       break;
 
     case MEM_ST:
@@ -232,6 +330,18 @@ void LSQ_Unit::commit(Op* mem_op) {
       ASSERT(mem_op->proc_id, FALSE);
       break;
   }
+}
+
+Flag LSQ_Unit::rfp_enqueue(Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle) {
+  return load_queue.allocate_rfp(owner_op, predicted_line_addr, prfid, launch_cycle);
+}
+
+Flag LSQ_Unit::rfp_peek(Lsq_Rfp_Req* out_req) const {
+  return load_queue.peek_rfp(out_req);
+}
+
+void LSQ_Unit::rfp_pop() {
+  load_queue.pop_rfp();
 }
 
 /**************************************************************************************/
@@ -318,14 +428,36 @@ void lsq_commit(Op* mem_op) {
 
 /**************************************************************************************/
 
+Flag lsq_rfp_enqueue(uns8 proc_id, Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle) {
+  if (!LSQ_ENABLE)
+    return FALSE;
+  if (!owner_op || proc_id >= per_core_lsq_unit.size())
+    return FALSE;
+  return per_core_lsq_unit[proc_id].rfp_enqueue(owner_op, predicted_line_addr, prfid, launch_cycle);
+}
+
+Flag lsq_rfp_peek(uns8 proc_id, Lsq_Rfp_Req* out_req) {
+  if (!LSQ_ENABLE || proc_id >= per_core_lsq_unit.size())
+    return FALSE;
+  return per_core_lsq_unit[proc_id].rfp_peek(out_req);
+}
+
+void lsq_rfp_pop(uns8 proc_id) {
+  if (!LSQ_ENABLE || proc_id >= per_core_lsq_unit.size())
+    return;
+  per_core_lsq_unit[proc_id].rfp_pop();
+}
+
+/**************************************************************************************/
+
 int lsq_get_in_flight_load_num() {
   if (!LSQ_ENABLE)
     return 0;
 
   int in_flight_num = 0;
-  const auto& store_entries = lsq_unit->get_queue(MEM_LD)->get_entries();
-  for (const auto& entry : store_entries) {
-    if (entry.op->state >= OS_IN_RS)
+  const auto& load_entries = lsq_unit->get_queue(MEM_LD)->get_entries();
+  for (const auto& entry : load_entries) {
+    if (entry.op && entry.op->state >= OS_IN_RS)
       in_flight_num++;
   }
 

@@ -61,6 +61,7 @@
 #include "map_rename.h"
 #include "op_pool.h"
 #include "sim.h"
+#include "prefetcher/rfp.h"
 #include "statistics.h"
 #include "thread.h"
 #include "xed-iclass-enum.h"
@@ -68,59 +69,58 @@
 /* Macros */
 
 #define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_NODE_STAGE, ##args)
-#define PRINT_RETIRED_UOP(proc_id, args...) _DEBUG_LEAN(proc_id, DEBUG_RETIRED_UOPS, ##args)
+#define PRINT_RETIRED_UOP(proc_id, args...)                                    \
+  _DEBUG_LEAN(proc_id, DEBUG_RETIRED_UOPS, ##args)
 
 #define DEBUG_NODE_WIDTH ISSUE_WIDTH
 /**************************************************************************************/
 /* Global Variables */
 
-Node_Stage* node = NULL;
+Node_Stage *node = NULL;
 Rob_Stall_Reason rob_stall_reason = ROB_STALL_NONE;
 Rob_Block_Issue_Reason rob_block_issue_reason = ROB_BLOCK_ISSUE_NONE;
 
 /**************************************************************************************/
 /* Prototypes */
 
-void debug_print_retired_uop(Op* op);
+void debug_print_retired_uop(Op *op);
 void flush_scheduling_buffer(void);
 void flush_rs(void);
 void flush_window(void);
 void debug_print_node_table(void);
-Flag op_not_ready_for_retire(Op* op);
+Flag op_not_ready_for_retire(Op *op);
 Flag is_node_table_empty(void);
-void collect_not_ready_to_retire_stats(Op* op);
+void collect_not_ready_to_retire_stats(Op *op);
 Flag is_node_table_full(void);
-void collect_node_table_full_stats(Op* op);
+void collect_node_table_full_stats(Op *op);
 
-void node_fill_rob(Stage_Data*);
+void node_fill_rob(Stage_Data *);
 void node_retire(void);
 
 void node_precommit_update(void);
-void node_precommit_retire(Op* op);
+void node_precommit_retire(Op *op);
 
-void node_fuse_op(Op* op);
+void node_fuse_op(Op *op);
 
 /**************************************************************************************/
 /* set_node_stage:*/
 
-void set_node_stage(Node_Stage* new_node) {
-  node = new_node;
-}
+void set_node_stage(Node_Stage *new_node) { node = new_node; }
 
 /**************************************************************************************/
 /* init_node_stage:*/
 
-void init_node_stage(uns8 proc_id, const char* name) {
+void init_node_stage(uns8 proc_id, const char *name) {
   ASSERT(proc_id, node);
   DEBUG(proc_id, "Initializing %s stage\n", name);
 
   node->proc_id = proc_id;
   /* `name` is expected to be long-lived (caller passes string literals). */
-  node->sd.name = (char*)name;
+  node->sd.name = (char *)name;
 
   // allocate wires to functional units
-  node->sd.max_op_count = NUM_FUS;  // Bandwidth between schedule and FUS
-  node->sd.ops = (Op**)malloc(sizeof(Op*) * node->sd.max_op_count);
+  node->sd.max_op_count = NUM_FUS; // Bandwidth between schedule and FUS
+  node->sd.ops = (Op **)malloc(sizeof(Op *) * node->sd.max_op_count);
 
   reset_node_stage();
 }
@@ -165,7 +165,8 @@ void recover_node_stage() {
   ASSERT(node->proc_id, node->proc_id == bp_recovery_info->proc_id);
 
   DEBUG(node->proc_id, "Recovering '%s' stage\n", node->sd.name);
-  if (ENABLE_GLOBAL_DEBUG_PRINT && DEBUG_NODE_STAGE && DEBUG_RANGE_COND(node->proc_id))
+  if (ENABLE_GLOBAL_DEBUG_PRINT && DEBUG_NODE_STAGE &&
+      DEBUG_RANGE_COND(node->proc_id))
     debug_node_stage();
 
   flush_scheduling_buffer();
@@ -176,20 +177,23 @@ void recover_node_stage() {
   if (node->last_scheduled_opnum >= bp_recovery_info->recovery_op_num)
     node->last_scheduled_opnum = bp_recovery_info->recovery_op_num;
 
-  if (ENABLE_GLOBAL_DEBUG_PRINT && DEBUG_NODE_STAGE && DEBUG_RANGE_COND(node->proc_id))
+  if (ENABLE_GLOBAL_DEBUG_PRINT && DEBUG_NODE_STAGE &&
+      DEBUG_RANGE_COND(node->proc_id))
     debug_node_stage();
 }
 
 void flush_scheduling_buffer() {
   uns ii;
   for (ii = 0; ii < node->sd.max_op_count; ii++) {
-    Op* op = node->sd.ops[ii];
+    Op *op = node->sd.ops[ii];
     if (op && FLUSH_OP(op)) {
-      DEBUG(node->proc_id, "Node sched-buffer flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
-            op->off_path);
+      DEBUG(node->proc_id,
+            "Node sched-buffer flushing op_num:%llu off_path:%u\n",
+            (unsigned long long)op->op_num, op->off_path);
       ASSERT(node->proc_id, node->proc_id == op->proc_id);
       ASSERT(node->proc_id, op->off_path);
-      ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
+      ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num,
+              "op_num:%s\n", unsstr64(op->op_num));
 
       node->sd.ops[ii] = NULL;
       node->sd.op_count--;
@@ -200,20 +204,21 @@ void flush_scheduling_buffer() {
 }
 
 void flush_rs() {
-  Op* op = node->next_op_into_rs;
+  Op *op = node->next_op_into_rs;
   if (op && FLUSH_OP(op)) {
-    DEBUG(node->proc_id, "Node RS-input flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
-          op->off_path);
+    DEBUG(node->proc_id, "Node RS-input flushing op_num:%llu off_path:%u\n",
+          (unsigned long long)op->op_num, op->off_path);
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
     ASSERT(node->proc_id, op->off_path);
-    ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
-    node->next_op_into_rs = NULL;  // all later ops will also be flushed
+    ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num,
+            "op_num:%s\n", unsstr64(op->op_num));
+    node->next_op_into_rs = NULL; // all later ops will also be flushed
   }
 }
 
 void flush_window() {
-  Op* op;
-  Op** last;
+  Op *op;
+  Op **last;
   uns flush_ops = 0;
   uns keep_ops = 0;
 
@@ -222,8 +227,8 @@ void flush_window() {
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
 
     if (FLUSH_OP(op)) {
-      DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
-            op->off_path);
+      DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n",
+            (unsigned long long)op->op_num, op->off_path);
       ASSERT(node->proc_id, op->off_path);
       if (!op->macro_fused)
         flush_ops++;
@@ -241,7 +246,8 @@ void flush_window() {
         /* Mark that the scheduled recovery has occurred */
         op->recovery_scheduled = FALSE;
       }
-      DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
+      DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n",
+            unsstr64(op->op_num), op->node_id);
       if (!op->macro_fused)
         keep_ops++;
       last = &op->next_node;
@@ -264,7 +270,7 @@ void debug_node_stage() {
 }
 
 void debug_print_node_table() {
-  Op* op;
+  Op *op;
 
   Counter row = 0;
   Flag empty = TRUE;
@@ -272,7 +278,7 @@ void debug_print_node_table() {
   uns printed_all = 0;
   uns printed_non_fused = 0;
 
-  Op** temp = (Op**)calloc(DEBUG_NODE_WIDTH, sizeof(Op*));
+  Op **temp = (Op **)calloc(DEBUG_NODE_WIDTH, sizeof(Op *));
 
   for (op = node->node_head; op; op = op->next_node, ++row) {
     slot_num = row % DEBUG_NODE_WIDTH;
@@ -287,7 +293,8 @@ void debug_print_node_table() {
     // we have populated entire row, print and reinitialize
     if (slot_num == DEBUG_NODE_WIDTH - 1) {
       if (!empty) {
-        print_open_op_array(GLOBAL_DEBUG_STREAM, temp, DEBUG_NODE_WIDTH, DEBUG_NODE_WIDTH);
+        print_open_op_array(GLOBAL_DEBUG_STREAM, temp, DEBUG_NODE_WIDTH,
+                            DEBUG_NODE_WIDTH);
       }
       // For some reason this does not zero out the entire array.
       // (Assert fails and verified in gdb).
@@ -298,12 +305,15 @@ void debug_print_node_table() {
     }
   }
 
-  ASSERTM(node->proc_id, printed_non_fused == node->node_count, "printed_non_fused=%d, node_count=%d, printed_all=%d",
+  ASSERTM(node->proc_id, printed_non_fused == node->node_count,
+          "printed_non_fused=%d, node_count=%d, printed_all=%d",
           printed_non_fused, node->node_count, printed_all);
 
-  // If node table is empty, print a blank row. Or if there is a remainder, print that too
+  // If node table is empty, print a blank row. Or if there is a remainder,
+  // print that too
   if (printed_all == 0 || slot_num < DEBUG_NODE_WIDTH - 1)
-    print_open_op_array(GLOBAL_DEBUG_STREAM, temp, DEBUG_NODE_WIDTH, DEBUG_NODE_WIDTH);
+    print_open_op_array(GLOBAL_DEBUG_STREAM, temp, DEBUG_NODE_WIDTH,
+                        DEBUG_NODE_WIDTH);
 
   print_open_op_array_end(GLOBAL_DEBUG_STREAM, DEBUG_NODE_WIDTH);
 
@@ -313,7 +323,7 @@ void debug_print_node_table() {
 /**************************************************************************************/
 /* node_cycle: */
 
-void update_node_stage(Stage_Data* src_sd) {
+void update_node_stage(Stage_Data *src_sd) {
   DEBUG(node->proc_id, "Beginning '%s' stage\n", node->sd.name);
   STAT_EVENT(node->proc_id, NODE_CYCLE);
   STAT_EVENT(node->proc_id, POWER_CYCLE);
@@ -335,21 +345,23 @@ void update_node_stage(Stage_Data* src_sd) {
 }
 
 /**************************************************************************************/
-/* node_fill_rob: This function takes ops from the map stage and allocates them into the node table.
- *    Note, this function does not place the Op in the RS, that is done later.*/
+/* node_fill_rob: This function takes ops from the map stage and allocates them
+ * into the node table. Note, this function does not place the Op in the RS,
+ * that is done later.*/
 
-void node_fill_rob(Stage_Data* src_sd) {
+void node_fill_rob(Stage_Data *src_sd) {
   Flag on_path = FALSE;
   uns ii;
 
   /* if nothing to process, return */
   if (src_sd->op_count == 0) {
-    DEBUG(node->proc_id, "Node fill starved: src_sd_op_count:0 node_count:%d\n", node->node_count);
+    DEBUG(node->proc_id, "Node fill starved: src_sd_op_count:0 node_count:%d\n",
+          node->node_count);
     return;
   }
 
-  // Go through all the ops in the issue buffer and stick them into the Node Table.
-  // We will stick them into the RS later
+  // Go through all the ops in the issue buffer and stick them into the Node
+  // Table. We will stick them into the RS later
   for (ii = 0; ii < src_sd->max_op_count; ii++) {
     /* if node table is full, stall */
     if (is_node_table_full()) {
@@ -360,17 +372,22 @@ void node_fill_rob(Stage_Data* src_sd) {
     rob_block_issue_reason = ROB_BLOCK_ISSUE_NONE;
 
     // If it is not full, issue the next op
-    Op* op = src_sd->ops[ii];
+    Op *op = src_sd->ops[ii];
     if (!op)
       continue;
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if (op->inst_info->table_info.mem_type == MEM_LD ||
+        op->inst_info->table_info.mem_type == MEM_ST) {
       if (!lsq_available(op->inst_info->table_info.mem_type)) {
-        DEBUG(node->proc_id, "Node fill stalled: LSQ full for op_num:%s mem_type:%s src_sd_op_count:%d node_count:%d\n",
-              unsstr64(op->op_num), op->inst_info->table_info.mem_type == MEM_LD ? "LD" : "ST", src_sd->op_count,
-              node->node_count);
+        DEBUG(node->proc_id,
+              "Node fill stalled: LSQ full for op_num:%s mem_type:%s "
+              "src_sd_op_count:%d node_count:%d\n",
+              unsstr64(op->op_num),
+              op->inst_info->table_info.mem_type == MEM_LD ? "LD" : "ST",
+              src_sd->op_count, node->node_count);
         STAT_EVENT(op->proc_id, LSQ_FULL_TOTAL);
-        STAT_EVENT(op->proc_id, LSQ_FULL_TOTAL + op->inst_info->table_info.mem_type);
+        STAT_EVENT(op->proc_id,
+                   LSQ_FULL_TOTAL + op->inst_info->table_info.mem_type);
         return;
       }
 
@@ -379,7 +396,8 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
     /* check if it's a synchronizing op that can't issue  */
-    if ((op->inst_info->table_info.bar_type & BAR_ISSUE) && (node->node_count > 0))
+    if ((op->inst_info->table_info.bar_type & BAR_ISSUE) &&
+        (node->node_count > 0))
       break;
 
     /* remove op from previous stage */
@@ -410,12 +428,13 @@ void node_fill_rob(Stage_Data* src_sd) {
       node->node_count++;
 
     ASSERTM(node->proc_id, node->node_count <= NODE_TABLE_SIZE,
-            "node_count: %d src_max_op_count: %d src_op_count: %d\n", node->node_count, src_sd->max_op_count,
-            src_sd->op_count);
+            "node_count: %d src_max_op_count: %d src_op_count: %d\n",
+            node->node_count, src_sd->max_op_count, src_sd->op_count);
 
     on_path |= !op->off_path;
 
-    DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n", unsstr64(op->op_num), op->off_path);
+    DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n",
+          unsstr64(op->op_num), op->off_path);
 
     op->state = OS_IN_ROB;
 
@@ -430,7 +449,7 @@ void node_fill_rob(Stage_Data* src_sd) {
 
 void node_retire() {
   uns ret_count = 0;
-  Op* op = NULL;
+  Op *op = NULL;
 
   // If node table is empty, then there is nothing to retire
   if (is_node_table_empty()) {
@@ -438,19 +457,23 @@ void node_retire() {
     return;
   }
 
-  // Iterate through the first NODE_RET_WIDTH number of ops and try to retire them.
-  // Advance with a saved next_node: ft_free_op() may delete the FT and free this op when it
-  // is get_last_op(), so we must not read op->next_node after free.
+  // Iterate through the first NODE_RET_WIDTH number of ops and try to retire
+  // them. Advance with a saved next_node: ft_free_op() may delete the FT and
+  // free this op when it is get_last_op(), so we must not read op->next_node
+  // after free.
   for (op = node->node_head; op && ret_count < NODE_RET_WIDTH;) {
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
 
     // check to see if the head of the node table is ready to retire
     if (op_not_ready_for_retire(op)) {
       DEBUG(node->proc_id,
-            "Node retire stalled head_op_num:%s state:%s off_path:%u recovery_scheduled:%u redirect_scheduled:%u "
+            "Node retire stalled head_op_num:%s state:%s off_path:%u "
+            "recovery_scheduled:%u redirect_scheduled:%u "
             "done_cycle:%s cycle:%s op_done_now:%u\n",
-            unsstr64(op->op_num), Op_State_str(op->state), op->off_path, op->recovery_scheduled, op->redirect_scheduled,
-            unsstr64(op->done_cycle), unsstr64(cycle_count), (unsigned)(OP_DONE(op) ? 1 : 0));
+            unsstr64(op->op_num), Op_State_str(op->state), op->off_path,
+            op->recovery_scheduled, op->redirect_scheduled,
+            unsstr64(op->done_cycle), unsstr64(cycle_count),
+            (unsigned)(OP_DONE(op) ? 1 : 0));
       // op is not ready to retire
       collect_not_ready_to_retire_stats(op);
       break;
@@ -459,7 +482,8 @@ void node_retire() {
     rob_stall_reason = ROB_STALL_NONE;
 
     /**op is ready to retire**/
-    ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n", op->op_num);
+    ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n",
+            op->op_num);
     ret_count++;
     DEBUG(node->proc_id, "Retiring op:%llu\n", op->op_num);
 
@@ -467,13 +491,15 @@ void node_retire() {
     debug_print_retired_uop(op);
 
     // count number of stall cycles
-    STAT_EVENT(node->proc_id, RET_STALL_LENGTH_0 + MIN2(node->ret_stall_length, 5000) / 100);
+    STAT_EVENT(node->proc_id,
+               RET_STALL_LENGTH_0 + MIN2(node->ret_stall_length, 5000) / 100);
     if (DIE_ON_RET_STALL_THRESH) {
       // time out code
       if (node->proc_id == DIE_ON_RET_STALL_CORE) {
         ASSERTM(node->proc_id, node->ret_stall_length < DIE_ON_RET_STALL_THRESH,
-                "Retire stalled for %u cycles (%llu--%llu)\n", node->ret_stall_length,
-                cycle_count - node->ret_stall_length, cycle_count);
+                "Retire stalled for %u cycles (%llu--%llu)\n",
+                node->ret_stall_length, cycle_count - node->ret_stall_length,
+                cycle_count);
       }
     }
     node->ret_stall_length = 0;
@@ -484,17 +510,21 @@ void node_retire() {
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
     ASSERT(node->proc_id, op->in_node_list);
     ASSERT(node->proc_id, !op->off_path);
-    STAT_EVENT(op->proc_id, OP_WAIT_0 + MIN2(op->sched_cycle - real_rdy_cycle, 31));
-    STAT_EVENT(op->proc_id, OP_RETIRED);  // Counts all ops retired, not just those in primary thread
+    STAT_EVENT(op->proc_id,
+               OP_WAIT_0 + MIN2(op->sched_cycle - real_rdy_cycle, 31));
+    STAT_EVENT(
+        op->proc_id,
+        OP_RETIRED); // Counts all ops retired, not just those in primary thread
 
     DEBUG(node->proc_id, "Retiring op_num:%s\n", unsstr64(op->op_num));
 
-    ASSERTM(node->proc_id, op->op_num == node->ret_op, "op_num=%s  ret_op=%s\n", unsstr64(op->op_num),
-            unsstr64(node->ret_op));
+    ASSERTM(node->proc_id, op->op_num == node->ret_op, "op_num=%s  ret_op=%s\n",
+            unsstr64(op->op_num), unsstr64(node->ret_op));
 
     if (op->eom) {
-      /* We need to retire sys calls, bar fetch instructions, and the last instruction.
-       * All other retires are "optional" to release resources in the PIN frontend */
+      /* We need to retire sys calls, bar fetch instructions, and the last
+       * instruction. All other retires are "optional" to release resources in
+       * the PIN frontend */
       inst_count[node->proc_id]++;
       STAT_EVENT(op->proc_id, NODE_INST_COUNT);
 
@@ -503,7 +533,8 @@ void node_retire() {
         STAT_EVENT(op->proc_id, NODE_INST_COUNT_FETCHED);
       }
 
-      Flag retire_op = IS_CALLSYS(&op->inst_info->table_info) || op->inst_info->table_info.bar_type & BAR_FETCH ||
+      Flag retire_op = IS_CALLSYS(&op->inst_info->table_info) ||
+                       op->inst_info->table_info.bar_type & BAR_FETCH ||
                        (inst_count[node->proc_id] % NODE_RETIRE_RATE == 0);
 
       if (op->exit) {
@@ -518,10 +549,14 @@ void node_retire() {
     }
     uop_count[node->proc_id]++;
     STAT_EVENT(op->proc_id, NODE_UOP_COUNT);
-    ASSERTM(node->proc_id, uop_count[node->proc_id] == node->ret_op, "%s  %s op_num: %s\n",
-            unsstr64(uop_count[node->proc_id]), unsstr64(node->ret_op), unsstr64(op->op_num));
+    ASSERTM(node->proc_id, uop_count[node->proc_id] == node->ret_op,
+            "%s  %s op_num: %s\n", unsstr64(uop_count[node->proc_id]),
+            unsstr64(node->ret_op), unsstr64(op->op_num));
 
     node->ret_op++;
+
+    /* Train RFP table on committed load */
+    rfp_train_retire(op);
 
     STAT_EVENT(op->proc_id, RET_ALL_INST);
 
@@ -538,8 +573,10 @@ void node_retire() {
       bp_retire_op(g_bp_data, op);
     }
 
-    if (op->inst_info->table_info.mem_type == MEM_LD && (op->done_cycle - op->sched_cycle) < 5) {
-      STAT_EVENT(op->proc_id, LD_EXEC_CYCLES_0 + (op->done_cycle - op->sched_cycle));
+    if (op->inst_info->table_info.mem_type == MEM_LD &&
+        (op->done_cycle - op->sched_cycle) < 5) {
+      STAT_EVENT(op->proc_id,
+                 LD_EXEC_CYCLES_0 + (op->done_cycle - op->sched_cycle));
     }
     if (op->inst_info->table_info.mem_type == MEM_LD) {
       STAT_EVENT(op->proc_id, LD_NO_DEPENDENTS + (op->wake_up_head ? 1 : 0));
@@ -553,17 +590,19 @@ void node_retire() {
 
     node_precommit_retire(op);
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if (op->inst_info->table_info.mem_type == MEM_LD ||
+        op->inst_info->table_info.mem_type == MEM_ST) {
       lsq_commit(op);
     }
 
-    Op* next_retired = op->next_node;
+    Op *next_retired = op->next_node;
     Flag macro_fused_saved = op->macro_fused;
 
     if (model->op_retired_hook)
       model->op_retired_hook(op);
     else {
-      printf("[ft_free_op] stage=node_stage:retire op_num=%llu op=%p\n", (unsigned long long)op->op_num, (void*)op);
+      printf("[ft_free_op] stage=node_stage:retire op_num=%llu op=%p\n",
+             (unsigned long long)op->op_num, (void *)op);
       ft_free_op(op);
     }
     // the fused op does not occupy the ROB entry
@@ -577,13 +616,16 @@ void node_retire() {
 
   STAT_EVENT(node->proc_id, ROW_SIZE_0 + ret_count);
 
-  // op should be pointing to first op that was not retired because of the above for-loop
+  // op should be pointing to first op that was not retired because of the above
+  // for-loop
   node->node_head = op;
   if (node->node_head)
-    DEBUG(node->proc_id, "Op op_num:%s is now head of the node table\n", unsstr64(node->node_head->op_num));
+    DEBUG(node->proc_id, "Op op_num:%s is now head of the node table\n",
+          unsstr64(node->node_head->op_num));
   if (op == NULL) {
     node->node_tail = NULL;
-    ASSERTM(node->proc_id, node->node_count == 0, "Node table must be empty if next node is null!\n");
+    ASSERTM(node->proc_id, node->node_count == 0,
+            "Node table must be empty if next node is null!\n");
   }
 }
 
@@ -593,32 +635,40 @@ void node_retire() {
 
 Flag is_node_stage_stalled() {
   return (node->node_count == NODE_TABLE_SIZE) && /* node table is full */
-         !issue_queue_has_ready_ops() &&          /* no ready ops in issue queues */
-         !node->next_op_into_rs;                  /* no ops waiting to enter RS */
+         !issue_queue_has_ready_ops() && /* no ready ops in issue queues */
+         !node->next_op_into_rs;         /* no ops waiting to enter RS */
 }
 
-void debug_print_retired_uop(Op* op) {
+void debug_print_retired_uop(Op *op) {
   PRINT_RETIRED_UOP(node->proc_id, "============================\n");
   PRINT_RETIRED_UOP(node->proc_id, "EIP: 0x%llx\n", op->inst_info->addr);
-  PRINT_RETIRED_UOP(node->proc_id, "Op Type: %s\n", Op_Type_str(op->inst_info->table_info.op_type));
-  PRINT_RETIRED_UOP(node->proc_id, "Mem Type: %d\n", op->inst_info->table_info.mem_type);
-  PRINT_RETIRED_UOP(node->proc_id, "CF Type: %d\n", op->inst_info->table_info.cf_type);
-  PRINT_RETIRED_UOP(node->proc_id, "Barrier Type: %d\n", op->inst_info->table_info.bar_type);
-  PRINT_RETIRED_UOP(node->proc_id, "Is SIMD: %d\n", op->inst_info->table_info.is_simd);
+  PRINT_RETIRED_UOP(node->proc_id, "Op Type: %s\n",
+                    Op_Type_str(op->inst_info->table_info.op_type));
+  PRINT_RETIRED_UOP(node->proc_id, "Mem Type: %d\n",
+                    op->inst_info->table_info.mem_type);
+  PRINT_RETIRED_UOP(node->proc_id, "CF Type: %d\n",
+                    op->inst_info->table_info.cf_type);
+  PRINT_RETIRED_UOP(node->proc_id, "Barrier Type: %d\n",
+                    op->inst_info->table_info.bar_type);
+  PRINT_RETIRED_UOP(node->proc_id, "Is SIMD: %d\n",
+                    op->inst_info->table_info.is_simd);
   PRINT_RETIRED_UOP(node->proc_id, "Srcs: ");
   for (uns i = 0; i < op->inst_info->table_info.num_src_regs; ++i) {
-    PRINT_RETIRED_UOP(node->proc_id, "%s ", disasm_reg(op->inst_info->srcs[i].id));
+    PRINT_RETIRED_UOP(node->proc_id, "%s ",
+                      disasm_reg(op->inst_info->srcs[i].id));
   }
   PRINT_RETIRED_UOP(node->proc_id, "\n");
   PRINT_RETIRED_UOP(node->proc_id, "Dests: ");
   for (uns i = 0; i < op->inst_info->table_info.num_dest_regs; ++i) {
-    PRINT_RETIRED_UOP(node->proc_id, "%s ", disasm_reg(op->inst_info->dests[i].id));
+    PRINT_RETIRED_UOP(node->proc_id, "%s ",
+                      disasm_reg(op->inst_info->dests[i].id));
   }
   PRINT_RETIRED_UOP(node->proc_id, "\n");
 }
 
-Flag op_not_ready_for_retire(Op* op) {
-  return !(op->state == OS_DONE || OP_DONE(op)) || op->off_path || op->recovery_scheduled || op->redirect_scheduled;
+Flag op_not_ready_for_retire(Op *op) {
+  return !(op->state == OS_DONE || OP_DONE(op)) || op->off_path ||
+         op->recovery_scheduled || op->redirect_scheduled;
 }
 
 Flag is_node_table_empty() {
@@ -638,7 +688,7 @@ Flag is_node_table_empty() {
   return FALSE;
 }
 
-void collect_not_ready_to_retire_stats(Op* op) {
+void collect_not_ready_to_retire_stats(Op *op) {
   rob_stall_reason = ROB_STALL_OTHER;
   if (op->recovery_scheduled) {
     rob_stall_reason = ROB_STALL_WAIT_FOR_RECOVERY;
@@ -649,10 +699,12 @@ void collect_not_ready_to_retire_stats(Op* op) {
   if (op->engine_info.l1_miss) {
     rob_stall_reason = ROB_STALL_WAIT_FOR_L1_MISS;
     STAT_EVENT(op->proc_id, RET_BLOCKED_L1_MISS);
-    Flag bw_prefetch = !op->engine_info.l1_miss_satisfied &&  // op->req is OK to use
-                       op->req->demand_match_prefetch && op->req->bw_prefetch;
-    Flag bw_prefetchable = !op->engine_info.l1_miss_satisfied &&  // op->req is OK to use
-                           !op->req->demand_match_prefetch && op->req->bw_prefetchable;
+    Flag bw_prefetch =
+        !op->engine_info.l1_miss_satisfied && // op->req is OK to use
+        op->req->demand_match_prefetch && op->req->bw_prefetch;
+    Flag bw_prefetchable =
+        !op->engine_info.l1_miss_satisfied && // op->req is OK to use
+        !op->req->demand_match_prefetch && op->req->bw_prefetchable;
     if (bw_prefetch || bw_prefetchable)
       STAT_EVENT(op->proc_id, RET_BLOCKED_L1_MISS_BW_PREF);
   }
@@ -680,12 +732,15 @@ Flag is_node_table_full() {
   return (node->node_count == NODE_TABLE_SIZE);
 }
 
-void collect_node_table_full_stats(Op* op) {
+void collect_node_table_full_stats(Op *op) {
   if (!(op->state == OS_DONE || OP_DONE(op))) {
-    if (op->inst_info->table_info.op_type == OP_ILD || op->inst_info->table_info.op_type == OP_IST ||
-        op->inst_info->table_info.op_type == OP_FLD || op->inst_info->table_info.op_type == OP_FST) {
+    if (op->inst_info->table_info.op_type == OP_ILD ||
+        op->inst_info->table_info.op_type == OP_IST ||
+        op->inst_info->table_info.op_type == OP_FLD ||
+        op->inst_info->table_info.op_type == OP_FST) {
       STAT_EVENT(node->proc_id, FULL_WINDOW_MEM_OP);
-    } else if (op->inst_info->table_info.op_type >= OP_FCVT && op->inst_info->table_info.op_type <= OP_FCMOV) {
+    } else if (op->inst_info->table_info.op_type >= OP_FCVT &&
+               op->inst_info->table_info.op_type <= OP_FCMOV) {
       STAT_EVENT(node->proc_id, FULL_WINDOW_FP_OP);
     } else {
       STAT_EVENT(node->proc_id, FULL_WINDOW_OTHER_OP);
@@ -699,7 +754,7 @@ void collect_node_table_full_stats(Op* op) {
 /* node precommit mechanism */
 
 void node_precommit_update(void) {
-  Op* op = node->node_head;
+  Op *op = node->node_head;
   if (node->node_precommit)
     op = node->node_precommit;
 
@@ -711,7 +766,8 @@ void node_precommit_update(void) {
       return;
 
     // wait until looking up the d-cache for memory operands
-    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+    if ((op->inst_info->table_info.mem_type == MEM_LD ||
+         op->inst_info->table_info.mem_type == MEM_ST) &&
         op->dcache_cycle > cycle_count)
       return;
 
@@ -731,7 +787,7 @@ void node_precommit_update(void) {
   }
 }
 
-void node_precommit_retire(Op* op) {
+void node_precommit_retire(Op *op) {
   ASSERT(node->proc_id, op->precommitted);
   ASSERT(node->proc_id, op->precommit_cycle <= op->retire_cycle);
 
@@ -747,7 +803,7 @@ void node_precommit_retire(Op* op) {
 }
 
 /* Marcro-Fusion op */
-void node_fuse_op(Op* op) {
+void node_fuse_op(Op *op) {
   uns16 op_code = op->inst_info->table_info.true_op_type;
 
   if (op_code == XED_ICLASS_CMP || op_code == XED_ICLASS_TEST) {
