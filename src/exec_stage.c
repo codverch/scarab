@@ -51,6 +51,7 @@
 
 #include "cmp_model.h"
 #include "exec_ports.h"
+#include "helios/heliosFusion.h"  // heliosWakeFusedStoreTailDeps (head-driven store-tail timing, site A)
 #include "issue_queue.h"
 #include "map.h"
 #include "map_rename.h"
@@ -160,7 +161,7 @@ void recover_exec_stage() {
     }
     if (op && FLUSH_OP(op)) {
       DEBUG(exec->proc_id, "Exec flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num, op->off_path);
-      ASSERT(exec->proc_id, op->off_path);
+      ASSERT(exec->proc_id, op->off_path || helios_flush_squash_allowed());
       exec->sd.ops[ii] = NULL;
       exec->sd.op_count--;
       fu->avail_cycle = cycle_count + 1;
@@ -338,6 +339,19 @@ void update_exec_stage(Stage_Data* src_sd) {
        * we have to go with the first recovery (even though it is improper) for the time being
        */
       exec_stage_bp_resolve(op);
+    } else if (HELIOS_DO_FUSION && HELIOS_ENABLE_FLUSHES && op->logForFlushing &&
+               op->bp_pred_info->recover_at_exec && !op->off_path && !is_replay &&
+               !op->bp_pred_info->recovery_sch && !helios_flush_redundant(op)) {
+      /*
+       * A mis-fused load/store is not a control-flow op (cf_type == NOT_CF), so it never
+       * enters exec_stage_bp_resolve above. Its fusion was invalidated at execute. Schedule the 
+       * on-path pipeline flush here, at the cycle the fusion resolves, via the dedicated HELIOS recovery path
+       * (re-steers to the load's next macro-inst, squashes younger ops, skips branch-predictor
+       * restore).
+       */
+      helios_sched_recovery(bp_recovery_info, op, op->exec_cycle);
+      op->recovery_scheduled = TRUE;
+      STAT_EVENT(op->proc_id, HELIOS_FLUSHES);
     }
 
     /* value prediction recovery/resolution code  */
@@ -469,6 +483,10 @@ static inline void exec_stage_dep_wakeup(Op* op) {
       op->wake_cycle = exec_cycle;
       wake_up_ops(op, MEM_ADDR_DEP, model->wake_hook);
       wake_up_ops(op, MEM_DATA_DEP, model->wake_hook);
+      // HELIOS site (A): if this store is a fused-pair head, deliver its non-issuing tail's
+      // MEM_ADDR/DATA_DEP to younger ordering dependents at this same single AGU cycle.
+      if (HELIOS_DO_FUSION)
+        heliosWakeFusedStoreTailDeps(op);
     }
     return;
   }
@@ -530,6 +548,10 @@ static inline int exec_stage_check_fu_available(int ii) {
 }
 
 static inline void exec_stage_process_op(Op* op) {
+  // HELIOS: a fused load tail must never reach exec -- it is gated out at dispatch (fusedNoIssue)
+  // and completed off its head's single cache access. If one arrives here the dispatch gate leaked.
+  ASSERT(op->proc_id, !(HELIOS_DO_FUSION && op->fusedNoIssue));
+
   // set the op's state to reflect it's execution
   if (op->inst_info->table_info.mem_type == NOT_MEM || STALL_ON_WAIT_MEM) {
     op->state = OS_SCHEDULED;

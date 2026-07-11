@@ -1,70 +1,19 @@
-syntax: regexp
+# Build dependencies installed by setup_scarab-3.sh (formerly git submodules).
+# Pinned commits live in the setup script, not in this repo.
+/src/deps/xed/
+/src/deps/mbuild/
+/src/deps/dynamorio/
 
-# Files matching these patterns will be ignored by hg
-# if they are not tracked already
+# Scarab build output
+/src/build/
+/src/scarab
 
-# experiment result directories
-out/
-results/
-rollups/
+# PIN toolkit (installed by setup_scarab-3.sh; not versioned)
+/src/pin-3.15/
 
-# intermediate compilation files
-*.o
-*.so
-*.a
-*.d
-*.dd
-*.aux
-*.bbl
-*.blg
-*.brf
-*.dvi
-*.log
+# HELIOS run outputs: keep the light result artifacts (PNGs, SUMMARY.csv, STATE.json,
+# HELIOS_optimized_configs.md), but never the regenerable per-simpoint stats.
+/helios_results/simulations/
 
-# Doxygen output
-^doc/doxygen
-
-# binaries/compilation results
-build/
-*.pdf
-*.ps
-*.pyc
-bin/Linux
-src/bin
-src/obj
-src/libcbp_inst/libcbp_inst.a
-src/libcbp_inst/predictor
-src/scarab
-src/gitrev
-src/ramulator/lib_opt
-src/ramulator/lib_dbg
-src/ramulator/lib_gpf
-utils/qsort/test_qsort
-
-# Emacs backup files
-*.~
-
-# tags files
-TAGS
-
-# Hidden files usually should not be tracked
-^\.
-.*.swp
-
-PARAMS.in
-src/pin/pin_trace/read
-src/test/PARAMS.in
-test_mem
-test_mem.c
-test_simd
-test_simd.c
-test_simd.dump
-test_simd_pinball/
-test_string
-test_string.c
-test_string.dump
-test_string_pinball/
-
-.vscode/*
-*.code-workspace
-.env
+# Claude Files
+CLAUDE.MD

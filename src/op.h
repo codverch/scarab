@@ -158,6 +158,37 @@ struct Op_struct {
   Btb_Pred_Info* btb_pred_info;  // selected/active btb prediction info
   // }}}
 
+  // {{{ Helios Fusion fields
+  uint64_t globalMicroOpNumber;
+  uint16_t distanceToHead;
+  uint16_t predictedDistanceToHead;
+  uint64_t partnerMicroOpNumber;
+  struct Op_struct* fusedHeadOp;
+  struct Op_struct* fusedTailOp;        // HELIOS: head->tail back-pointer; the head completes this tail at head->done_cycle (head-driven timing)
+  Counter  fusedTailUniqueNum;          // HELIOS: recycle-safety for fusedTailOp (validate tail->unique_num == this before completing)
+  Flag     fusedNoIssue;                // HELIOS: set on a fused LOAD or STORE tail; it never issues to exec/dcache (completed off its head)
+  Flag     fusedTailCompleted;          // HELIOS: idempotency guard so a tail is completed at most once across the head's completion sites
+  Flag     fusedStoreDepsWoken;         // HELIOS: store-tail only -- idempotency guard so its MEM_ADDR/DATA_DEP wake + reg_file_consume happen exactly once (at the head's EXEC)
+  Flag     fusedHeadPendingTail;        // HELIOS: set on a fused HEAD that is held pre-issue until its tail maps and splices the tail's source regs into the head's wake-up deps (paper NCS_Ready). Cleared in heliosAddFusionDep.
+  Counter  fusedGroupLastOpNum;         // HELIOS: on a fused HEAD, the op_num of its tail = upper bound of its extended commit group [head..tail]; the head cannot retire until the whole group is ready (paper IV-B3). 0 = not a group head.
+  Flag     isFusionCandidate;
+  Flag     localFusionPrediction;
+  Flag     globalFusionPrediction;
+  Flag     fused;
+  Flag     headConsumed;
+  Flag     headAlreadyFused;
+  Flag     isPredictionCorrect;
+  Flag     fusionBlockedByStore;
+  Flag     fusionBlockedByDeadlock;
+  Flag     fusionBlockedBySerializing;
+  Flag     fusionNestLimited;  
+  Flag     fusionHeadEvicted;
+  Flag     fusionAddressMisprediction;
+  Flag     logForFlushing;
+  Counter  helios_macro_last_op_num; /* Number of the last micro-instruction of this op's macro-instruction. Used as the squash boundary for a mis-fusion flush */ 
+  Addr     helios_macro_next_fetch_addr; /* Next dynamic PC of this op's macro-instruction. Used as the re-steer fetch-target for a mis-fusion flush */
+  // }}}
+
   int32 conf_perceptron_output;  // confidece perceptron
   // {{{ state and event cycle counters
   Op_State state;        // the state of the op in the datapath

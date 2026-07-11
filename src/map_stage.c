@@ -1,3 +1,5 @@
+// HELIOS Injection at lines 269-275
+
 /*
  * Copyright 2020 HPS/SAFARI Research Groups
  * Copyright 2025 Litz Lab
@@ -42,11 +44,13 @@
 #include "debug/debug_print.h"
 
 #include "core.param.h"
+#include "general.param.h"
 #include "memory/memory.param.h"
 
 #include "bp/bp.h"
 
 #include "ft.h"
+#include "helios/heliosFusion.h"
 #include "map.h"
 #include "map_rename.h"
 #include "model.h"
@@ -147,7 +151,7 @@ void recover_map_stage() {
           DEBUG(map->proc_id, "Map flushing op_num:%llu off_path:%u\n", (unsigned long long)cur->ops[jj]->op_num,
                 cur->ops[jj]->off_path);
           flushed = TRUE;
-          ASSERT(map->proc_id, cur->ops[jj]->off_path);
+          ASSERT(map->proc_id, cur->ops[jj]->off_path || helios_flush_squash_allowed());
           if (cur->ops[jj]->parent_FT)
             ft_free_op(cur->ops[jj]);
           cur->ops[jj] = NULL;
@@ -261,6 +265,13 @@ static inline void stage_process_op(Op* op) {
 
   /* register renaming allocation */
   reg_file_rename(op);
+
+  // HELIOS: Tie a validated fused tail to its head as a synthetic source dependency so
+  // it waits in the IQ/SQ. Must run after the normal srcs are mapped and before 
+  // add_to_wake_up_lists builds the wake-up linkage.
+  if (HELIOS_DO_FUSION) {
+    heliosAddFusionDep(op);
+  }
 
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);

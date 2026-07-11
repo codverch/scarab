@@ -41,6 +41,7 @@ extern "C" {
 #include "debug/debug_print.h"
 
 #include "core.param.h"
+#include "general.param.h"  // HELIOS_DO_FUSION (fused load-tail non-issue gate)
 
 #include "bp/bp.h"
 #include "memory/memory.h"
@@ -534,7 +535,15 @@ void IssueQueue::reject(uns16 entry_id) {
 void IssueQueue::recover() {
   for (IssueQueueEntry& entry : entries) {
     Op* op = entry.op;
-    if (op == nullptr || !op->off_path) {
+    if (op == nullptr)
+      continue;
+
+    // A normal branch recovery squashes only off-path ops, so it frees only their RS entries. A HELIOS
+    // on-path mis-fusion flush (and any recovery after one has pre-fetched the true on-path stream)
+    // squashes ON-PATH ops too (op_num > recovery_op_num with off_path FALSE); their RS entries must be
+    // freed as well, else they leak. Over many flushes they fill the issue queues and backpressure walks
+    // its way through the pipeline. 
+    if (!op->off_path && !helios_flush_squash_allowed()) {
       continue;
     }
 
@@ -668,6 +677,20 @@ void IssueQueues::dispatch() {
   uns32 num_fill_rs = 0;
 
   for (op = node->next_op_into_rs; op; op = op->next_node) {
+    // HELIOS: a fused LOAD or STORE tail never issues. A load tail's data is delivered when the
+    // head's single cache access resolves; a store tail's MEM deps fire at the head's EXEC and its
+    // retire gating at the head's resolution. Either way it must never enter a reservation station /
+    // exec / dcache. It still occupies its ROB slot and retires off its head-driven done_cycle.
+    // Mark OS_SCHEDULED (the state memory ops use to leave the schedule path) and skip RS
+    // allocation. Keeping it out of the issue path entirely is what makes the exec->dcache
+    // memory-ordering perturbation (the prior load-head double-wake) impossible.
+    if (HELIOS_DO_FUSION && op->fusedNoIssue) {
+      op->state = OS_SCHEDULED;
+      STAT_EVENT(op->proc_id, HELIOS_FUSED_TAIL_NOISSUE);
+      if (op->inst_info->table_info.mem_type == MEM_ST)
+        STAT_EVENT(op->proc_id, HELIOS_FUSED_STORE_TAIL_NOISSUE);  // store-invariant: == driven + immediate
+      continue;
+    }
     ASSERT(proc_id, op->queue_id == MAX_UNS16 && op->queue_entry_id == MAX_UNS16);
     uns16 queue_id = find_emptiest_queue(op);
     if (queue_id == MAX_UNS16) {
@@ -683,7 +706,12 @@ void IssueQueues::dispatch() {
     ASSERT(node->proc_id, op->state == OS_IN_ROB);
     op->state = OS_IN_RS;
 
-    if (op_sources_not_rdy_is_clear(op)) {
+    // HELIOS NCS_Ready (helios_fused_wait_tail_srcs): a fused head is held in the RS -- allocated
+    // but never made ready -- until its tail maps and splices the tail's source operands into the
+    // head's wake-up deps (heliosAddFusionDep clears fusedHeadPendingTail and re-checks readiness).
+    // This models the paper's fused micro-op issuing only when ALL nucleii sources are ready.
+    if (op_sources_not_rdy_is_clear(op) &&
+        !(HELIOS_DO_FUSION && HELIOS_FUSED_WAIT_TAIL_SRCS && op->fusedHeadPendingTail)) {
       queue.wakeup(op->queue_entry_id);
       op->state = (cycle_count + 1 >= op->rdy_cycle ? OS_READY : OS_WAIT_FWD);
     }

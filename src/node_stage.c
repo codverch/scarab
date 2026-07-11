@@ -1,3 +1,5 @@
+// HELIOS Injection at lines 470-475
+
 /* Copyright 2020 HPS/SAFARI Research Groups
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -44,6 +46,7 @@
 
 #include "bp/bp.param.h"
 #include "core.param.h"
+#include "general.param.h"
 #include "memory/memory.param.h"
 
 #include "bp/bp.h"
@@ -54,6 +57,7 @@
 #include "decoupled_frontend.h"
 #include "exec_ports.h"
 #include "ft.h"
+#include "helios/heliosFusion.h"
 #include "icache_stage.h"
 #include "issue_queue.h"
 #include "lsq.h"
@@ -188,7 +192,7 @@ void flush_scheduling_buffer() {
       DEBUG(node->proc_id, "Node sched-buffer flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, node->proc_id == op->proc_id);
-      ASSERT(node->proc_id, op->off_path);
+      ASSERT(node->proc_id, op->off_path || helios_flush_squash_allowed());
       ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
 
       node->sd.ops[ii] = NULL;
@@ -205,7 +209,7 @@ void flush_rs() {
     DEBUG(node->proc_id, "Node RS-input flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
           op->off_path);
     ASSERT(node->proc_id, node->proc_id == op->proc_id);
-    ASSERT(node->proc_id, op->off_path);
+    ASSERT(node->proc_id, op->off_path || helios_flush_squash_allowed());
     ASSERTM(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num, "op_num:%s\n", unsstr64(op->op_num));
     node->next_op_into_rs = NULL;  // all later ops will also be flushed
   }
@@ -224,11 +228,19 @@ void flush_window() {
     if (FLUSH_OP(op)) {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
-      ASSERT(node->proc_id, op->off_path);
+      ASSERT(node->proc_id, op->off_path || helios_flush_squash_allowed());
       if (!op->macro_fused)
         flush_ops++;
-      ASSERT(node->proc_id, op->off_path);
+      ASSERT(node->proc_id, op->off_path || helios_flush_squash_allowed());
       ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
+
+      // A normal recovery never strands node_precommit as node_precommit_update returns before
+      // advanced onto an off-path op. In the case of a HELIOS mis-fusion flush, node_precommit 
+      // can point at a squashed on-path op since the flush pre-fetches the on-path stream. Reset it 
+      // before the op is freed below, else node_precommit dangles and the next node_precommit_update 
+      // walks freed memory -> an op later reaches node_precommit_retire un-precommitted. 
+      if (op == node->node_precommit)
+        node->node_precommit = NULL;
       op->in_node_list = FALSE;
       *last = op->next_node;
       if (op->parent_FT)
@@ -236,11 +248,20 @@ void flush_window() {
     } else {
       /* Keep op */
 
-      if (IS_FLUSHING_OP(op)) {
+      if (IS_FLUSHING_OP(op))
         op_select_bp_pred_info(op, BP_PRED_MAIN);
-        /* Mark that the scheduled recovery has occurred */
-        op->recovery_scheduled = FALSE;
-      }
+
+      // Clear the retire pin (recovery_scheduled) on EVERY kept on-path op, not just recovery_op /
+      // IS_FLUSHING_OP. A mis-fused load/store pins itself (exec_stage.c) until its HELIOS flush fires,
+      // but that flush re-steers at the macro's LAST uop, so a younger same-macro op needing recovery
+      // (e.g. the macro's terminal mispredicting branch, whose op_num == this op's recovery boundary) can
+      // supersede the pending flush via bp_sched_recovery and fire as recovery_op instead. The mis-fused
+      // op is then KEPT (op_num <= recovery_op_num) yet is no longer recovery_op, so its pin would never
+      // clear and it could never retire -> ROB-head deadlock. After any recovery fires there is no other
+      // pending recovery (single-slot bp_recovery_info, recovery_cycle just reset), so any pin surviving on
+      // a kept op is moot and must be released. (For a branch recovery, only recovery_op was ever pinned,
+      // so this stays a no-op there.)
+      op->recovery_scheduled = FALSE;
       DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
       if (!op->macro_fused)
         keep_ops++;
@@ -251,6 +272,13 @@ void flush_window() {
 
   ASSERT(node->proc_id, flush_ops + keep_ops == node->node_count);
   node->node_count = keep_ops;
+
+  // A HELIOS mis-fusion flush re-executes the squashed on-path ops; count them as the slowdown
+  // magnitude behind HELIOS_FLUSHES. helios_flush is finalized for a genuine mis-fusion flush by
+  // the time this stage runs (the replay->flush promotion happens later in cmp_recover).
+  if (HELIOS_DO_FUSION && bp_recovery_info->helios_flush)
+    INC_STAT_EVENT(node->proc_id, HELIOS_FLUSH_OPS_SQUASHED, flush_ops);
+
   ASSERT(node->proc_id, node->node_count <= NODE_TABLE_SIZE);
 }
 
@@ -452,7 +480,22 @@ void node_retire() {
             unsstr64(op->op_num), Op_State_str(op->state), op->off_path, op->recovery_scheduled, op->redirect_scheduled,
             unsstr64(op->done_cycle), unsstr64(cycle_count), (unsigned)(OP_DONE(op) ? 1 : 0));
       // op is not ready to retire
+      // HELIOS deadlock-breaker: if the oldest op is stuck only because it is a fused head still in
+      // the NCS_Ready hold, release the hold so it can issue -- otherwise the ROB never drains, Map
+      // stalls, and its tail can never map to release it (forward-progress deadlock).
+      if (HELIOS_DO_FUSION && op->fusedHeadPendingTail)
+        heliosUnblockRobHead(op);
       collect_not_ready_to_retire_stats(op);
+      break;
+    }
+
+    // HELIOS extended commit group (paper IV-B3): a fused head is itself ready, but it must not
+    // retire until its catalyst + tail are all ready too, so a catalyst fault/mispredict can still
+    // unfuse/flush the not-yet-retired head (precise exceptions). Holds the in-order retire of the
+    // whole group. No-op for non-group heads. See heliosExtCommitGroupBlocks for the deadlock-free
+    // argument.
+    if (HELIOS_DO_FUSION && HELIOS_EXTENDED_COMMIT_GROUP && heliosExtCommitGroupBlocks(op)) {
+      STAT_EVENT(op->proc_id, HELIOS_EXT_COMMIT_GROUP_STALLS);
       break;
     }
 
@@ -462,6 +505,12 @@ void node_retire() {
     ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n", op->op_num);
     ret_count++;
     DEBUG(node->proc_id, "Retiring op:%llu\n", op->op_num);
+
+    // This op is confirmed to be retiring. Update the UCH, and train the FP
+    // if the prediction is correct.
+    if (HELIOS_DO_FUSION) {
+      heliosCommit(op);
+    }
 
     // Debug prints mainly used for testing the uop generation of PIN frontend
     debug_print_retired_uop(op);
@@ -562,10 +611,8 @@ void node_retire() {
 
     if (model->op_retired_hook)
       model->op_retired_hook(op);
-    else {
-      printf("[ft_free_op] stage=node_stage:retire op_num=%llu op=%p\n", (unsigned long long)op->op_num, (void*)op);
+    else
       ft_free_op(op);
-    }
     // the fused op does not occupy the ROB entry
     if (!macro_fused_saved)
       node->node_count--;

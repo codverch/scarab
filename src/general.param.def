@@ -112,3 +112,24 @@ DEF_PARAM( ignore_bar_fetch             , IGNORE_BAR_FETCH           , Flag   , 
 DEF_PARAM( trace_bbv_output             , TRACE_BBV_OUTPUT          , char*  , string    , NULL     ,       )
 DEF_PARAM( trace_footprint_output       , TRACE_FOOTPRINT_OUTPUT    , char*  , string    , ""       ,       )
 DEF_PARAM( segment_instr_count          , SEGMENT_INSTR_COUNT       , uns64  , uns64     , 0        ,       )
+
+/* HELIOS load/store fusion */
+DEF_PARAM( helios_do_fusion             , HELIOS_DO_FUSION           , Flag   , Flag      , FALSE    ,       )
+DEF_PARAM( helios_enable_flushes        , HELIOS_ENABLE_FLUSHES      , Flag   , Flag      , TRUE     ,       )
+DEF_PARAM( helios_confidence_threshold  , HELIOS_CONFIDENCE_THRESHOLD, uns    , uns       , 150      ,       )
+DEF_PARAM( helios_confidence_increment  , HELIOS_CONFIDENCE_INCREMENT, uns    , uns       , 10        ,       )
+DEF_PARAM( helios_confidence_decrement  , HELIOS_CONFIDENCE_DECREMENT, uns    , uns       , 10       ,       )
+DEF_PARAM( helios_fusion_window         , HELIOS_FUSION_WINDOW       , uns    , uns       , 64       ,       )
+/* Gate store-store fusion independently of loads. Default TRUE preserves HELIOS behavior when
+ * HELIOS_DO_FUSION is on; set 0 to disable store pairs while load pairs keep fusing. */
+DEF_PARAM( helios_fuse_stores           , HELIOS_FUSE_STORES         , Flag   , Flag      , TRUE     ,       )
+/* Paper-faithful (MICRO'22 NCS_Ready): the fused single cache access must wait for the TAIL's
+ * source registers too, not just the head's. Holds the fused head pre-issue until the tail maps
+ * and splices the tail's source producers into the head's wake-up deps. Matters for DBR pairs
+ * (SBR pairs share the base register, so this is a no-op). Set 0 for the prior optimistic timing. */
+DEF_PARAM( helios_fused_wait_tail_srcs  , HELIOS_FUSED_WAIT_TAIL_SRCS, Flag   , Flag      , TRUE     ,       )
+/* Paper-faithful (MICRO'22 IV-B3 extended commit group): a fused head cannot retire until its whole
+ * group (catalyst ops between head and tail, plus the tail) are all ready to retire, so a catalyst
+ * fault/mispredict can still unfuse/flush the not-yet-retired head (precise exceptions). Set 0 to let
+ * the head retire at its own done_cycle (prior behavior). */
+DEF_PARAM( helios_extended_commit_group , HELIOS_EXTENDED_COMMIT_GROUP, Flag  , Flag      , TRUE     ,       )

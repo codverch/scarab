@@ -1,0 +1,96 @@
+[2026-06-29 20:16:05] === HELIOS_NS_00_baseline: 16 apps, configs=['baseline'] ===
+[2026-06-29 20:16:05]   apps: ['bc', 'bfs', 'cc', 'cd', 'chemcrow', 'dfs', 'langchain_web', 'mongodb', 'mysql', 'pagerank', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'swe_agent', 'tc', 'toolformer']
+[2026-06-29 20:16:05] $ ./sci --sim HELIOS_NS_00_baseline
+[2026-06-29 20:43:02]   -> rc=0
+[2026-06-29 20:43:02] $ ./sci --collect-stats HELIOS_NS_00_baseline
+[2026-06-29 20:43:06]   -> rc=0
+[2026-06-29 20:43:07]   baseline IPC: {'bc': 0.7073, 'bfs': 3.2149, 'cc': 3.2136, 'cd': 4.2185, 'chemcrow': 2.4395, 'dfs': 3.2179, 'langchain_web': 1.7729, 'mongodb': 1.4568, 'mysql': 0.7304, 'pagerank': 3.2506, 'postgres': 2.5278, 'rag_haystack': 3.0427, 'sssp_ego_fb': 1.2621, 'swe_agent': 1.707, 'tc': 5.0457, 'toolformer': 1.9999}
+[2026-06-29 20:43:07] === HELIOS_NS_seed_T3: 8 apps, configs=['helios_T3_ns'] ===
+[2026-06-29 20:43:07]   apps: ['bc', 'bfs', 'cc', 'cd', 'chemcrow', 'dfs', 'swe_agent', 'toolformer']
+[2026-06-29 20:43:07] $ ./sci --sim HELIOS_NS_seed_T3
+[2026-06-29 21:03:10]   -> rc=0
+[2026-06-29 21:03:10] $ ./sci --collect-stats HELIOS_NS_seed_T3
+[2026-06-29 21:03:13]   -> rc=0
+[2026-06-29 21:03:14]   seed T3: winners=['bc', 'bfs', 'cc', 'cd', 'chemcrow', 'dfs', 'swe_agent']  remaining=['langchain_web', 'mongodb', 'mysql', 'pagerank', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:03:14] === HELIOS_NS_seed_T10: 1 apps, configs=['helios_T10_ns'] ===
+[2026-06-29 21:03:14]   apps: ['mongodb']
+[2026-06-29 21:03:14] $ ./sci --sim HELIOS_NS_seed_T10
+[2026-06-29 21:09:24]   -> rc=0
+[2026-06-29 21:09:24] $ ./sci --collect-stats HELIOS_NS_seed_T10
+[2026-06-29 21:09:27]   -> rc=0
+[2026-06-29 21:09:27]   seed T10: winners=['mongodb']  remaining=['langchain_web', 'mysql', 'pagerank', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:09:27] === HELIOS_NS_seed_T100: 1 apps, configs=['helios_T100_ns'] ===
+[2026-06-29 21:09:27]   apps: ['mysql']
+[2026-06-29 21:09:27] $ ./sci --sim HELIOS_NS_seed_T100
+[2026-06-29 21:14:37]   -> rc=0
+[2026-06-29 21:14:37] $ ./sci --collect-stats HELIOS_NS_seed_T100
+[2026-06-29 21:14:39]   -> rc=0
+[2026-06-29 21:14:40]   seed T100: winners=[]  remaining=['langchain_web', 'mysql', 'pagerank', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:14:40] === HELIOS_NS_seed_T1000: 3 apps, configs=['helios_T1000_ns'] ===
+[2026-06-29 21:14:40]   apps: ['langchain_web', 'pagerank', 'postgres']
+[2026-06-29 21:14:40] $ ./sci --sim HELIOS_NS_seed_T1000
+[2026-06-29 21:26:49]   -> rc=0
+[2026-06-29 21:26:49] $ ./sci --collect-stats HELIOS_NS_seed_T1000
+[2026-06-29 21:26:52]   -> rc=0
+[2026-06-29 21:26:52]   seed T1000: winners=['pagerank']  remaining=['langchain_web', 'mysql', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:26:52] === HELIOS_NS_seed_T65000: 3 apps, configs=['helios_T65000_ns'] ===
+[2026-06-29 21:26:52]   apps: ['rag_haystack', 'sssp_ego_fb', 'tc']
+[2026-06-29 21:26:52] $ ./sci --sim HELIOS_NS_seed_T65000
+[2026-06-29 21:33:19]   -> rc=0
+[2026-06-29 21:33:19] $ ./sci --collect-stats HELIOS_NS_seed_T65000
+[2026-06-29 21:33:22]   -> rc=0
+[2026-06-29 21:33:22]   seed T65000: winners=[]  remaining=['langchain_web', 'mysql', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:33:22] === HELIOS_NS_recfg_T10: 1 apps, configs=['helios_T10_ns'] ===
+[2026-06-29 21:33:22]   apps: ['toolformer']
+[2026-06-29 21:33:22] $ ./sci --sim HELIOS_NS_recfg_T10
+[2026-06-29 21:34:59]   -> rc=0
+[2026-06-29 21:34:59] $ ./sci --collect-stats HELIOS_NS_recfg_T10
+[2026-06-29 21:35:01]   -> rc=0
+[2026-06-29 21:35:01]   reconfig T10: winners=[]  remaining=['langchain_web', 'mysql', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:35:01] === HELIOS_NS_recfg_T100: 1 apps, configs=['helios_T100_ns'] ===
+[2026-06-29 21:35:01]   apps: ['toolformer']
+[2026-06-29 21:35:01] $ ./sci --sim HELIOS_NS_recfg_T100
+[2026-06-29 21:36:40]   -> rc=0
+[2026-06-29 21:36:40] $ ./sci --collect-stats HELIOS_NS_recfg_T100
+[2026-06-29 21:36:42]   -> rc=0
+[2026-06-29 21:36:42]   reconfig T100: winners=[]  remaining=['langchain_web', 'mysql', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:36:42] === HELIOS_NS_recfg_T1000: 2 apps, configs=['helios_T1000_ns'] ===
+[2026-06-29 21:36:42]   apps: ['mysql', 'toolformer']
+[2026-06-29 21:36:42] $ ./sci --sim HELIOS_NS_recfg_T1000
+[2026-06-29 21:42:12]   -> rc=0
+[2026-06-29 21:42:12] $ ./sci --collect-stats HELIOS_NS_recfg_T1000
+[2026-06-29 21:42:14]   -> rc=0
+[2026-06-29 21:42:14]   reconfig T1000: winners=[]  remaining=['langchain_web', 'mysql', 'postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:42:14] === HELIOS_NS_recfg_T10000: 4 apps, configs=['helios_T10000_ns'] ===
+[2026-06-29 21:42:14]   apps: ['langchain_web', 'mysql', 'postgres', 'toolformer']
+[2026-06-29 21:42:14] $ ./sci --sim HELIOS_NS_recfg_T10000
+[2026-06-29 21:55:15]   -> rc=0
+[2026-06-29 21:55:15] $ ./sci --collect-stats HELIOS_NS_recfg_T10000
+[2026-06-29 21:55:18]   -> rc=0
+[2026-06-29 21:55:18]   reconfig T10000: winners=['langchain_web', 'mysql']  remaining=['postgres', 'rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 21:55:18] === HELIOS_NS_recfg_T30000: 2 apps, configs=['helios_T30000_ns'] ===
+[2026-06-29 21:55:18]   apps: ['postgres', 'toolformer']
+[2026-06-29 21:55:18] $ ./sci --sim HELIOS_NS_recfg_T30000
+[2026-06-29 22:00:13]   -> rc=0
+[2026-06-29 22:00:13] $ ./sci --collect-stats HELIOS_NS_recfg_T30000
+[2026-06-29 22:00:15]   -> rc=0
+[2026-06-29 22:00:15]   reconfig T30000: winners=['postgres']  remaining=['rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 22:00:15] === HELIOS_NS_recfg_T40000: 1 apps, configs=['helios_T40000_ns'] ===
+[2026-06-29 22:00:15]   apps: ['toolformer']
+[2026-06-29 22:00:15] $ ./sci --sim HELIOS_NS_recfg_T40000
+[2026-06-29 22:01:57]   -> rc=0
+[2026-06-29 22:01:57] $ ./sci --collect-stats HELIOS_NS_recfg_T40000
+[2026-06-29 22:01:59]   -> rc=0
+[2026-06-29 22:01:59]   reconfig T40000: winners=[]  remaining=['rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 22:01:59] === HELIOS_NS_recfg_T65000: 1 apps, configs=['helios_T65000_ns'] ===
+[2026-06-29 22:01:59]   apps: ['toolformer']
+[2026-06-29 22:01:59] $ ./sci --sim HELIOS_NS_recfg_T65000
+[2026-06-29 22:03:40]   -> rc=0
+[2026-06-29 22:03:40] $ ./sci --collect-stats HELIOS_NS_recfg_T65000
+[2026-06-29 22:03:42]   -> rc=0
+[2026-06-29 22:03:42]   reconfig T65000: winners=[]  remaining=['rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 22:03:42]   STILL below baseline after ladder (underperformers): ['rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 22:03:42] === Writing SUMMARY.csv + UNDERPERFORMERS.txt ===
+[2026-06-29 22:03:42]   SUMMARY.csv written; underperformers: ['rag_haystack', 'sssp_ego_fb', 'tc', 'toolformer']
+[2026-06-29 22:03:43]   Wrote /users/vedlaksh/helios_campaign_nostore/baseline_vs_ideal.png
+[2026-06-29 22:03:43] Campaign complete.

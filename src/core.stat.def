@@ -92,6 +92,74 @@ DEF_STAT(  OP_RETIRED,        COUNT,    NO_RATIO    ) //delete
 DEF_STAT(  OP_MACRO_FUSION_ONPATH,  COUNT, NO_RATIO )
 DEF_STAT(  OP_MACRO_FUSION_OFFPATH, COUNT, NO_RATIO )
 
+// HELIOS FUSION STATS
+
+DEF_STAT(  HELIOS_FUSIONS,            COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_FUSION_CANDIDATES,  COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_FUSION_MISPREDICT,  COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_FLUSHES,            COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_FLUSH_SKIPPED_STALE_CKPT, COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_CF_RECOVERY_VIA_REPLAY, COUNT, NO_RATIO )
+
+// On-path mem-op population (denominators for fusion-coverage rates)
+DEF_STAT(  HELIOS_ONPATH_LOADS,       COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_ONPATH_STORES,      COUNT, NO_RATIO )
+
+// Fusions that survive speculation and actually retire ("accurate" fusions)
+DEF_STAT(  HELIOS_FUSIONS_COMMITTED,  COUNT, NO_RATIO )
+
+// Why a predicted fusion was rejected at validation (one branch per reason)
+DEF_STAT(  HELIOS_REJECT_DISTANCE_INVALID,   COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_HEAD_EVICTED,       COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_HEAD_ALREADY_FUSED, COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_NEST_LIMIT,         COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_DEADLOCK,           COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_SERIALIZING,        COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_ADDR_MISMATCH,      COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_STORE_HAZARD,       COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_TYPE_DISABLED,      COUNT, NO_RATIO )
+
+// Benefit: cache-port accesses skipped by fused tails
+DEF_STAT(  HELIOS_DCACHE_PORTS_SAVED,        COUNT, NO_RATIO )
+
+// Head-driven (paper-faithful) load-tail timing: tails completed by their head's single access
+DEF_STAT(  HELIOS_HEAD_DRIVEN_TAIL_COMPLETIONS, COUNT, NO_RATIO )
+// Tail whose head had already resolved by the tail's map stage -> completed immediately in program order
+DEF_STAT(  HELIOS_TAIL_IMMEDIATE_COMPLETE,      COUNT, NO_RATIO )
+// Fused load tail skipped at dispatch (never enters an RS / exec / dcache)
+DEF_STAT(  HELIOS_FUSED_TAIL_NOISSUE,           COUNT, NO_RATIO )
+
+// Head-driven (paper-faithful) store-tail timing. The store tail is non-issuing: its
+// MEM_ADDR/DATA_DEP deps are woken at the head's EXEC (address gen) and its done_cycle is
+// stamped at the head's single cache access. Bring-up invariant:
+//   HELIOS_FUSED_STORE_TAIL_NOISSUE == HEAD_DRIVEN_STORE_COMPLETIONS + STORE_TAIL_IMMEDIATE_COMPLETE
+DEF_STAT(  HELIOS_HEAD_DRIVEN_STORE_COMPLETIONS, COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_STORE_TAIL_IMMEDIATE_COMPLETE, COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_FUSED_STORE_TAIL_NOISSUE,      COUNT, NO_RATIO )
+
+// Tournament-predictor insight: which sub-predictor uniquely proposed fusion
+DEF_STAT(  HELIOS_SELECTOR_LOCAL_WINS,       COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_SELECTOR_GLOBAL_WINS,      COUNT, NO_RATIO )
+
+// Cost: re-executed work squashed by mis-fusion flushes
+DEF_STAT(  HELIOS_FLUSH_OPS_SQUASHED,        COUNT, NO_RATIO )
+
+// Paper NCS_Ready (helios_fused_wait_tail_srcs): fused head successfully held pre-issue until its
+// tail mapped and contributed its source operands. ALREADY_ISSUED counts the optimistic residue
+// (head had already issued before the hold took effect -> tail-src wait not modeled this instance).
+DEF_STAT(  HELIOS_FUSED_HEAD_HELD_FOR_TAIL,  COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_FUSED_HEAD_ALREADY_ISSUED, COUNT, NO_RATIO )
+// Deadlock-breaker: a held fused head reached the ROB head before its tail mapped; the NCS_Ready hold
+// was force-released so the ROB could drain (tail-source wait forfeited for this op).
+DEF_STAT(  HELIOS_FUSED_HEAD_FORCE_RELEASED, COUNT, NO_RATIO )
+// Age-safety: a tail source produced by a YOUNGER (catalyst) op was NOT wired onto the head (would
+// invert RS age-order and deadlock the scheduler); that catalyst-RaW pair's timing stays optimistic.
+DEF_STAT(  HELIOS_FUSED_TAIL_SRC_YOUNGER_SKIPPED, COUNT, NO_RATIO )
+
+// Paper IV-B3 extended commit group: cycles a fused head was held at the ROB head waiting for its
+// catalyst+tail group to all be ready to retire.
+DEF_STAT(  HELIOS_EXT_COMMIT_GROUP_STALLS,   COUNT, NO_RATIO )
+
 DEF_STAT(  REPLAY_SIGNALED,    COUNT,    NO_RATIO  )     
 DEF_STAT(  REPLAY_COUNTED,     COUNT,    NO_RATIO  )     
 

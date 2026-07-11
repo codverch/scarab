@@ -1,3 +1,5 @@
+// HELIOS Injection at lines 238-256
+
 /*
  * Copyright 2020 HPS/SAFARI Research Groups
  * Copyright 2025 Litz Lab
@@ -55,6 +57,8 @@
 #include "model.h"
 #include "statistics.h"
 #include "thread.h"
+#include "general.param.h"        // HELIOS_DO_FUSION (head-driven load-tail timing)
+#include "helios/heliosFusion.h"  // heliosCompleteFusedTail (head-driven load-tail timing)
 
 /**************************************************************************************/
 /* Macros */
@@ -143,7 +147,7 @@ void recover_dcache_stage() {
     }
     if (op && op->op_num > bp_recovery_info->recovery_op_num) {
       DEBUG(dc->proc_id, "Dcache flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num, op->off_path);
-      ASSERT(dc->proc_id, op->off_path);
+      ASSERT(dc->proc_id, op->off_path || helios_flush_squash_allowed());
       dc->sd.ops[ii] = NULL;
       dc->sd.op_count--;
     }
@@ -233,6 +237,21 @@ void update_dcache_stage(Stage_Data* src_sd) {
       continue;
     }
 
+    /* HELIOS: A successfully-fused (second) memory op is served by its head nucleus's
+     * single access -- it performs no cache access and consumes no read/write port.
+     * Per the paper, the tail's data is ready only when the head's access resolves. The
+     * tail is held in the IQ/SQ as a synthetic dependent of its head (see
+     * heliosAddFusionDep / Task 1), so by the time it issues and reaches here the head's
+     * access has already resolved; it completes with a 1-cycle extract latency. Placed
+     * before the port check so no port is acquired. */
+    /* HELIOS: NO fused tail may reach the dcache. Both LOAD and STORE tails are now non-issuing
+     * (op->fusedNoIssue, gated out at issue_queue.cc dispatch) and completed off their head's
+     * single cache access -- loads' regs via heliosCompleteFusedTail, stores' deps at the head's
+     * EXEC (heliosWakeFusedStoreTailDeps) and retire gating at the head's resolution. A fused op
+     * arriving here means the dispatch gate leaked; assert rather than silently self-complete with
+     * the wrong (non-head-driven) timing. */
+    ASSERT(dc->proc_id, !(HELIOS_DO_FUSION && op->fused));
+
     /* check on the availability of a read port for the given bank */
     // the bank bits are the lowest order cache index bits
     uns bank = BANK(op->oracle_info.va, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR);
@@ -281,6 +300,9 @@ void update_dcache_stage(Stage_Data* src_sd) {
         op->wake_cycle = op->done_cycle;
         wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
       }
+      // HELIOS site (B): complete a fused tail (load OR store) at its head's single access.
+      if (HELIOS_DO_FUSION)
+        heliosCompleteFusedTail(op);
       continue;
     }
 
@@ -581,6 +603,9 @@ static inline void dcache_cacheline_hit(Op* op, Addr line_addr, Dcache_Data* lin
     op->wake_cycle = op->done_cycle;
     wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
   }
+  // HELIOS site (B): complete a fused tail (load OR store) at its head's single access.
+  if (HELIOS_DO_FUSION)
+    heliosCompleteFusedTail(op);
 }
 
 static inline void dcache_cacheline_miss(Op* op, Addr line_addr) {
@@ -608,6 +633,8 @@ static inline void dcache_cacheline_miss(Op* op, Addr line_addr) {
         op->done_cycle = cycle_count + DCACHE_CYCLES + op->inst_info->extra_ld_latency;
         op->wake_cycle = cycle_count + DCACHE_CYCLES + op->inst_info->extra_ld_latency;
         wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
+        if (HELIOS_DO_FUSION)
+          heliosCompleteFusedTail(op);  // deliver the fused tail's reg at this store-forward
         break;
       }
 
@@ -702,6 +729,9 @@ static inline void dcache_cacheline_miss(Op* op, Addr line_addr) {
       if (STORES_DO_NOT_BLOCK_WINDOW) {
         op->done_cycle = cycle_count + DCACHE_CYCLES + op->inst_info->extra_ld_latency;
         op->state = OS_SCHEDULED;
+        // HELIOS site (B): under STORES_DO_NOT_BLOCK_WINDOW a store-miss resolves (done_cycle) here.
+        if (HELIOS_DO_FUSION)
+          heliosCompleteFusedTail(op);
       }
       break;
 
@@ -854,6 +884,11 @@ static inline void dcache_fill_process_cacheline(Mem_Req* req, Dcache_Data* data
       op->wake_cycle = op->done_cycle;
       wake_up_ops(op, REG_DATA_DEP, model->wake_hook);
     }
+    // HELIOS site (B): head-miss case -- a fused tail (load OR store) completes when the fill
+    // returns. For a default-config store-miss this is the ONLY site that resolves the head's
+    // done_cycle, so the store tail would deadlock at retire without this call.
+    if (HELIOS_DO_FUSION)
+      heliosCompleteFusedTail(op);
   }
 
   /*

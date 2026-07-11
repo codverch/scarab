@@ -248,7 +248,7 @@ void recover_icache_stage() {
         DEBUG(ic->proc_id, "Icache flushing op_num:%llu off_path:%u\n", (unsigned long long)cur_data->ops[ii]->op_num,
               cur_data->ops[ii]->off_path);
         flushed = TRUE;
-        ASSERT(ic->proc_id, cur_data->ops[ii]->off_path);
+        ASSERT(ic->proc_id, cur_data->ops[ii]->off_path || helios_flush_squash_allowed());
         if (cur_data->ops[ii]->parent_FT)
           ft_free_op(cur_data->ops[ii]);
         cur_data->ops[ii] = NULL;
@@ -1006,8 +1006,6 @@ Flag icache_fill_line(Mem_Req* req)  // cmp FIXME maybe needed to be optimized
 
   if (req->dirty_l0) {
     STAT_EVENT(ic->proc_id, DIRTY_WRITE_TO_ICACHE);
-    printf("fetch_addr:%s line_addr:%s req_addr:%s off:%d\n", hexstr64s(ic->fetch_addr), hexstr64s(ic->line_addr),
-           hexstr64s(req->addr), ic->off_path);
   }
 
   /* get new line in the cache */

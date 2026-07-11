@@ -75,8 +75,9 @@ const static int TOPDOWN_RECOVERY_DEPTH = 2;
  * BackendStalls = CoreStalls + (∑OpsExecuted[= FEW]) + StoreStalls
  * =================================================================================== */
 
-void topdown_bp_recovery(uns proc_id, Op* op) {
-  ASSERT(op->proc_id, op->inst_info->table_info.cf_type);
+void topdown_bp_recovery(uns proc_id, Op* op, Flag helios_flush) {
+  // Relax the CF requirement for a HELIOS mis-fusion flush that recovers on a non-CF (NOT_CF) load/store.
+  ASSERT(op->proc_id, op->inst_info->table_info.cf_type || helios_flush);
 
   STAT_EVENT(proc_id, TOPDOWN_MACHINE_CLEAR_CYCLES);
   if (op->bp_pred_info->recover_at_exec) {

@@ -1,13 +1,15 @@
-find_package(Git)
-if(GIT_FOUND)
-    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
-                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/..
-                    RESULT_VARIABLE GIT_SUBMOD_RESULT)
-    if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-        message(FATAL_ERROR "Updating git submodules failed: ${GIT_SUBMOD_RESULT}")
-    endif()
-else()
-  message(FATAL_ERROR "Could not find git binary in the system")
+# Build dependencies (xed, mbuild, dynamorio) are no longer git submodules.
+# They are installed into src/deps/ by setup_scarab-3.sh at pinned, verified
+# commits. Fail early with an actionable message if they are missing.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/xed/mfile.py")
+    message(FATAL_ERROR
+        "Missing build dependency src/deps/xed (and its sibling src/deps/mbuild). "
+        "Run setup_scarab-3.sh to install Scarab's build dependencies.")
+endif()
+if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE} AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dynamorio/CMakeLists.txt")
+    message(FATAL_ERROR
+        "Missing build dependency src/deps/dynamorio (required when SCARAB_ENABLE_PT_MEMTRACE is set). "
+        "Run setup_scarab-3.sh to install Scarab's build dependencies.")
 endif()
 
 find_package(Python3)

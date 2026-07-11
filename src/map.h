@@ -83,7 +83,13 @@ void free_wake_up_list(Op*);
 void add_to_wake_up_lists(Op*, void (*)(Op*, Op*, uns));
 
 void simple_wake(Op*, Op*, uns);
+/* HELIOS only: wire `producer` as an extra REG_DATA_DEP source of an already-mapped fused head
+ * `consumer`, mirroring add_to_wake_up_lists' per-source body for one source. Returns TRUE if a
+ * still-pending not-ready bit was added (producer not yet signaled). */
+Flag helios_wire_fused_reg_src(Op* consumer, Op* producer);
 void delete_store_hash_entry(Op*);
+void helios_recover_store_hash(Counter recovery_op_num);
+void helios_recover_reg_map(Counter recovery_op_num);
 
 /**************************************************************************************/
 
