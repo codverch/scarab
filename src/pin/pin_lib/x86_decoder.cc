@@ -1267,6 +1267,8 @@ void init_pin_opcode_convert(void) {
 
   iclass_to_scarab_map[XED_ICLASS_RDTSC]  = {OP_NOTPIPELINED_SLOW, 4, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_RDTSCP]  = {OP_NOTPIPELINED_SLOW, 8, 1, NONE}; // 4 bytes for time-stamp (somehow), 4 for processor id
+  // RDPID reads the processor-ID register into a general-purpose register.
+  iclass_to_scarab_map[XED_ICLASS_RDPID]   = {OP_MOV, 4, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_RDPKRU] = {OP_MOV, 1, 2, NONE};
   // INS_Opcode() never returns REPEAT variants of the iclasses
   iclass_to_scarab_map[XED_ICLASS_REPE_CMPSB]  = {OP_ICMP, 1, 1, NONE};
