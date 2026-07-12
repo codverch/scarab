@@ -1,0 +1,26 @@
+Scarab gitrev: f8e91d24
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Sun Jul 12 00:40:22 2026
+
+Initialized Ramulator. 
+** Heartbeat:   1% -- { 1000007 } -- 0.00 KIPS (37.04 KIPS)
+** Heartbeat:   2% -- { 2000014 } -- 43.48 KIPS (40.00 KIPS)
+** Heartbeat:   3% -- { 3000020 } -- 52.63 KIPS (43.48 KIPS)
+** Heartbeat:   4% -- { 4000024 } -- 45.45 KIPS (43.96 KIPS)
+** Heartbeat:   5% -- { 5000024 } -- 43.48 KIPS (43.86 KIPS)
+** Heartbeat:   6% -- { 6000026 } -- 38.46 KIPS (42.86 KIPS)
+** Heartbeat:   7% -- { 7000031 } -- 33.33 KIPS (41.18 KIPS)
+** Heartbeat:   8% -- { 8000034 } -- 34.48 KIPS (40.20 KIPS)
+** Heartbeat:   9% -- { 9000039 } -- 34.48 KIPS (39.47 KIPS)
+Reached end of trace (last_inst) pc=0x7f929a59e7f8
+sh: 1: Syntax error: word unexpected (expecting ")")
+** Core 0 Finished:    insts:9999999     cycles:7693293     time:2404154062500       -- 1.30 IPC (1.30 IPC) --  N/A  KIPS (39.06 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=14081958  I=10540042  C=7693293):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=14081958  I=10540042  C=7693293):  Command "python3 (null)/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x26b6d6) [0x5555557bf6d6]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x300bde) [0x555555854bde]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x1e4013) [0x555555738013]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_current(+0x1e849e) [0x55555573c49e]
