@@ -762,6 +762,7 @@ void init_reg_compress_map(void) {
 void init_pin_opcode_convert(void) {
   assert(OP_INV == 0);
 
+  iclass_to_scarab_map[XED_ICLASS_RDPID]   = {OP_MOV, -1, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_ADC]      = {OP_IADD, -1, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_ADCX]     = {OP_IADD, -1, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_ADC_LOCK] = {OP_IADD, -1, 1, NONE};
