@@ -1018,6 +1018,7 @@ void TraceReaderMemtrace::processInst(InstInfo* _info, [[maybe_unused]] instr_t*
     apply_x87_bug_workaround(&cinst, xed_ins);
     fill_in_cf_info(&cinst, xed_ins);
     cinst.encoding_is_new = mt_ref_.instr.encoding_is_new;
+    print_err_if_invalid(&cinst, xed_ins);
 
     ctype_inst_map.emplace(mt_ref_.instr.addr,
                            std::make_tuple(n_used_mem_ops, unknown_type, cinst.cf_type != NOT_CF, is_rep, cinst));
