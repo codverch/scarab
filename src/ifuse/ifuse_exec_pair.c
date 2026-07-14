@@ -210,8 +210,8 @@ static void ifuse_exec_pair_signal_ld2(
     ld2_op->wake_cycle = pair->ld1_wake_cycle;
     ld2_op->exec_cycle = pair->ld1_wake_cycle;
 
-    // LOAD2's fused result is now available in the physical register allocated
-    // by LOAD1. Update Scarab's register metadata at the same modeled event.
+    // LOAD2's fused result is produced into the physical register reserved by
+    // LOAD1 and rebound as LOAD2's destination at rename.
     reg_file_produce(ld2_op);
 
     for (Wake_Up_Entry* wake = ld2_op->wake_up_head; wake; wake = wake->next) {
