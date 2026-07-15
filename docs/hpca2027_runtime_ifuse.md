@@ -81,10 +81,22 @@ separately rather than silently using a different warmup.
 
 - Boundary/history tests pass for 511-versus-512 micro-op distance, most-recent
   matching, intervening-store invalidation, and 4/8-way tree PLRU behavior.
-- A full `SCARABOPT` compile reached and compiled every Scarab source file,
-  including the runtime trainer, TT, FCT integration, and retire call site.
-- A linked PT/memtrace binary and trace smoke run remain pending. The available
-  CloudLab node has Clang 14, while this parent branch's bundled DynamoRIO
-  rejects it as too old for its required Intel-syntax option. A non-PT build
-  also cannot link because the parent branch references PT-only globals.
-- No IPC, warmup, or runtime-promotion result is claimed yet.
+- The PT/memtrace `SCARABOPT` binary builds on the Utah CloudLab node with GCC
+  9 and GNU `as`. Every runtime I-Fuse source file and retire integration point
+  is included in that binary.
+- A 1M-instruction Tao smoke run with threshold 10 discovered 1,933 pairs,
+  promoted 148 FCT entries, and completed successfully with no PGO preload.
+- The standard validation used a longer Tao capture, 10M full warmup, 10M
+  measured instructions, and threshold 1,000. Warmup promoted 39 candidates;
+  the measured interval promoted 17 more and fused 729,075 loads. The TT peak
+  occupancy was 128 entries and `FCT_PRELOAD_INSERTS` remained zero.
+- Measured IPC was 3.40930 for runtime I-Fuse and 3.40743 for the exact matching
+  no-training baseline, a 0.055% speedup on this one Tao thread. This validates
+  operation and measurement boundaries; it is not a full performance result.
+
+Remote result directories:
+
+```text
+/proj/datacntr-effcy-PG0/Harry123/hpca2027_dcperf/simulations/runtime_ifuse_tao1000m_20m_warmup10m_threshold1000_20260714
+/proj/datacntr-effcy-PG0/Harry123/hpca2027_dcperf/simulations/runtime_ifuse_tao1000m_baseline_20m_warmup10m_20260714
+```
