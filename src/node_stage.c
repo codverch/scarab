@@ -58,6 +58,7 @@
 #include "ifuse/ifuse_exec_pair.h"
 #include "ifuse/ifuse_recovery.h"
 #include "ifuse/ifuse_rename.h"
+#include "ifuse/ifuse_train_retire.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map.h"
@@ -565,6 +566,9 @@ void node_retire() {
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
     op->retire_cycle = cycle_count;
+
+    /* Learn only from committed operations and use all-uop program distance. */
+    ifuse_train_retired_op(op);
 
     // Count completed fusions, not speculative frontend classifications.
     if (op->ifuse_load_role == LOAD2) {

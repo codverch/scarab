@@ -13,10 +13,8 @@
  * Fusion Candidate Table (FCT)
  * ============================
  * The FCT predicts load fusion candidates by mapping each LD1 PC to a single
- * LD2 candidate. Entries are populated up front from the offline PGO candidate
- * file (IFUSE_FCT_PRELOAD_FILE); there is no runtime training table. At runtime
- * only the confidence of preloaded rows changes, based on whether their
- * predictions turn out correct.
+ * LD2 candidate. Entries can be preloaded from an offline PGO file or promoted
+ * by the retire-stage runtime training table.
  */
 
  /**
@@ -34,8 +32,8 @@ typedef struct FCT_Row {
     unsigned int ld2_mem_size;
 
     // Execution context
-    unsigned int ld1_micro_op_num;
-    unsigned int ld2_micro_op_num;
+    Counter      ld1_micro_op_num;
+    Counter      ld2_micro_op_num;
 
     // Prediction metadata
     bool         direction;
@@ -68,5 +66,15 @@ void fct_update_confidence(Addr ld1_pc_addr, bool prediction_correct);
  * @return TRUE if a row exists, FALSE otherwise.
  */
 Flag fct_has_load1_pc_entry(Addr ld1_pc_addr);
+
+/* Promote one runtime-trained candidate. Returns TRUE when installed. */
+Flag fct_install_runtime_candidate(Addr ld1_pc_addr, Addr ld2_pc_addr,
+                                   Addr ld1_effective_addr,
+                                   Addr ld2_effective_addr,
+                                   unsigned int offset_delta, bool direction,
+                                   unsigned int ld2_mem_size,
+                                   Counter ld1_micro_op_num,
+                                   Counter ld2_micro_op_num,
+                                   unsigned int proc_id);
 
 #endif /* IFUSE_FCT_H */

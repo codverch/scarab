@@ -17,11 +17,9 @@
  * Fusion Candidate Table (FCT) runtime policy.
  *
  * The FCT models a single LD2 candidate for each LD1 PC. It is populated up
- * front from the offline PGO candidate file named by IFUSE_FCT_PRELOAD_FILE;
- * there is no runtime training. At runtime only the confidence of preloaded
- * rows is adjusted: correct fused predictions reinforce a row and
- * mispredictions penalize it, so a noisy PGO pair can fall below the
- * prediction threshold and stop predicting.
+ * front from an optional PGO candidate file and can also receive candidates
+ * promoted by the retire-stage runtime training table. Correct predictions
+ * reinforce a row and mispredictions penalize it.
  *
  * Simulator state is maintained in a large open-addressed hash table with
  * 2^IFUSE_FCT_HASH_BITS entries.
@@ -81,7 +79,8 @@ static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
  * it is fully trusted until a misprediction lowers it.
  */
 static unsigned int fct_max_confidence_score(void) {
-    return IFUSE_FCT_PRELOAD_CONF;
+    return IFUSE_FCT_PRELOAD_CONF > IFUSE_FCT_RUNTIME_INSERT_CONF ?
+        IFUSE_FCT_PRELOAD_CONF : IFUSE_FCT_RUNTIME_INSERT_CONF;
 }
 
 /**
@@ -110,8 +109,8 @@ static void fct_write_row(FCT_Row* row, Addr ld1_pc_addr, Addr ld2_pc_addr,
                           Addr ld1_effective_addr, Addr ld2_effective_addr,
                           unsigned int offset_delta,
                           bool direction, unsigned int ld2_mem_size,
-                          unsigned int ld1_micro_op_num,
-                          unsigned int ld2_micro_op_num,
+                          Counter ld1_micro_op_num,
+                          Counter ld2_micro_op_num,
                           unsigned int confidence_score) {
     row->ld1_pc_addr        = ld1_pc_addr;
     row->ld2_pc_addr        = ld2_pc_addr;
@@ -399,4 +398,50 @@ Flag fct_has_load1_pc_entry(Addr ld1_pc_addr) {
         return FALSE;
     }
     return fct_lookup_row(ld1_pc_addr) ? TRUE : FALSE;
+}
+
+Flag fct_install_runtime_candidate(Addr ld1_pc_addr, Addr ld2_pc_addr,
+                                   Addr ld1_effective_addr,
+                                   Addr ld2_effective_addr,
+                                   unsigned int offset_delta, bool direction,
+                                   unsigned int ld2_mem_size,
+                                   Counter ld1_micro_op_num,
+                                   Counter ld2_micro_op_num,
+                                   unsigned int proc_id) {
+    if (!fct_is_initialized)
+        fct_init();
+    if (!ld1_pc_addr || !ld2_pc_addr || offset_delta > 63U ||
+        !ld2_mem_size || ld2_mem_size > 64U)
+        return FALSE;
+
+    FCT_Row* row = fct_lookup_row(ld1_pc_addr);
+    if (row) {
+        bool same_candidate = row->ld2_pc_addr == ld2_pc_addr &&
+                              row->offset_delta == offset_delta &&
+                              row->direction == direction &&
+                              row->ld2_mem_size == ld2_mem_size;
+        if (same_candidate) {
+            if (row->confidence_score < IFUSE_FCT_RUNTIME_INSERT_CONF)
+                row->confidence_score = fct_saturating_confidence_score(
+                    IFUSE_FCT_RUNTIME_INSERT_CONF);
+            STAT_EVENT(proc_id, FCT_RUNTIME_REINFORCEMENTS);
+            return TRUE;
+        }
+
+        /* A trusted row keeps its LD2; a suppressed row may be relearned. */
+        if (row->confidence_score > IFUSE_FCT_CONF_THRESHOLD) {
+            STAT_EVENT(proc_id, FCT_RUNTIME_CONFLICTS);
+            return FALSE;
+        }
+        STAT_EVENT(proc_id, FCT_RUNTIME_REPLACEMENTS);
+    } else {
+        row = fct_allocate_row_for_load1_pc(ld1_pc_addr);
+        STAT_EVENT(proc_id, FCT_RUNTIME_INSERTS);
+    }
+
+    fct_write_row(row, ld1_pc_addr, ld2_pc_addr, ld1_effective_addr,
+                  ld2_effective_addr, offset_delta, direction, ld2_mem_size,
+                  ld1_micro_op_num, ld2_micro_op_num,
+                  IFUSE_FCT_RUNTIME_INSERT_CONF);
+    return TRUE;
 }

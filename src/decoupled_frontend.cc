@@ -250,9 +250,15 @@ void Decoupled_FE::init(uns _proc_id, uns _bp_id, Bp_Data* _bp_data, uns _dfe_tr
   // state) and trace_redirect FATALs on any redirect call. Fail-fast at init
   // so misconfigured runs surface clearly instead of silently misbehaving.
   if (bp_id != MAIN_BP) {
+#ifdef ENABLE_PT_MEMTRACE
     ASSERTM(_proc_id, FRONTEND == FE_PT || FRONTEND == FE_MEMTRACE,
             "alt BP (bp_id=%u, trigger_policy=%u) requires FRONTEND in {FE_PT, FE_MEMTRACE}; got FRONTEND=%u\n", _bp_id,
             dfe_trigger_policy, (uns)FRONTEND);
+#else
+    ASSERTM(_proc_id, FALSE,
+            "alt BP (bp_id=%u, trigger_policy=%u) requires a build with ENABLE_PT_MEMTRACE\n", _bp_id,
+            dfe_trigger_policy);
+#endif
   }
   // _ON_H2P_* policies gate on is_h2p_at_exec, which only registers a branch
   // as H2P when its exec-stage mispred ratio crosses the threshold. To keep
@@ -275,8 +281,8 @@ void Decoupled_FE::init(uns _proc_id, uns _bp_id, Bp_Data* _bp_data, uns _dfe_tr
   saved_recovery_ft = nullptr;
   if (bp_id == MAIN_BP) {
     /*
-     * The FCT is populated from the offline PGO candidate file. Build it once
-     * per frontend lifetime, before the first fetch-time lookup.
+     * Build the FCT before its first fetch-time lookup. It may start empty,
+     * load optional PGO candidates, and accept runtime-trained candidates.
      */
     fct_init();
   }
