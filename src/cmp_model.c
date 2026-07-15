@@ -59,6 +59,7 @@
 #include "ft.h"
 #include "idq_stage.h"
 #include "ifuse/ifuse_recovery.h"
+#include "ifuse/ifuse_train_retire.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map_rename.h"
@@ -472,8 +473,8 @@ void warmup_uncore(uns proc_id, Addr addr, Flag write) {
 }
 
 /**************************************************************************************/
-/* Warm up select microarchitectural structures: BP, icache, dcache,
- * and L1. No wrong path warmup. */
+/* Warm up select microarchitectural structures: BP, icache, dcache, L1, and
+ * the persistent retirement-side IFuse learning state. No wrong path warmup. */
 
 void cmp_warmup(Op* op) {
   uns proc_id = op->proc_id;
@@ -553,6 +554,21 @@ void cmp_warmup(Op* op) {
     }
     bp_retire_op(bp_data, op);
   }
+
+  /*
+   * Fast warmup bypasses the timing pipeline and therefore never reaches the
+   * normal node-stage retirement hook. Feed its committed-operation stream to
+   * the same IFuse learner so the retired-load history, training table, and
+   * runtime-trained FCT reflect warmup execution. The reusable warmup Op does
+   * not pass through FT's IFuse metadata initialization/classification path,
+   * so treat it as an unclassified committed operation.
+   *
+   * APT and ACI intentionally remain empty: they hold speculative, in-flight
+   * predictions, and fast-warmup operations are retired immediately. Empty is
+   * therefore their architecturally correct state at the timing boundary.
+   */
+  op->ifuse_load_role = NOT_FUSION_CANDIDATE;
+  ifuse_train_retired_op(op);
 }
 
 static void cmp_measure_chip_util() {
