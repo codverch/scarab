@@ -12,6 +12,18 @@
 #define HISTORY_BUCKETS  1024U
 #define HISTORY_LINE_SIZE 64U
 
+/*
+ * Hardware-design storage model (distinct from HistoryRow below, whose links
+ * and full-width types are simulator bookkeeping): each of the 512 retired
+ * load buffer entries needs a 48-bit PC, 48-bit effective address, 3-bit
+ * log2(access size), 10-bit modulo-1024 micro-op timestamp, and 1 valid bit,
+ * for 110 bits/entry. The timestamp is required because fusion distance is
+ * measured in all micro-ops, not merely in loads; a global 10-bit timestamp
+ * advances once per micro-op and age is their modulo-1024 difference. Thus
+ * the packed RLB costs 512 * 110 = 56,320 bits = 6.875 KiB, plus global
+ * timestamp/head/tail control bits. Ten timestamp bits distinguish ages
+ * 0..511 from expired entries across wraparound.
+ */
 typedef struct HistoryRow {
     RetiredLoadHistoryEntry load;
     Addr block;

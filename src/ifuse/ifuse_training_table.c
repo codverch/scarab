@@ -10,6 +10,14 @@
 #include "ifuse_plru.h"
 #include "ifuse.param.h"
 
+/*
+ * Hardware-design storage model (the C fields below intentionally use normal
+ * host types): each entry packs two 48-bit PC tags, a 10-bit observation
+ * counter, a 6-bit cache-line offset delta, a 3-bit log2(LD2 access size),
+ * direction, and valid, totaling 117 bits. There are 32 sets * 4 ways = 128
+ * entries. Three tree-PLRU bits per set add 96 bits, so the packed training
+ * table costs 128 * 117 + 32 * 3 = 15,072 bits = 1.83984375 KiB.
+ */
 typedef struct TrainingEntry {
     uint64_t ld1_tag;
     uint64_t ld2_tag;
