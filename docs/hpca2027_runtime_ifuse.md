@@ -79,6 +79,10 @@ separately rather than silently using a different warmup.
 
 ## Validation Status (2026-07-14)
 
+TaoBench is excluded from the final HPCA 2027 workload set. The Tao results
+below are retained only as engineering evidence that runtime training works;
+they must not be included in final speedup plots or averages.
+
 - Boundary/history tests pass for 511-versus-512 micro-op distance, most-recent
   matching, intervening-store invalidation, and 4/8-way tree PLRU behavior.
 - The PT/memtrace `SCARABOPT` binary builds on the Utah CloudLab node with GCC
