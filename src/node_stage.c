@@ -562,6 +562,58 @@ void node_retire() {
       // Accumulate on-path load latency (retire guarantees on-path here).
       INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
       INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
+
+      /* I-Fuse stall / latency breakdown (mirrors RFP retire-time load stats). */
+      if (op->fetch_cycle != MAX_CTR && op->exec_cycle != MAX_CTR &&
+          op->done_cycle != MAX_CTR) {
+        Flag fused_path = op->ifuse_ld2_early_wake_signaled;
+
+        STAT_EVENT(op->proc_id, IFUSE_ALL_LOADS);
+        if (fused_path) {
+          /* Committed fused load: contributes to coverage vs all loads. */
+          STAT_EVENT(op->proc_id, IFUSE_LOAD_COVERAGE);
+        }
+        if (op->exec_cycle >= op->fetch_cycle) {
+          INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_MINUS_FETCH,
+                         op->exec_cycle - op->fetch_cycle);
+        }
+        if (cycle_count >= op->fetch_cycle) {
+          INC_STAT_EVENT(op->proc_id, IFUSE_LD_RETIRE_MINUS_FETCH,
+                         cycle_count - op->fetch_cycle);
+        }
+        if (op->done_cycle >= op->exec_cycle) {
+          INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE,
+                         op->done_cycle - op->exec_cycle);
+        }
+
+        if (fused_path) {
+          if (op->exec_cycle >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_MINUS_FETCH_FUSED,
+                           op->exec_cycle - op->fetch_cycle);
+          }
+          if (cycle_count >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_RETIRE_MINUS_FETCH_FUSED,
+                           cycle_count - op->fetch_cycle);
+          }
+          if (op->done_cycle >= op->exec_cycle) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE_FUSED,
+                           op->done_cycle - op->exec_cycle);
+          }
+        } else {
+          if (op->exec_cycle >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_MINUS_FETCH_DEMAND,
+                           op->exec_cycle - op->fetch_cycle);
+          }
+          if (cycle_count >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_RETIRE_MINUS_FETCH_DEMAND,
+                           cycle_count - op->fetch_cycle);
+          }
+          if (op->done_cycle >= op->exec_cycle) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE_DEMAND,
+                           op->done_cycle - op->exec_cycle);
+          }
+        }
+      }
     }
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
