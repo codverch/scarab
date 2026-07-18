@@ -544,9 +544,26 @@ void node_retire() {
     if (op->inst_info->table_info.mem_type == MEM_LD) {
       STAT_EVENT(op->proc_id, LD_NO_DEPENDENTS + (op->wake_up_head ? 1 : 0));
 
-      // Accumulate on-path load latency (retire guarantees on-path here).
-      INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
-      INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
+      /* Accumulate on-path load latency (retire guarantees on-path here).
+       * Skip loads with unset timestamps so MAX_CTR does not inflate the sums. */
+      if (op->fetch_cycle != MAX_CTR && op->exec_cycle != MAX_CTR && op->done_cycle != MAX_CTR) {
+        STAT_EVENT(op->proc_id, LD_RETIRED_ONPATH);
+
+        /* Time from fetch until address gen / exec completes. */
+        if (op->exec_cycle >= op->fetch_cycle) {
+          INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
+        }
+        /* Time from fetch until the load retires. */
+        if (cycle_count >= op->fetch_cycle) {
+          INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
+        }
+        /* Data-wait latency: cycles the load spends waiting for its value after exec.
+         * Compare against RFP_LD_EXEC_TO_DONE (all loads) or RFP_LD_EXEC_TO_DONE_SERVED
+         * (RFP-served only) on the RFP config. */
+        if (op->done_cycle >= op->exec_cycle) {
+          INC_STAT_EVENT(op->proc_id, LD_EXEC_TO_DONE_LATENCY, op->done_cycle - op->exec_cycle);
+        }
+      }
     }
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
