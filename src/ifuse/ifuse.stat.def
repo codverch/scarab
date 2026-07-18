@@ -68,53 +68,50 @@ DEF_STAT(IFUSE_MISPREDICTION_FLUSHES, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_MISPREDICTED_CACHE_BLOCK_ADDR, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_MISPREDICTED_OFFSET_DELTA, COUNT, NO_RATIO)
 
-/* --- Load stalls / cycles saved (same style as RFP; compare side by side) ---
- * coverage × avg cycles saved per fused load ≈ total cycles saved:
- *   IFUSE_AVG_LAT_REDUCTION_PER_FUSED = average cycles saved per fused LD2
- *   IFUSE_NUM_FUSED_LOADS             = how many LD2s got data via fusion
- *   IFUSE_TOTAL_CYCLES_SAVED          = sum of those per-load savings
- *   Check: AVG × NUM ≈ TOTAL
- *
- * "Stall" here means cycles a load waits for its data after it starts
- * executing (done_cycle - exec_cycle).
+/* --- Observed load stalls (compare across baseline / RFP / I-Fuse runs) ---
+ * Stall = done_cycle - exec_cycle: cycles the load waited for its data.
+ * We do NOT invent an L1-hit "cycles saved" number (fusion skips the demand
+ * access, so we never learn hit vs miss). Instead compare totals across runs:
+ *   stalls_removed ≈ IFUSE_LD_STALL_CYCLES(baseline) - IFUSE_LD_STALL_CYCLES(ifuse)
+ * Coverage × avg stall on fused loads explains how much of that is coverage
+ * vs timeliness when set next to RFP's same-style stall totals.
  */
 
-/* Every on-path load that retires (coverage denominator). */
+/* Every on-path load that retires. */
 DEF_STAT(IFUSE_ALL_LOADS, COUNT, NO_RATIO)
-/* LD2s that finished through the fused path (no demand d-cache access). */
+/* Retired loads that used the fused path (LD2 early-woken). */
 DEF_STAT(IFUSE_NUM_FUSED_LOADS, COUNT, NO_RATIO)
-/* Fraction of all loads that used fusion: NUM_FUSED / ALL_LOADS. */
+/* Retired loads that used the normal demand memory path. */
+DEF_STAT(IFUSE_NUM_DEMAND_LOADS, COUNT, NO_RATIO)
+/* Fraction of retired loads that used fusion. */
 DEF_STAT(IFUSE_LOAD_COVERAGE, RATIO, IFUSE_ALL_LOADS)
 
-/* Total cycles saved vs a normal L1-hit path, summed over fused LD2s. */
-DEF_STAT(IFUSE_TOTAL_CYCLES_SAVED, COUNT, NO_RATIO)
-/* Average cycles saved per fused LD2 (timeliness). */
-DEF_STAT(IFUSE_AVG_LAT_REDUCTION_PER_FUSED, RATIO, IFUSE_NUM_FUSED_LOADS)
-/* Fused LD2 where LD1 data was already ready when LD2 finished AGU. */
-DEF_STAT(IFUSE_FULL_MITIGATED, COUNT, NO_RATIO)
-/* Fused LD2 where LD1 data arrived after LD2 reached AGU (still some wait). */
-DEF_STAT(IFUSE_PARTIAL_MITIGATED, COUNT, NO_RATIO)
-/* Cycles fused LD2s still waited after AGU (0 when fully ready). */
-DEF_STAT(IFUSE_REMAINING_LAT_FUSED, COUNT, NO_RATIO)
-/* Cycles saved only on fully-ready fused LD2s. */
-DEF_STAT(IFUSE_SAVED_CYCLES_FULL, COUNT, NO_RATIO)
-/* Cycles saved only on partially-ready fused LD2s. */
-DEF_STAT(IFUSE_SAVED_CYCLES_PARTIAL, COUNT, NO_RATIO)
-DEF_STAT(IFUSE_AVG_LAT_REDUCTION_FULL, RATIO, IFUSE_FULL_MITIGATED)
-DEF_STAT(IFUSE_AVG_LAT_REDUCTION_PARTIAL, RATIO, IFUSE_PARTIAL_MITIGATED)
+/* Sum of stall cycles (done - exec) over all / fused / demand loads. */
+DEF_STAT(IFUSE_LD_STALL_CYCLES, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_LD_STALL_CYCLES_FUSED, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_LD_STALL_CYCLES_DEMAND, COUNT, NO_RATIO)
+/* Average stall per load in each group. */
+DEF_STAT(IFUSE_AVG_STALL_PER_LOAD, RATIO, IFUSE_ALL_LOADS)
+DEF_STAT(IFUSE_AVG_STALL_PER_FUSED, RATIO, IFUSE_NUM_FUSED_LOADS)
+DEF_STAT(IFUSE_AVG_STALL_PER_DEMAND, RATIO, IFUSE_NUM_DEMAND_LOADS)
 
-/* --- Load latency at retire (on-path only) --- */
+/* Fused LD2: LD1 data already ready when LD2 finished AGU. */
+DEF_STAT(IFUSE_FULL_MITIGATED, COUNT, NO_RATIO)
+/* Fused LD2: LD1 data arrived after LD2 AGU (observed leftover wait). */
+DEF_STAT(IFUSE_PARTIAL_MITIGATED, COUNT, NO_RATIO)
+/* Sum of (LD1_wake - AGU) when LD1 was late; 0 for full mitigation. */
+DEF_STAT(IFUSE_REMAINING_WAIT_AFTER_AGU, COUNT, NO_RATIO)
+
+/* --- Other load latency at retire (on-path only) --- */
 /* Sum over loads of (exec_cycle - fetch_cycle). */
 DEF_STAT(IFUSE_LD_EXEC_MINUS_FETCH, COUNT, NO_RATIO)
 /* Sum over loads of (retire_cycle - fetch_cycle). */
 DEF_STAT(IFUSE_LD_RETIRE_MINUS_FETCH, COUNT, NO_RATIO)
-/* Sum over loads of (done_cycle - exec_cycle): data-wait / stall cycles. */
+/* Alias of IFUSE_LD_STALL_CYCLES (done - exec). */
 DEF_STAT(IFUSE_LD_EXEC_TO_DONE, COUNT, NO_RATIO)
-/* Same three latencies, only for loads that used fusion. */
 DEF_STAT(IFUSE_LD_EXEC_MINUS_FETCH_FUSED, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_RETIRE_MINUS_FETCH_FUSED, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_EXEC_TO_DONE_FUSED, COUNT, NO_RATIO)
-/* Same three latencies, only for loads that took the normal demand path. */
 DEF_STAT(IFUSE_LD_EXEC_MINUS_FETCH_DEMAND, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_RETIRE_MINUS_FETCH_DEMAND, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_EXEC_TO_DONE_DEMAND, COUNT, NO_RATIO)

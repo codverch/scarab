@@ -563,16 +563,20 @@ void node_retire() {
       INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
       INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
 
-      /* I-Fuse stall / latency breakdown (mirrors RFP retire-time load stats). */
+      /* Observed load stalls: done - exec (compare totals across runs). */
       if (op->fetch_cycle != MAX_CTR && op->exec_cycle != MAX_CTR &&
           op->done_cycle != MAX_CTR) {
         Flag fused_path = op->ifuse_ld2_early_wake_signaled;
+        Counter stall_cycles = 0;
 
         STAT_EVENT(op->proc_id, IFUSE_ALL_LOADS);
         if (fused_path) {
-          /* Committed fused load: contributes to coverage vs all loads. */
+          STAT_EVENT(op->proc_id, IFUSE_NUM_FUSED_LOADS);
           STAT_EVENT(op->proc_id, IFUSE_LOAD_COVERAGE);
+        } else {
+          STAT_EVENT(op->proc_id, IFUSE_NUM_DEMAND_LOADS);
         }
+
         if (op->exec_cycle >= op->fetch_cycle) {
           INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_MINUS_FETCH,
                          op->exec_cycle - op->fetch_cycle);
@@ -582,8 +586,10 @@ void node_retire() {
                          cycle_count - op->fetch_cycle);
         }
         if (op->done_cycle >= op->exec_cycle) {
-          INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE,
-                         op->done_cycle - op->exec_cycle);
+          stall_cycles = op->done_cycle - op->exec_cycle;
+          INC_STAT_EVENT(op->proc_id, IFUSE_LD_STALL_CYCLES, stall_cycles);
+          INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE, stall_cycles);
+          INC_STAT_EVENT(op->proc_id, IFUSE_AVG_STALL_PER_LOAD, stall_cycles);
         }
 
         if (fused_path) {
@@ -595,9 +601,10 @@ void node_retire() {
             INC_STAT_EVENT(op->proc_id, IFUSE_LD_RETIRE_MINUS_FETCH_FUSED,
                            cycle_count - op->fetch_cycle);
           }
-          if (op->done_cycle >= op->exec_cycle) {
-            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE_FUSED,
-                           op->done_cycle - op->exec_cycle);
+          if (stall_cycles) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_STALL_CYCLES_FUSED, stall_cycles);
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE_FUSED, stall_cycles);
+            INC_STAT_EVENT(op->proc_id, IFUSE_AVG_STALL_PER_FUSED, stall_cycles);
           }
         } else {
           if (op->exec_cycle >= op->fetch_cycle) {
@@ -608,9 +615,10 @@ void node_retire() {
             INC_STAT_EVENT(op->proc_id, IFUSE_LD_RETIRE_MINUS_FETCH_DEMAND,
                            cycle_count - op->fetch_cycle);
           }
-          if (op->done_cycle >= op->exec_cycle) {
-            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE_DEMAND,
-                           op->done_cycle - op->exec_cycle);
+          if (stall_cycles) {
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_STALL_CYCLES_DEMAND, stall_cycles);
+            INC_STAT_EVENT(op->proc_id, IFUSE_LD_EXEC_TO_DONE_DEMAND, stall_cycles);
+            INC_STAT_EVENT(op->proc_id, IFUSE_AVG_STALL_PER_DEMAND, stall_cycles);
           }
         }
       }

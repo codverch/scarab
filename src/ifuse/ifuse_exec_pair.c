@@ -12,7 +12,6 @@
 #include "../globals/global_defs.h"
 #include "../globals/global_vars.h"
 #include "../map_rename.h"
-#include "../memory/memory.param.h"
 #include "../op_info.h"
 #include "../statistics.h"
 
@@ -182,10 +181,7 @@ static void ifuse_exec_pair_remove_ld2_if_current(const Op* ld2_op) {
 }
 
 static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
-    Counter normal_done;
     Counter serve_done;
-    uns saved_cycles;
-    Flag partial;
 
     if (!ld2_op->ifuse_ld2_early_wake_signaled ||
         !ld2_op->ifuse_ld2_agu_completed) {
@@ -199,33 +195,14 @@ static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
     // The fused LOAD2 is complete only after its data path and AGU accounting
     // have both completed. It can now retire normally from the ROB.
     serve_done = MAX2(ld2_op->wake_cycle, ld2_op->dcache_cycle);
-    /* What done_cycle would have been on a normal L1 hit from AGU time. */
-    normal_done = ld2_op->dcache_cycle + DCACHE_CYCLES +
-                  ld2_op->inst_info->extra_ld_latency;
-    saved_cycles =
-        (normal_done > serve_done) ? (uns)(normal_done - serve_done) : 0;
-    /* Partial: LD1 data arrived after LD2 finished AGU, so some wait remains. */
-    partial = (ld2_op->wake_cycle > ld2_op->dcache_cycle);
 
-    STAT_EVENT(ld2_op->proc_id, IFUSE_NUM_FUSED_LOADS);
-    INC_STAT_EVENT(ld2_op->proc_id, IFUSE_TOTAL_CYCLES_SAVED, saved_cycles);
-    INC_STAT_EVENT(ld2_op->proc_id, IFUSE_AVG_LAT_REDUCTION_PER_FUSED,
-                   saved_cycles);
-    if (partial) {
+    /* Observed readiness only (no assumed L1-hit "cycles saved"). */
+    if (ld2_op->wake_cycle > ld2_op->dcache_cycle) {
         STAT_EVENT(ld2_op->proc_id, IFUSE_PARTIAL_MITIGATED);
-        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_SAVED_CYCLES_PARTIAL,
-                       saved_cycles);
-        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_AVG_LAT_REDUCTION_PARTIAL,
-                       saved_cycles);
-        if (serve_done > ld2_op->dcache_cycle) {
-            INC_STAT_EVENT(ld2_op->proc_id, IFUSE_REMAINING_LAT_FUSED,
-                           serve_done - ld2_op->dcache_cycle);
-        }
+        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_REMAINING_WAIT_AFTER_AGU,
+                       ld2_op->wake_cycle - ld2_op->dcache_cycle);
     } else {
         STAT_EVENT(ld2_op->proc_id, IFUSE_FULL_MITIGATED);
-        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_SAVED_CYCLES_FULL, saved_cycles);
-        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_AVG_LAT_REDUCTION_FULL,
-                       saved_cycles);
     }
 
     ld2_op->done_cycle = serve_done;
