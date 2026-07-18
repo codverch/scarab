@@ -294,6 +294,16 @@ void update_dcache_stage(Stage_Data* src_sd) {
            and re-fetch via the normal demand path below. */
         rfp_prf_clear(op->proc_id, op->rfp_prfid);
         mem_cancel_rfp_prefetch(op->proc_id, op->rfp_prfid, op->rfp_launch_cycle, op->unique_num);
+        if (!op->rfp_pred_resolved) {
+          Addr pred_line = op->rfp_predicted_addr & ~(Addr)(DCACHE_LINE_SIZE - 1);
+          Addr actual_line = op->oracle_info.va & ~(Addr)(DCACHE_LINE_SIZE - 1);
+          STAT_EVENT(op->proc_id, RFP_PRED_RESOLVED);
+          if (pred_line == actual_line)
+            STAT_EVENT(op->proc_id, RFP_PRED_WRONG_LINE);
+          else
+            STAT_EVENT(op->proc_id, RFP_PRED_WRONG_ADDR);
+          op->rfp_pred_resolved = TRUE;
+        }
         STAT_EVENT(op->proc_id, RFP_PREDICTION_WRONG);
         STAT_EVENT(op->proc_id, RFP_PRF_CLEARED_DUE_TO_MISPRED);
         op->rfp_mispred_accounted = TRUE;
@@ -305,6 +315,12 @@ void update_dcache_stage(Stage_Data* src_sd) {
         op->rfp_dropped_load_first = TRUE;
         rfp_prf_mark_dropped(op->proc_id, op->rfp_prfid, op->unique_num);
         mem_cancel_rfp_prefetch(op->proc_id, op->rfp_prfid, op->rfp_launch_cycle, op->unique_num);
+        if (!op->rfp_pred_resolved) {
+          /* Address was correct; prefetch just lost the race. */
+          STAT_EVENT(op->proc_id, RFP_PRED_RESOLVED);
+          STAT_EVENT(op->proc_id, RFP_PRED_CORRECT);
+          op->rfp_pred_resolved = TRUE;
+        }
         STAT_EVENT(op->proc_id, RFP_DROPPED_SINCE_LOAD_BEAT_PREFETCH);
       }
     }
@@ -325,13 +341,40 @@ void update_dcache_stage(Stage_Data* src_sd) {
       uns saved_cycles = (normal_done > serve_done) ? (uns)(normal_done - serve_done) : 0;
       op->dcache_cycle = cycle_count;
       op->oracle_info.dcmiss = FALSE;
+      op->rfp_served = TRUE;
+      op->rfp_partial_mitigated = (rfp_ready_cycle > cycle_count);
+      if (!op->rfp_pred_resolved) {
+        STAT_EVENT(op->proc_id, RFP_PRED_RESOLVED);
+        STAT_EVENT(op->proc_id, RFP_PRED_CORRECT);
+        op->rfp_pred_resolved = TRUE;
+      }
       STAT_EVENT(op->proc_id, RFP_PRF_SERVED);
       STAT_EVENT(op->proc_id, RFP_PREFETCH_USEFUL);
-      if (rfp_ready_cycle > cycle_count)
+      STAT_EVENT(op->proc_id, RFP_USED_NO_DEMAND);
+      STAT_EVENT(op->proc_id, RFP_NUM_PREFETCHED_LOADS);
+      STAT_EVENT(op->proc_id, RFP_COVERAGE);
+      if (op->rfp_partial_mitigated) {
         STAT_EVENT(op->proc_id, RFP_PARTIAL_MITIGATED);
+      } else {
+        STAT_EVENT(op->proc_id, RFP_FULL_MITIGATED);
+        STAT_EVENT(op->proc_id, RFP_ON_TIME);
+      }
 
-      if (saved_cycles > 0)
-        INC_STAT_EVENT(op->proc_id, RFP_SAVED_CYCLES, saved_cycles);
+      /* avg cycles saved per useful RFP × #useful RFPs ≈ total cycles saved */
+      INC_STAT_EVENT(op->proc_id, RFP_SAVED_CYCLES, saved_cycles);
+      INC_STAT_EVENT(op->proc_id, RFP_TOTAL_CYCLES_SAVED, saved_cycles);
+      INC_STAT_EVENT(op->proc_id, RFP_AVG_LAT_REDUCTION_PER_PREF, saved_cycles);
+      if (op->rfp_partial_mitigated) {
+        INC_STAT_EVENT(op->proc_id, RFP_SAVED_CYCLES_PARTIAL, saved_cycles);
+        INC_STAT_EVENT(op->proc_id, RFP_AVG_LAT_REDUCTION_PARTIAL, saved_cycles);
+      } else {
+        INC_STAT_EVENT(op->proc_id, RFP_SAVED_CYCLES_FULL, saved_cycles);
+        INC_STAT_EVENT(op->proc_id, RFP_AVG_LAT_REDUCTION_FULL, saved_cycles);
+      }
+      /* Remaining wait after dispatch on the served path (0 for full mitigation). */
+      if (serve_done > cycle_count)
+        INC_STAT_EVENT(op->proc_id, RFP_REMAINING_LAT_SERVED, serve_done - cycle_count);
+
       op->done_cycle = serve_done;        /* full: now+1; partial: data-available cycle */
       op->wake_cycle = op->done_cycle;
       wake_up_ops(op, REG_DATA_DEP, model->wake_hook);

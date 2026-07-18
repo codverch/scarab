@@ -181,6 +181,9 @@ void rfp_predict_at_fetch(Op *op) {
   op->rfp_predicted = FALSE;
   op->rfp_predicted_addr = 0;
   op->rfp_dropped_load_first = FALSE;
+  op->rfp_served = FALSE;
+  op->rfp_partial_mitigated = FALSE;
+  op->rfp_pred_resolved = FALSE;
 }
 
 /* Launch RFP prefetch for PRF model: enqueue into LSQ-side RFP queue. */
@@ -190,6 +193,7 @@ static void rfp_prefetch_launch_prf(Op* op, Addr line_addr) {
   /* Get the PRF ID for the load */
   if (!rfp_op_load_prfid(op, &prfid)) {
     STAT_EVENT(op->proc_id, RFP_PRF_LAUNCH_NO_DEST);
+    STAT_EVENT(op->proc_id, RFP_ELIGIBLE_NOT_ISSUED);
     return;
   }
 
@@ -199,6 +203,9 @@ static void rfp_prefetch_launch_prf(Op* op, Addr line_addr) {
   /* Enqueue the load into the LSQ-side RFP FIFO */
   if (lsq_rfp_enqueue(op->proc_id, op, line_addr, prfid, op->rfp_launch_cycle)) {
     STAT_EVENT(op->proc_id, RFP_PREFETCH_INJECTED);
+    STAT_EVENT(op->proc_id, RFP_ISSUED);
+  } else {
+    STAT_EVENT(op->proc_id, RFP_ELIGIBLE_NOT_ISSUED);
   }
 }
 
@@ -229,6 +236,7 @@ void rfp_prefetch_launch(Op* op) {
     op->rfp_predicted = TRUE;
     op->rfp_predicted_addr = predicted_addr;
     STAT_EVENT(op->proc_id, RFP_PREDICTION_MADE);
+    STAT_EVENT(op->proc_id, RFP_ELIGIBLE);
   }
 
   rfp_inflight_inc(op->inst_info->addr);
@@ -248,8 +256,9 @@ void rfp_prefetch_launch(Op* op) {
   rfp_prefetch_launch_prf(op, line_addr);
 }
 
-/* Train the RFP table on a load instruction. 
+/* Train the RFP table on a load instruction.
  * Training is done when the load is retired.
+ * Also accumulate retire-time coverage / latency for RFP analysis.
  */
 void rfp_train_retire(Op *op) {
   ASSERT(op->proc_id, op);
@@ -266,6 +275,20 @@ void rfp_train_retire(Op *op) {
 
   STAT_EVENT(op->proc_id, RFP_RETIRE_LOAD);
   rfp_train_entry(op->proc_id, op->inst_info->addr, op->oracle_info.va);
+
+  /* Retire-time prediction coverage (committed loads only). */
+  if (op->rfp_predicted) {
+    STAT_EVENT(op->proc_id, RFP_RETIRE_PRED);
+    if (op->rfp_served) {
+      STAT_EVENT(op->proc_id, RFP_RETIRE_COVERED);
+      STAT_EVENT(op->proc_id, RFP_RETIRE_PRED_CORRECT);
+    } else if (op->rfp_mispred_accounted) {
+      STAT_EVENT(op->proc_id, RFP_RETIRE_PRED_WRONG);
+    } else if (op->rfp_dropped_load_first) {
+      /* Correct address, but prefetch lost the race — still a correct prediction. */
+      STAT_EVENT(op->proc_id, RFP_RETIRE_PRED_CORRECT);
+    }
+  }
 }
 
 /* Track the squashed loads and decrement the inflight count for the load.

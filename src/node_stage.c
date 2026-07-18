@@ -558,6 +558,60 @@ void node_retire() {
     /* Train RFP table on committed load */
     rfp_train_retire(op);
 
+    /* Accumulate on-path load latency (retire guarantees on-path here). */
+    if (op->inst_info->table_info.mem_type == MEM_LD && op->fetch_cycle != MAX_CTR &&
+        op->exec_cycle != MAX_CTR && op->done_cycle != MAX_CTR) {
+      if (op->exec_cycle >= op->fetch_cycle) {
+        INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
+      }
+      if (cycle_count >= op->fetch_cycle) {
+        INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
+      }
+      if (op->done_cycle >= op->exec_cycle) {
+        INC_STAT_EVENT(op->proc_id, LD_EXEC_TO_DONE_LATENCY, op->done_cycle - op->exec_cycle);
+      }
+
+      if (RFP_ON) {
+        if (op->exec_cycle >= op->fetch_cycle) {
+          INC_STAT_EVENT(op->proc_id, RFP_LD_EXEC_MINUS_FETCH, op->exec_cycle - op->fetch_cycle);
+        }
+        if (cycle_count >= op->fetch_cycle) {
+          INC_STAT_EVENT(op->proc_id, RFP_LD_RETIRE_MINUS_FETCH, cycle_count - op->fetch_cycle);
+        }
+        if (op->done_cycle >= op->exec_cycle) {
+          INC_STAT_EVENT(op->proc_id, RFP_LD_EXEC_TO_DONE, op->done_cycle - op->exec_cycle);
+        }
+
+        if (op->rfp_served) {
+          if (op->exec_cycle >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, RFP_LD_EXEC_MINUS_FETCH_SERVED,
+                           op->exec_cycle - op->fetch_cycle);
+          }
+          if (cycle_count >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, RFP_LD_RETIRE_MINUS_FETCH_SERVED,
+                           cycle_count - op->fetch_cycle);
+          }
+          if (op->done_cycle >= op->exec_cycle) {
+            INC_STAT_EVENT(op->proc_id, RFP_LD_EXEC_TO_DONE_SERVED,
+                           op->done_cycle - op->exec_cycle);
+          }
+        } else {
+          if (op->exec_cycle >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, RFP_LD_EXEC_MINUS_FETCH_DEMAND,
+                           op->exec_cycle - op->fetch_cycle);
+          }
+          if (cycle_count >= op->fetch_cycle) {
+            INC_STAT_EVENT(op->proc_id, RFP_LD_RETIRE_MINUS_FETCH_DEMAND,
+                           cycle_count - op->fetch_cycle);
+          }
+          if (op->done_cycle >= op->exec_cycle) {
+            INC_STAT_EVENT(op->proc_id, RFP_LD_EXEC_TO_DONE_DEMAND,
+                           op->done_cycle - op->exec_cycle);
+          }
+        }
+      }
+    }
+
     STAT_EVENT(op->proc_id, RET_ALL_INST);
 
     remove_from_seq_op_list(td, op);

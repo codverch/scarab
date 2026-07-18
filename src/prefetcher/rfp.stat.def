@@ -1,26 +1,76 @@
-DEF_STAT(RFP_PREDICTED_AT_RENAME, COUNT, NO_RATIO)               /* Predicted loads observed at rename stage */
-DEF_STAT(RFP_ALL_LOADS, COUNT, NO_RATIO)                         /* All on-path loads observed at rename */
-DEF_STAT(RFP_PREDICTION_MADE, COUNT, NO_RATIO)                   /* Predictions made by PT at rename */
-DEF_STAT(RFP_RETIRE_LOAD, COUNT, NO_RATIO)                       /* Loads used to train PT at retire */
-DEF_STAT(RFP_PT_ALLOC, COUNT, NO_RATIO)                          /* New PT entries allocated */
-DEF_STAT(RFP_PT_HIT, COUNT, NO_RATIO)                            /* PT lookups that hit an existing entry */
-DEF_STAT(RFP_STRIDE_CONFIRM, COUNT, NO_RATIO)                    /* Retire-time observed stride matched entry */
-DEF_STAT(RFP_STRIDE_CHANGE, COUNT, NO_RATIO)                     /* Retire-time observed stride changed */
-DEF_STAT(RFP_CONF_INC, COUNT, NO_RATIO)                          /* Times confidence was increased */
-DEF_STAT(RFP_PREFETCH_INJECTED, COUNT, NO_RATIO)                 /* Launch attempt that successfully created a request */
-DEF_STAT(RFP_PREFETCH_INFLIGHT, COUNT, NO_RATIO)                 /* Prefetch actually started cache lookup */
-DEF_STAT(RFP_PREFETCH_EXECUTED, COUNT, NO_RATIO)                 /* RFP prefetches that completed and wrote to PRF */
-DEF_STAT(RFP_DROPPED_SINCE_LOAD_BEAT_PREFETCH, COUNT, NO_RATIO)  /* Dropped because load launched before prefetch start */
-DEF_STAT(RFP_PREFETCH_USEFUL, COUNT, NO_RATIO)                   /* Loads that consumed prefetched data via PRF */
-DEF_STAT(RFP_SAVED_CYCLES, COUNT, NO_RATIO)                      /* Aggregate cycles saved by PRF fast-serve */
-DEF_STAT(RFP_PREDICTION_WRONG, COUNT, NO_RATIO)                  /* Wrong-address predictions detected */
-DEF_STAT(RFP_PRF_LAUNCH, COUNT, NO_RATIO)                        /* Launch attempts after obtaining a valid destination */
-DEF_STAT(RFP_PRF_LAUNCH_NO_DEST, COUNT, NO_RATIO)                /* Launches skipped: no valid destination reg */
-DEF_STAT(RFP_PRF_SERVED, COUNT, NO_RATIO)                        /* Loads served by PRF-ready fast path */
-DEF_STAT(RFP_PRF_CLEARED_DUE_TO_MISPRED, COUNT, NO_RATIO)        /* PRF entry cleared due to address misprediction */
-DEF_STAT(RFP_PRF_CLEARED_DUE_TO_RECOVERY, COUNT, NO_RATIO)       /* PRF entry cleared due to squash/recovery */
-DEF_STAT(RFP_PRF_OWNER_MISMATCH, COUNT, NO_RATIO)                /* Ready-check owner mismatch (stale PRF state) */
-DEF_STAT(RFP_LSQ_FIFO_FULL, COUNT, NO_RATIO)                     /* Launch dropped because dedicated RFP FIFO was full */
-DEF_STAT(RFP_DROPPED_ON_L1_MISS, COUNT, NO_RATIO)                /* RFP request dropped after missing the L1 (no lower-level req issued) */
-DEF_STAT(RFP_PARTIAL_MITIGATED, COUNT, NO_RATIO)                 /* Served loads that waited a few cycles for in-flight prefetch data (partial latency mitigation, §3.3) */
-DEF_STAT(RFP_DROPPED_MEM_PRESSURE, COUNT, NO_RATIO)              /* L1-miss RFP prefetch dropped: too few free mem-req buffers (demand reserve) */
+/* Register File Prefetch (RFP) statistics
+ *
+ * How to read coverage × timeliness ≈ cycles saved:
+ *   RFP_AVG_LAT_REDUCTION_PER_PREF  = average cycles saved per useful RFP load
+ *   RFP_NUM_PREFETCHED_LOADS        = how many loads used an RFP result
+ *   RFP_TOTAL_CYCLES_SAVED          = total cycles saved
+ *   Check: AVG × NUM ≈ TOTAL
+ */
+
+/* --- Rename / launch --- */
+DEF_STAT(RFP_PREDICTED_AT_RENAME, COUNT, NO_RATIO)               /* Load was predicted and ready to launch RFP at rename */
+DEF_STAT(RFP_ALL_LOADS, COUNT, NO_RATIO)                         /* Every on-path load seen at rename */
+DEF_STAT(RFP_PREDICTION_MADE, COUNT, NO_RATIO)                   /* PT was confident enough to predict an address */
+DEF_STAT(RFP_ELIGIBLE, RATIO, RFP_ALL_LOADS)                     /* Same as PREDICTION_MADE, shown as fraction of all loads */
+DEF_STAT(RFP_RETIRE_LOAD, COUNT, NO_RATIO)                       /* On-path load retired and used to train the PT */
+DEF_STAT(RFP_PT_ALLOC, COUNT, NO_RATIO)                          /* New PT entry created for a load PC */
+DEF_STAT(RFP_PT_HIT, COUNT, NO_RATIO)                            /* Load PC already had a PT entry */
+DEF_STAT(RFP_STRIDE_CONFIRM, COUNT, NO_RATIO)                    /* Observed stride matched the PT entry */
+DEF_STAT(RFP_STRIDE_CHANGE, COUNT, NO_RATIO)                     /* Observed stride differed from the PT entry */
+DEF_STAT(RFP_CONF_INC, COUNT, NO_RATIO)                          /* PT confidence counter was increased */
+DEF_STAT(RFP_PREFETCH_INJECTED, COUNT, NO_RATIO)                 /* RFP request was put into the RFP FIFO */
+DEF_STAT(RFP_ISSUED, RATIO, RFP_ALL_LOADS)                       /* Same as PREFETCH_INJECTED, shown as fraction of all loads */
+DEF_STAT(RFP_ELIGIBLE_NOT_ISSUED, COUNT, NO_RATIO)               /* Predicted, but RFP was not launched (no dest reg or FIFO full) */
+DEF_STAT(RFP_PREFETCH_INFLIGHT, COUNT, NO_RATIO)                 /* RFP request started looking up L1 */
+DEF_STAT(RFP_PREFETCH_EXECUTED, COUNT, NO_RATIO)                 /* RFP finished and wrote the value into the PRF tracker */
+DEF_STAT(RFP_DROPPED_SINCE_LOAD_BEAT_PREFETCH, COUNT, NO_RATIO)  /* Load reached L1 before RFP did, so RFP was dropped */
+DEF_STAT(RFP_PREFETCH_USEFUL, COUNT, NO_RATIO)                   /* Load used the RFP value from the register file */
+DEF_STAT(RFP_SAVED_CYCLES, COUNT, NO_RATIO)                      /* Total cycles saved vs a normal L1 hit (same as TOTAL_CYCLES_SAVED) */
+DEF_STAT(RFP_PREDICTION_WRONG, COUNT, NO_RATIO)                  /* Predicted address did not match the real load address */
+DEF_STAT(RFP_PRF_LAUNCH, COUNT, NO_RATIO)                        /* Tried to launch RFP after finding a dest register */
+DEF_STAT(RFP_PRF_LAUNCH_NO_DEST, COUNT, NO_RATIO)                /* Could not launch RFP because the load has no usable dest reg */
+DEF_STAT(RFP_PRF_SERVED, COUNT, NO_RATIO)                        /* Load got its data from RFP; no demand L1 access */
+DEF_STAT(RFP_USED_NO_DEMAND, COUNT, NO_RATIO)                    /* Same as PRF_SERVED: RFP satisfied the load, demand load not issued */
+DEF_STAT(RFP_NUM_PREFETCHED_LOADS, COUNT, NO_RATIO)              /* How many loads used an RFP result (coverage count) */
+DEF_STAT(RFP_COVERAGE, RATIO, RFP_ALL_LOADS)                     /* Fraction of all loads that used an RFP result */
+DEF_STAT(RFP_PRF_CLEARED_DUE_TO_MISPRED, COUNT, NO_RATIO)        /* Cleared RFP PRF state because the address was wrong */
+DEF_STAT(RFP_PRF_CLEARED_DUE_TO_RECOVERY, COUNT, NO_RATIO)       /* Cleared RFP PRF state because of a squash/recovery */
+DEF_STAT(RFP_PRF_OWNER_MISMATCH, COUNT, NO_RATIO)                /* PRF entry belonged to a different dynamic load */
+DEF_STAT(RFP_LSQ_FIFO_FULL, COUNT, NO_RATIO)                     /* Could not launch RFP because the RFP FIFO was full */
+DEF_STAT(RFP_DROPPED_ON_L1_MISS, COUNT, NO_RATIO)                /* Dropped RFP because it missed in L1 */
+DEF_STAT(RFP_PARTIAL_MITIGATED, COUNT, NO_RATIO)                 /* Used RFP, but data was not ready yet at dispatch (saved only some cycles) */
+DEF_STAT(RFP_FULL_MITIGATED, COUNT, NO_RATIO)                    /* Used RFP, and data was already ready at dispatch (full L1 latency hidden) */
+DEF_STAT(RFP_ON_TIME, RATIO, RFP_PREFETCH_INJECTED)              /* Fraction of issued RFPs that were fully ready before the load */
+DEF_STAT(RFP_DROPPED_MEM_PRESSURE, COUNT, NO_RATIO)              /* Dropped RFP under memory-buffer pressure (legacy / unused path) */
+
+/* --- Cycles saved (avg × count ≈ total) --- */
+DEF_STAT(RFP_TOTAL_CYCLES_SAVED, COUNT, NO_RATIO)                /* Total cycles saved by all useful RFP loads */
+DEF_STAT(RFP_AVG_LAT_REDUCTION_PER_PREF, RATIO, RFP_USED_NO_DEMAND) /* Average cycles saved per load that used RFP */
+DEF_STAT(RFP_SAVED_CYCLES_FULL, COUNT, NO_RATIO)                 /* Cycles saved only on fully-ready RFP serves */
+DEF_STAT(RFP_SAVED_CYCLES_PARTIAL, COUNT, NO_RATIO)              /* Cycles saved only on partially-ready RFP serves */
+DEF_STAT(RFP_AVG_LAT_REDUCTION_FULL, RATIO, RFP_FULL_MITIGATED)  /* Average cycles saved when RFP was fully ready */
+DEF_STAT(RFP_AVG_LAT_REDUCTION_PARTIAL, RATIO, RFP_PARTIAL_MITIGATED) /* Average cycles saved when RFP was only partially ready */
+DEF_STAT(RFP_REMAINING_LAT_SERVED, COUNT, NO_RATIO)              /* Cycles the load still waited after dispatch, even when using RFP */
+
+/* --- Prediction accuracy --- */
+DEF_STAT(RFP_PRED_RESOLVED, COUNT, NO_RATIO)                     /* Predicted+launched load whose address was checked at L1 */
+DEF_STAT(RFP_PRED_CORRECT, RATIO, RFP_PRED_RESOLVED)             /* Fraction of resolved predictions with exact address match */
+DEF_STAT(RFP_PRED_WRONG_LINE, COUNT, NO_RATIO)                   /* Wrong: same cache line, wrong byte offset */
+DEF_STAT(RFP_PRED_WRONG_ADDR, COUNT, NO_RATIO)                   /* Wrong: different cache line */
+
+/* --- Load latency at retire (on-path only) --- */
+DEF_STAT(RFP_LD_EXEC_MINUS_FETCH, COUNT, NO_RATIO)               /* Sum over loads of (exec_cycle - fetch_cycle) */
+DEF_STAT(RFP_LD_RETIRE_MINUS_FETCH, COUNT, NO_RATIO)             /* Sum over loads of (retire_cycle - fetch_cycle) */
+DEF_STAT(RFP_LD_EXEC_TO_DONE, COUNT, NO_RATIO)                   /* Sum over loads of (done_cycle - exec_cycle): data-wait latency */
+DEF_STAT(RFP_LD_EXEC_MINUS_FETCH_SERVED, COUNT, NO_RATIO)        /* exec-fetch latency for loads served by RFP */
+DEF_STAT(RFP_LD_RETIRE_MINUS_FETCH_SERVED, COUNT, NO_RATIO)      /* retire-fetch latency for loads served by RFP */
+DEF_STAT(RFP_LD_EXEC_TO_DONE_SERVED, COUNT, NO_RATIO)            /* data-wait latency for loads served by RFP */
+DEF_STAT(RFP_LD_EXEC_MINUS_FETCH_DEMAND, COUNT, NO_RATIO)        /* exec-fetch latency for loads that took the normal demand path */
+DEF_STAT(RFP_LD_RETIRE_MINUS_FETCH_DEMAND, COUNT, NO_RATIO)      /* retire-fetch latency for demand-path loads */
+DEF_STAT(RFP_LD_EXEC_TO_DONE_DEMAND, COUNT, NO_RATIO)            /* data-wait latency for demand-path loads */
+
+/* --- Coverage at retire --- */
+DEF_STAT(RFP_RETIRE_PRED, COUNT, NO_RATIO)                       /* Retired load that had an RFP prediction */
+DEF_STAT(RFP_RETIRE_COVERED, RATIO, RFP_RETIRE_LOAD)             /* Fraction of retired loads that were served by RFP */
+DEF_STAT(RFP_RETIRE_PRED_CORRECT, COUNT, NO_RATIO)               /* Retired predicted load whose address was correct */
+DEF_STAT(RFP_RETIRE_PRED_WRONG, COUNT, NO_RATIO)                 /* Retired predicted load whose address was wrong */
