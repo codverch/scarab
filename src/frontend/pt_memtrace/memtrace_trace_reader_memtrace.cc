@@ -613,7 +613,6 @@ PATCH_REP:
       _prior->mem_is_wr[0] = false;
       _prior->mem_is_wr[1] = false;
       _prior->is_dr_ins = false;
-      warn("Patching gap in trace by injecting a Jmp, prior PC: %lx next PC: %lx\n", _prior->pc, _info->pc);
     }
     _prior->target = _info->pc;  // TODO(granta): Invalid for pid/tid switch
   } else {
