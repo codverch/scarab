@@ -16,9 +16,11 @@
 #include "../statistics.h"
 
 /*
- * Pass 1 keeps recently fetched loads grouped by data-cache block. When a
- * later load arrives, the matching step can inspect only earlier loads from
- * the same block instead of scanning the full dynamic instruction history.
+ * Pass 1 keeps fetched loads grouped by data-cache block. When a later load
+ * arrives, the matching step inspects earlier loads from the same block.
+ * Fusion is unbounded in micro-op distance: a pair is valid when both loads
+ * share a cache block, each access fits in that block, and no intervening
+ * store has targeted the block (which invalidates pending LOAD1 candidates).
  */
 #define IDEAL_FUSION_LOAD_CANDIDATE_BUCKETS 4096
 #define IDEAL_FUSION_PAIR_INDEX_BUCKETS 1000003
@@ -36,7 +38,6 @@ typedef struct Ideal_Fusion_Load_Candidate_struct {
   Addr cache_block_offset;
   uns mem_size;
   Counter micro_op_num;
-  Flag fused;
   struct Ideal_Fusion_Load_Candidate_struct* next;
 } Ideal_Fusion_Load_Candidate;
 
@@ -64,7 +65,6 @@ static Counter next_on_path_micro_op_num = 0;
 
 static Ideal_Fusion_Load_Candidate*
   load_candidates[IDEAL_FUSION_LOAD_CANDIDATE_BUCKETS] = {NULL};
-static Counter last_load_cleanup_micro_op_num = 0;
 static FILE* candidate_log = NULL;
 static Counter logged_candidate_pair_count = 0;
 
@@ -280,7 +280,6 @@ static void load_pair_indexes(void) {
   char line[IDEAL_FUSION_CSV_LINE_SIZE];
   Counter line_num = 0;
   Counter loaded_pair_count = 0;
-  Counter skipped_distance_count = 0;
 
   if (pair_indexes_loaded)
     return;
@@ -383,12 +382,7 @@ static void load_pair_indexes(void) {
       pair_log_error(line_num, "inconsistent cache-block metadata");
     }
 
-    /* Pass 2: apply fusion only for pairs within the distance window. */
-    if (recorded_distance >= IDEAL_FUSION_DISTANCE) {
-      skipped_distance_count++;
-      continue;
-    }
-
+    /* Pass 2 applies every logged pair; distance is not a fusion constraint. */
     index_fusion_pair(&pair);
     loaded_pair_count++;
   }
@@ -409,9 +403,8 @@ static void load_pair_indexes(void) {
   pair_indexes_loaded = TRUE;
 
   printf("Ideal fusion pass 2: loaded %llu candidate pair(s) from '%s' "
-         "(distance < %u, skipped %llu)\n",
-         loaded_pair_count, IDEAL_FUSION_LOG, IDEAL_FUSION_DISTANCE,
-         skipped_distance_count);
+         "(unbounded distance)\n",
+         loaded_pair_count, IDEAL_FUSION_LOG);
   fflush(stdout);
 }
 
@@ -474,13 +467,11 @@ static void log_matched_pair(Ideal_Fusion_Load_Candidate* load1, Op* load2) {
 
 static Flag load1_matches_load2(const Ideal_Fusion_Load_Candidate* load1,
                                 Op* load2, Addr cache_block_addr) {
+  /* Same cache block and both accesses fit in the block; no distance bound. */
   return load1->cache_block_addr == cache_block_addr &&
-         !load1->fused &&
          access_fits_in_cache_block(load1->virtual_addr, load1->mem_size) &&
          access_fits_in_cache_block(load2->oracle_info.va,
-                                    load2->oracle_info.mem_size) &&
-         load2->ideal_fusion_micro_op_num - load1->micro_op_num <
-           IDEAL_FUSION_DISTANCE;
+                                    load2->oracle_info.mem_size);
 }
 
 static Ideal_Fusion_Load_Candidate* find_matching_load1(Op* load2) {
@@ -556,7 +547,6 @@ static void track_load(Op* op) {
     op->oracle_info.va - candidate->cache_block_addr;
   candidate->mem_size = op->oracle_info.mem_size;
   candidate->micro_op_num = op->ideal_fusion_micro_op_num;
-  candidate->fused = FALSE;
 
   bucket = get_candidate_bucket(candidate->cache_block_addr);
   candidate->next = load_candidates[bucket];
@@ -592,23 +582,23 @@ static void invalidate_loads_for_store(Op* store) {
   }
 }
 
-static void cleanup_stale_loads(Counter current_micro_op_num) {
+/* Remove a LOAD1 candidate after it has been paired (or otherwise retired). */
+static void remove_load_candidate(Ideal_Fusion_Load_Candidate* target) {
+  Ideal_Fusion_Load_Candidate** candidate;
   uns bucket;
 
-  for (bucket = 0; bucket < IDEAL_FUSION_LOAD_CANDIDATE_BUCKETS; bucket++) {
-    Ideal_Fusion_Load_Candidate** candidate = &load_candidates[bucket];
+  if (!target)
+    return;
 
-    while (*candidate) {
-      if ((*candidate)->fused ||
-          current_micro_op_num - (*candidate)->micro_op_num >=
-            IDEAL_FUSION_DISTANCE) {
-        Ideal_Fusion_Load_Candidate* stale_candidate = *candidate;
-        *candidate = stale_candidate->next;
-        free(stale_candidate);
-      } else {
-        candidate = &(*candidate)->next;
-      }
+  bucket = get_candidate_bucket(target->cache_block_addr);
+  candidate = &load_candidates[bucket];
+  while (*candidate) {
+    if (*candidate == target) {
+      *candidate = target->next;
+      free(target);
+      return;
     }
+    candidate = &(*candidate)->next;
   }
 }
 
@@ -624,14 +614,8 @@ void ideal_fusion_on_fetch_op(Op* op) {
     return;
   }
 
-  if (IDEAL_FUSION_PASS != 1 || IDEAL_FUSION_DISTANCE == 0)
+  if (IDEAL_FUSION_PASS != 1)
     return;
-
-  if (op->ideal_fusion_micro_op_num - last_load_cleanup_micro_op_num >=
-      IDEAL_FUSION_DISTANCE) {
-    cleanup_stale_loads(op->ideal_fusion_micro_op_num);
-    last_load_cleanup_micro_op_num = op->ideal_fusion_micro_op_num;
-  }
 
   if (op->inst_info->table_info.mem_type == MEM_ST) {
     invalidate_loads_for_store(op);
@@ -642,7 +626,7 @@ void ideal_fusion_on_fetch_op(Op* op) {
 
   if (load1) {
     log_matched_pair(load1, op);
-    load1->fused = TRUE;
+    remove_load_candidate(load1);
   } else {
     track_load(op);
   }
