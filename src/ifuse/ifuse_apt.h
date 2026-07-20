@@ -122,8 +122,9 @@ bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
 /**
  * Observes the current number of live APT LD2 predictions.
  *
- * The average number of live APT LD2 predictions is:
- *   APT_LIVE_LD2_PREDICTION_TOTAL / APT_LIVE_LD2_PREDICTION_OBSERVATIONS
+ * The average number of live APT LD2 predictions is reported as
+ * APT_LIVE_LD2_PREDICTION_AVG (= TOTAL / OBSERVATIONS). Peak occupancy
+ * is APT_LIVE_LD2_PREDICTION_PEAK (use this to size a finite APT).
  */
 void apt_observe_live_ld2_predictions(uns proc_id);
 

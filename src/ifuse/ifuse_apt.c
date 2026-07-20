@@ -111,6 +111,7 @@ void apt_init(void) {
         exit(1);
     }
     apt_initialized = true;
+    INC_STAT_EVENT(0, APT_CONFIGURED_CAPACITY, IFUSE_APT_MAX_NODES);
 }
 
 /**
@@ -190,6 +191,8 @@ void apt_observe_live_ld2_predictions(uns proc_id) {
 
     STAT_EVENT(proc_id, APT_LIVE_LD2_PREDICTION_OBSERVATIONS);
     INC_STAT_EVENT(proc_id, APT_LIVE_LD2_PREDICTION_TOTAL,
+                   apt_live_ld2_prediction_count);
+    INC_STAT_EVENT(proc_id, APT_LIVE_LD2_PREDICTION_AVG,
                    apt_live_ld2_prediction_count);
 }
 
@@ -278,6 +281,7 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
 
     APT_Node* node = (APT_Node*)ifuse_ideal_alloc_get(&apt_node_alloc);
     if (!node) {
+        STAT_EVENT(0, APT_INSERT_FAILURES);
         fprintf(stderr, "APT: alloc failed for ld2_pc=0x%llx\n",
                 (unsigned long long)ld2_pc_addr);
         return NULL;

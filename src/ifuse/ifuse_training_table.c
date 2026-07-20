@@ -12,12 +12,14 @@
 
 /*
  * Hardware-design storage model (the C fields below intentionally use normal
- * host types): each entry packs two 48-bit PC tags, a 10-bit observation
- * counter, a 6-bit cache-line offset delta, a 3-bit log2(LD2 access size),
- * direction, and valid, totaling 117 bits. There are 32 sets * 4 ways = 128
- * entries. Three tree-PLRU bits per set add 96 bits, so the packed training
- * table costs 128 * 117 + 32 * 3 = 15,072 bits = 1.83984375 KiB.
+ * host types): each entry packs two 48-bit PC tags, a 14-bit observation
+ * counter (supports insert thresholds up to 16383, e.g. 10/100/1000/10000),
+ * a 6-bit cache-line offset delta, a 3-bit log2(LD2 access size), direction,
+ * and valid, totaling 121 bits. There are 32 sets * 4 ways = 128 entries.
+ * Three tree-PLRU bits per set add 96 bits, so the packed training table
+ * costs 128 * 121 + 32 * 3 = 15,584 bits = 1.90234375 KiB.
  */
+#define IFUSE_TRAINING_OBS_COUNTER_MAX 16383U
 typedef struct TrainingEntry {
     uint64_t ld1_tag;
     uint64_t ld2_tag;
@@ -84,9 +86,11 @@ void training_table_init(void) {
         exit(1);
     }
     if (IFUSE_TRAINING_INSERT_THRESHOLD == 0U ||
-        IFUSE_TRAINING_INSERT_THRESHOLD > 1023U) {
-        fprintf(stderr, "I-Fuse training threshold must be 1-1023 for the "
-                        "modeled 10-bit counter\n");
+        IFUSE_TRAINING_INSERT_THRESHOLD > IFUSE_TRAINING_OBS_COUNTER_MAX) {
+        fprintf(stderr,
+                "I-Fuse training threshold must be 1-%u for the modeled "
+                "14-bit counter\n",
+                IFUSE_TRAINING_OBS_COUNTER_MAX);
         exit(1);
     }
 
