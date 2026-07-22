@@ -9,159 +9,49 @@
 #include "ifuse_apt.h"
 #include "ifuse_aci.h"
 #include "ifuse_exec_pair.h"
-#include "ifuse_ideal_alloc.h"
-#include "ifuse_ideal_limits.h"
+#include "ifuse_plru.h"
 #include "ifuse_rename.h"
 #include "../general.param.h"
 #include "../statistics.h"
 #include "ifuse.param.h"
 
 /**
- * Ideal Active Pair Table (APT)
- * =============================
- * The APT is a live prediction queue. LD1 inserts an entry when it predicts a
- * future LD2; LD2 probes by PC and claims one unmatched prediction for that
- * LD2 PC.
+ * Set-associative Active Pair Table (APT)
+ * =======================================
+ * LD1 inserts a live prediction keyed by LD2 PC; LD2 probes the set selected
+ * by hash(LD2 PC) and claims one unmatched entry with a matching LD2 PC.
  *
- * Multiple dynamic LD1s may wait for the same LD2 PC. The match policy is a
- * logical experiment knob, not a capacity model:
+ * Multiple dynamic LD1s may wait for the same LD2 PC (up to num_ways in the
+ * set). IFUSE_APT_MATCH_POLICY chooses first- or most-recent-inserted.
  *
- *   IFUSE_APT_MATCH_POLICY = 0: claim the first inserted unmatched LD1.
- *   IFUSE_APT_MATCH_POLICY = 1: claim the most recently inserted unmatched LD1.
- *
- * This ideal baseline has no hardware capacity model. It stores entries in
- * hash buckets for software speed, but the buckets do not imply set conflicts
- * or replacement. The ACI entry created with each APT entry is invalidated
- * when its owner leaves the APT.
+ * On insert into a full set, tree-PLRU selects the victim way to replace.
  */
 
+static APT_Entry* entries = NULL;
+static uint8_t*   plru = NULL;
+static unsigned int num_sets = 0;
+static unsigned int num_ways = 0;
+static bool         apt_initialized = false;
+static uint64_t     apt_next_timestamp = 0;
+static uint64_t     apt_live_ld2_prediction_count = 0;
+static uint64_t     apt_live_ld2_prediction_peak = 0;
 
-// Internal table node
-typedef struct APT_Node {
-    APT_Entry      entry;
-    struct APT_Node* next;
-} APT_Node;
-
-// Module state
-static APT_Node** apt_table = NULL;
-static unsigned int apt_num_buckets = 0;
-static unsigned int apt_bucket_mask = 0;
-static bool      apt_initialized = false;
-static uint64_t  apt_next_timestamp = 0;
-static uint64_t  apt_live_ld2_prediction_count = 0;
-static uint64_t  apt_live_ld2_prediction_peak = 0;
-static IfuseIdealAlloc apt_node_alloc;
-
-static bool apt_validate_table_params(void) {
-    if (IFUSE_APT_NUM_BUCKETS == 0U ||
-        IFUSE_APT_NUM_BUCKETS > IFUSE_IDEAL_MAX_BUCKETS ||
-        (IFUSE_APT_NUM_BUCKETS & (IFUSE_APT_NUM_BUCKETS - 1U)) != 0U) {
-        fprintf(stderr,
-                "APT: ifuse_apt_num_buckets must be a power of two <= %u\n",
-                IFUSE_IDEAL_MAX_BUCKETS);
-        return false;
-    }
-    if (IFUSE_APT_MAX_NODES == 0U ||
-        IFUSE_APT_MAX_NODES > IFUSE_IDEAL_MAX_NODES) {
-        fprintf(stderr,
-                "APT: ifuse_apt_max_nodes must be in [1, %u]\n",
-                IFUSE_IDEAL_MAX_NODES);
-        return false;
-    }
-    return true;
+static bool apt_power_of_two(unsigned int value) {
+    return value && !(value & (value - 1U));
 }
 
-// Internal helper methods
-static unsigned int apt_bucket(Addr ld2_pc_addr);
-static APT_Node* apt_find_matching_node(Addr ld2_pc_addr);
-static void apt_note_prediction_inserted(void);
-static void apt_note_prediction_removed(void);
-static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry);
-static void apt_remove_node(unsigned int bucket, APT_Node* prev,
-                            APT_Node* node, bool preserve_exec_pair);
-
-/**
- * Initializes the ideal Active Pair Table.
- */
-void apt_init(void) {
-    if (apt_initialized) {
-        return;
-    }
-
-    if (!apt_validate_table_params()) {
-        exit(1);
-    }
-
-    apt_num_buckets = IFUSE_APT_NUM_BUCKETS;
-    apt_bucket_mask = apt_num_buckets - 1U;
-    apt_table = (APT_Node**)calloc(apt_num_buckets, sizeof(APT_Node*));
-    if (!apt_table) {
-        fprintf(stderr, "APT: calloc failed for %u buckets\n", apt_num_buckets);
-        exit(1);
-    }
-
-    memset(apt_table, 0, apt_num_buckets * sizeof(APT_Node*));
-    apt_next_timestamp = 0;
-    apt_live_ld2_prediction_count = 0;
-    apt_live_ld2_prediction_peak = 0;
-    if (!ifuse_ideal_alloc_init_fixed(&apt_node_alloc, sizeof(APT_Node),
-                                      IFUSE_APT_MAX_NODES)) {
-        fprintf(stderr, "APT: fixed pool alloc failed (%u nodes)\n",
-                IFUSE_APT_MAX_NODES);
-        exit(1);
-    }
-    apt_initialized = true;
-    INC_STAT_EVENT(0, APT_CONFIGURED_CAPACITY, IFUSE_APT_MAX_NODES);
+static APT_Entry* apt_entry_at(unsigned int set, unsigned int way) {
+    return &entries[set * num_ways + way];
 }
 
-/**
- * Returns the software bucket for ld2_pc_addr.
- *
- * The bucket exists only to make simulator lookup efficient. It is not a
- * modeled hardware set index.
- */
-static unsigned int apt_bucket(Addr ld2_pc_addr) {
+static unsigned int apt_set_index(Addr ld2_pc_addr) {
     uint64_t h = (uint64_t)ld2_pc_addr;
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccdULL;
     h ^= h >> 33;
-    return (unsigned int)(h & apt_bucket_mask);
+    return (unsigned int)(h & (num_sets - 1U));
 }
 
-/**
- * Returns the unmatched node selected by the active APT match policy.
- */
-static APT_Node* apt_find_matching_node(Addr ld2_pc_addr) {
-    unsigned int bucket = apt_bucket(ld2_pc_addr);
-    APT_Node* best_node = NULL;
-
-    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
-        if (node->entry.valid &&
-            !node->entry.matched &&
-            node->entry.ld2_pc_addr == ld2_pc_addr) {
-            if (!best_node) {
-                best_node = node;
-                continue;
-            }
-
-            if (IFUSE_APT_MATCH_POLICY == 1) {
-                if (node->entry.timestamp > best_node->entry.timestamp) {
-                    best_node = node;
-                }
-            } else {
-                if (node->entry.timestamp < best_node->entry.timestamp) {
-                    best_node = node;
-                }
-            }
-        }
-    }
-
-    return best_node;
-}
-
-/**
- * Records that one live APT LD2 prediction was inserted.
- */
 static void apt_note_prediction_inserted(void) {
     apt_live_ld2_prediction_count++;
     if (apt_live_ld2_prediction_count > apt_live_ld2_prediction_peak) {
@@ -172,18 +62,164 @@ static void apt_note_prediction_inserted(void) {
     }
 }
 
-/**
- * Records that one live APT LD2 prediction was removed.
- */
 static void apt_note_prediction_removed(void) {
     if (apt_live_ld2_prediction_count > 0) {
         apt_live_ld2_prediction_count--;
     }
 }
 
-/**
- * Observes the current number of live APT LD2 predictions.
- */
+static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry) {
+    if (!entry || !entry->valid || entry->matched) {
+        return;
+    }
+
+    aci_invalidate_prediction(entry->predicted_ld2_effective_addr,
+                              entry->ld1_micro_op_num);
+}
+
+static void apt_clear_entry(unsigned int set, unsigned int way,
+                            bool preserve_exec_pair) {
+    APT_Entry* entry = apt_entry_at(set, way);
+    if (!entry->valid) {
+        return;
+    }
+
+    apt_invalidate_pending_aci_prediction(entry);
+    ifuse_free_ld2_physical_reg(entry->ld2_physical_reg_id);
+    if (!preserve_exec_pair) {
+        ifuse_exec_pair_forget_ld1_prediction(entry->ld1_micro_op_num);
+    }
+
+    memset(entry, 0, sizeof(*entry));
+    apt_note_prediction_removed();
+}
+
+static APT_Entry* apt_find_matching_entry(unsigned int set, Addr ld2_pc_addr) {
+    APT_Entry* best = NULL;
+
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        APT_Entry* entry = apt_entry_at(set, way);
+        if (!entry->valid || entry->matched ||
+            entry->ld2_pc_addr != ld2_pc_addr) {
+            continue;
+        }
+
+        if (!best) {
+            best = entry;
+            continue;
+        }
+
+        if (IFUSE_APT_MATCH_POLICY == 1) {
+            if (entry->timestamp > best->timestamp) {
+                best = entry;
+            }
+        } else if (entry->timestamp < best->timestamp) {
+            best = entry;
+        }
+    }
+
+    return best;
+}
+
+static APT_Entry* apt_find_entry_by_ld1(unsigned int set, Addr ld2_pc_addr,
+                                      unsigned int ld1_micro_op_num) {
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        APT_Entry* entry = apt_entry_at(set, way);
+        if (entry->valid && entry->ld2_pc_addr == ld2_pc_addr &&
+            entry->ld1_micro_op_num == ld1_micro_op_num) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static APT_Entry* apt_find_entry_by_ld1_any_pc(unsigned int ld1_micro_op_num) {
+    for (unsigned int set = 0; set < num_sets; ++set) {
+        for (unsigned int way = 0; way < num_ways; ++way) {
+            APT_Entry* entry = apt_entry_at(set, way);
+            if (entry->valid && entry->ld1_micro_op_num == ld1_micro_op_num) {
+                return entry;
+            }
+        }
+    }
+    return NULL;
+}
+
+static APT_Entry* apt_find_matched_entry(unsigned int set, Addr ld2_pc_addr,
+                                         unsigned int ld1_micro_op_num) {
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        APT_Entry* entry = apt_entry_at(set, way);
+        if (entry->valid && entry->matched &&
+            entry->ld2_pc_addr == ld2_pc_addr &&
+            entry->ld1_micro_op_num == ld1_micro_op_num) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static unsigned int apt_entry_set(const APT_Entry* entry) {
+    return (unsigned int)((entry - entries) / num_ways);
+}
+
+static unsigned int apt_entry_way(const APT_Entry* entry) {
+    return (unsigned int)((entry - entries) % num_ways);
+}
+
+static APT_Entry* apt_allocate_entry(unsigned int set) {
+    unsigned int invalid_way = num_ways;
+
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        if (!apt_entry_at(set, way)->valid) {
+            invalid_way = way;
+            break;
+        }
+    }
+
+    unsigned int way = invalid_way;
+    if (way == num_ways) {
+        way = ifuse_plru_victim(plru, set, num_ways);
+        apt_clear_entry(set, way, false);
+        STAT_EVENT(0, APT_EVICTIONS);
+    } else {
+        apt_note_prediction_inserted();
+    }
+
+    APT_Entry* entry = apt_entry_at(set, way);
+    memset(entry, 0, sizeof(*entry));
+    ifuse_plru_touch(plru, set, way, num_ways);
+    return entry;
+}
+
+void apt_init(void) {
+    if (apt_initialized) {
+        return;
+    }
+
+    num_sets = IFUSE_APT_SETS;
+    num_ways = IFUSE_APT_WAYS;
+    if (!apt_power_of_two(num_sets) || (num_ways != 4U && num_ways != 8U)) {
+        fprintf(stderr,
+                "APT: requires power-of-two sets and 4 or 8 ways (got %u x %u)\n",
+                num_sets, num_ways);
+        exit(1);
+    }
+
+    entries = (APT_Entry*)calloc((size_t)num_sets * num_ways, sizeof(*entries));
+    plru = (uint8_t*)calloc(num_sets, sizeof(*plru));
+    if (!entries || !plru) {
+        fprintf(stderr, "APT: allocation failed for %u sets x %u ways\n",
+                num_sets, num_ways);
+        exit(1);
+    }
+
+    apt_next_timestamp = 0;
+    apt_live_ld2_prediction_count = 0;
+    apt_live_ld2_prediction_peak = 0;
+    apt_initialized = true;
+    INC_STAT_EVENT(0, APT_CONFIGURED_CAPACITY, num_sets * num_ways);
+}
+
 void apt_observe_live_ld2_predictions(uns proc_id) {
     if (!apt_initialized) {
         return;
@@ -196,55 +232,6 @@ void apt_observe_live_ld2_predictions(uns proc_id) {
                    apt_live_ld2_prediction_count);
 }
 
-/**
- * Invalidates the ACI prediction owned by this APT entry.
- *
- * LD1 creates both an APT entry and an ACI entry. Once LD2 claims the APT entry,
- * ACI validation owns the ACI entry: a correct prediction consumes it, and an
- * ACI failure explicitly invalidates it. APT cleanup only invalidates ACI for
- * predictions that were never claimed by LD2.
- */
-static void apt_invalidate_pending_aci_prediction(const APT_Entry* entry) {
-    if (!entry || !entry->valid || entry->matched) {
-        return;
-    }
-
-    aci_invalidate_prediction(entry->predicted_ld2_effective_addr,
-                              entry->ld1_micro_op_num);
-}
-
-/**
- * Removes node from bucket and releases its allocator slot.
- */
-static void apt_remove_node(unsigned int bucket, APT_Node* prev,
-                            APT_Node* node, bool preserve_exec_pair) {
-    if (!node) {
-        return;
-    }
-
-    apt_invalidate_pending_aci_prediction(&node->entry);
-    if (prev) {
-        prev->next = node->next;
-    } else {
-        apt_table[bucket] = node->next;
-    }
-    apt_note_prediction_removed();
-
-    // An unmatched LOAD1 owns its extra physical register through this APT
-    // entry. A matching LOAD2 must take ownership before removing the entry.
-    // Stale cleanup reaches this path when the predicted LOAD2 never arrives.
-    ifuse_free_ld2_physical_reg(node->entry.ld2_physical_reg_id);
-    if (!preserve_exec_pair) {
-        ifuse_exec_pair_forget_ld1_prediction(
-            node->entry.ld1_micro_op_num);
-    }
-
-    ifuse_ideal_alloc_put(&apt_node_alloc, node);
-}
-
-/**
- * Returns and claims the unmatched entry waiting for ld2_pc_addr.
- */
 APT_Entry* apt_lookup(Addr ld2_pc_addr) {
     if (!apt_initialized) {
         apt_init();
@@ -253,18 +240,17 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr) {
         return NULL;
     }
 
-    APT_Node* node = apt_find_matching_node(ld2_pc_addr);
-    if (!node) {
+    unsigned int set = apt_set_index(ld2_pc_addr);
+    APT_Entry* entry = apt_find_matching_entry(set, ld2_pc_addr);
+    if (!entry) {
         return NULL;
     }
 
-    node->entry.matched = true;
-    return &node->entry;
+    entry->matched = true;
+    ifuse_plru_touch(plru, set, apt_entry_way(entry), num_ways);
+    return entry;
 }
 
-/**
- * Inserts a live LD1 prediction for a future LD2.
- */
 APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
                             Addr ld1_effective_addr,
                             unsigned int ld1_micro_op_num,
@@ -279,52 +265,36 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
         return NULL;
     }
 
-    APT_Node* node = (APT_Node*)ifuse_ideal_alloc_get(&apt_node_alloc);
-    if (!node) {
-        STAT_EVENT(0, APT_INSERT_FAILURES);
-        fprintf(stderr, "APT: alloc failed for ld2_pc=0x%llx\n",
-                (unsigned long long)ld2_pc_addr);
-        return NULL;
-    }
+    unsigned int set = apt_set_index(ld2_pc_addr);
+    APT_Entry* entry = apt_allocate_entry(set);
 
-    node->entry.ld2_pc_addr                      = ld2_pc_addr;
-    node->entry.ld1_pc_addr                      = ld1_pc_addr;
-    node->entry.ld1_effective_addr               = ld1_effective_addr;
-    node->entry.ld1_micro_op_num                 = ld1_micro_op_num;
-    node->entry.ld1_load_num                     = ld1_load_num;
-    node->entry.ld2_physical_reg_id              = 0xFFFF;
-    node->entry.predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
-    node->entry.predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
-    node->entry.valid                            = true;
-    node->entry.matched                          = false;
-    node->entry.timestamp                        = ++apt_next_timestamp;
+    entry->ld2_pc_addr                      = ld2_pc_addr;
+    entry->ld1_pc_addr                      = ld1_pc_addr;
+    entry->ld1_effective_addr               = ld1_effective_addr;
+    entry->ld1_micro_op_num                 = ld1_micro_op_num;
+    entry->ld1_load_num                     = ld1_load_num;
+    entry->ld2_physical_reg_id              = 0xFFFF;
+    entry->predicted_ld2_effective_addr     = predicted_ld2_effective_addr;
+    entry->predicted_ld2_memory_access_size = predicted_ld2_memory_access_size;
+    entry->valid                            = true;
+    entry->matched                          = false;
+    entry->timestamp                        = ++apt_next_timestamp;
 
-    unsigned int bucket = apt_bucket(ld2_pc_addr);
-    node->next = apt_table[bucket];
-    apt_table[bucket] = node;
-    apt_note_prediction_inserted();
-    return &node->entry;
+    STAT_EVENT(0, APT_INSERTS);
+    return entry;
 }
 
-/**
- * Removes the entry for a dynamic LD1 after rename-stage bookkeeping completes.
- */
 void apt_remove_entry_by_ld1_micro_op(Addr ld2_pc_addr,
                                       unsigned int ld1_micro_op_num) {
     if (!apt_initialized || ld2_pc_addr == 0) {
         return;
     }
 
-    unsigned int bucket = apt_bucket(ld2_pc_addr);
-    APT_Node* prev = NULL;
-    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
-        if (node->entry.valid &&
-            node->entry.ld2_pc_addr == ld2_pc_addr &&
-            node->entry.ld1_micro_op_num == ld1_micro_op_num) {
-            apt_remove_node(bucket, prev, node, false);
-            return;
-        }
-        prev = node;
+    unsigned int set = apt_set_index(ld2_pc_addr);
+    APT_Entry* entry =
+        apt_find_entry_by_ld1(set, ld2_pc_addr, ld1_micro_op_num);
+    if (entry) {
+        apt_clear_entry(set, apt_entry_way(entry), false);
     }
 }
 
@@ -333,16 +303,9 @@ void apt_remove_entry_by_ld1_micro_op_any_pc(unsigned int ld1_micro_op_num) {
         return;
     }
 
-    for (unsigned int bucket = 0; bucket < apt_num_buckets; bucket++) {
-        APT_Node* prev = NULL;
-        for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
-            if (node->entry.valid &&
-                node->entry.ld1_micro_op_num == ld1_micro_op_num) {
-                apt_remove_node(bucket, prev, node, false);
-                return;
-            }
-            prev = node;
-        }
+    APT_Entry* entry = apt_find_entry_by_ld1_any_pc(ld1_micro_op_num);
+    if (entry) {
+        apt_clear_entry(apt_entry_set(entry), apt_entry_way(entry), false);
     }
 }
 
@@ -352,26 +315,19 @@ bool apt_reopen_matched_entry(Addr ld2_pc_addr,
         return false;
     }
 
-    unsigned int bucket = apt_bucket(ld2_pc_addr);
-    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
-        if (node->entry.valid &&
-            node->entry.matched &&
-            node->entry.ld2_pc_addr == ld2_pc_addr &&
-            node->entry.ld1_micro_op_num == ld1_micro_op_num) {
-            /*
-             * Fetch-time validation may have consumed or invalidated ACI.
-             * Recreate the prediction so the re-fetched LOAD2 performs the
-             * same validation before it reaches rename.
-             */
-            node->entry.matched = false;
-            aci_insert_prediction(node->entry.predicted_ld2_effective_addr,
-                                  node->entry.ld1_micro_op_num,
-                                  node->entry.ld1_load_num);
-            return true;
-        }
+    unsigned int set = apt_set_index(ld2_pc_addr);
+    APT_Entry* entry =
+        apt_find_matched_entry(set, ld2_pc_addr, ld1_micro_op_num);
+    if (!entry) {
+        return false;
     }
 
-    return false;
+    entry->matched = false;
+    ifuse_plru_touch(plru, set, apt_entry_way(entry), num_ways);
+    aci_insert_prediction(entry->predicted_ld2_effective_addr,
+                          entry->ld1_micro_op_num,
+                          entry->ld1_load_num);
+    return true;
 }
 
 bool apt_set_ld2_physical_reg_id(unsigned int ld1_micro_op_num,
@@ -380,17 +336,13 @@ bool apt_set_ld2_physical_reg_id(unsigned int ld1_micro_op_num,
         return false;
     }
 
-    for (unsigned int bucket = 0; bucket < apt_num_buckets; bucket++) {
-        for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
-            if (node->entry.valid &&
-                node->entry.ld1_micro_op_num == ld1_micro_op_num) {
-                node->entry.ld2_physical_reg_id = ld2_physical_reg_id;
-                return true;
-            }
-        }
+    APT_Entry* entry = apt_find_entry_by_ld1_any_pc(ld1_micro_op_num);
+    if (!entry) {
+        return false;
     }
 
-    return false;
+    entry->ld2_physical_reg_id = ld2_physical_reg_id;
+    return true;
 }
 
 bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
@@ -400,51 +352,32 @@ bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
         return false;
     }
 
-    unsigned int bucket = apt_bucket(ld2_pc_addr);
-    APT_Node* prev = NULL;
-    for (APT_Node* node = apt_table[bucket]; node; node = node->next) {
-        if (node->entry.valid &&
-            node->entry.ld2_pc_addr == ld2_pc_addr &&
-            node->entry.ld1_micro_op_num == ld1_micro_op_num &&
-            node->entry.ld2_physical_reg_id != 0xFFFF) {
-            // LOAD2 now owns the register. Clear APT ownership before removing
-            // the entry so apt_remove_node() does not return it to the free list.
-            *ld2_physical_reg_id = node->entry.ld2_physical_reg_id;
-            node->entry.ld2_physical_reg_id = 0xFFFF;
-            apt_remove_node(bucket, prev, node, true);
-            return true;
-        }
-        prev = node;
+    unsigned int set = apt_set_index(ld2_pc_addr);
+    APT_Entry* entry =
+        apt_find_entry_by_ld1(set, ld2_pc_addr, ld1_micro_op_num);
+    if (!entry || entry->ld2_physical_reg_id == 0xFFFF) {
+        return false;
     }
 
-    return false;
+    *ld2_physical_reg_id = entry->ld2_physical_reg_id;
+    entry->ld2_physical_reg_id = 0xFFFF;
+    apt_clear_entry(set, apt_entry_way(entry), true);
+    return true;
 }
 
-/**
- * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
- */
 void apt_cleanup_stale(uint64_t current_load_num) {
     if (!apt_initialized) {
         return;
     }
 
-    for (unsigned int bucket = 0; bucket < apt_num_buckets; ++bucket) {
-        APT_Node* prev = NULL;
-        APT_Node* node = apt_table[bucket];
-
-        while (node) {
-            APT_Node* next = node->next;
-            // A matched entry remains live until LOAD2 reaches rename and
-            // consumes its speculative register. Unmatched entries expire
-            // after the configured number of subsequently fetched loads.
-            if (node->entry.valid && !node->entry.matched &&
-                current_load_num - node->entry.ld1_load_num >
+    for (unsigned int set = 0; set < num_sets; ++set) {
+        for (unsigned int way = 0; way < num_ways; ++way) {
+            APT_Entry* entry = apt_entry_at(set, way);
+            if (entry->valid && !entry->matched &&
+                current_load_num - entry->ld1_load_num >
                 IFUSE_FUSION_DISTANCE) {
-                apt_remove_node(bucket, prev, node, false);
-            } else {
-                prev = node;
+                apt_clear_entry(set, way, false);
             }
-            node = next;
         }
     }
 }

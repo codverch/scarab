@@ -16,12 +16,11 @@ DEF_PARAM(ifuse_fct_preload_conf, IFUSE_FCT_PRELOAD_CONF, uns, uns, 500, )
 DEF_PARAM(ifuse_fct_runtime_insert_conf, IFUSE_FCT_RUNTIME_INSERT_CONF, uns, uns, 500, )
 
 /* Tunable table capacities. 2^9 = 512 FCT rows.
- * APT/ACI: 256 entries, 64 buckets (~4-way when full). Buckets are for
- * lookup hashing only today (no set-assoc eviction); capacity is max_nodes. */
+ * APT/ACI: set-associative tables with tree-PLRU replacement (default 64x4). */
 DEF_PARAM(ifuse_fct_hash_bits, IFUSE_FCT_HASH_BITS, uns, uns, 9, )
-DEF_PARAM(ifuse_apt_max_nodes, IFUSE_APT_MAX_NODES, uns, uns, 256, )
-DEF_PARAM(ifuse_apt_num_buckets, IFUSE_APT_NUM_BUCKETS, uns, uns, 64, )
-DEF_PARAM(ifuse_aci_max_nodes, IFUSE_ACI_MAX_NODES, uns, uns, 256, )
-DEF_PARAM(ifuse_aci_num_buckets, IFUSE_ACI_NUM_BUCKETS, uns, uns, 64, )
+DEF_PARAM(ifuse_apt_sets, IFUSE_APT_SETS, uns, uns, 64, )
+DEF_PARAM(ifuse_apt_ways, IFUSE_APT_WAYS, uns, uns, 4, )
+DEF_PARAM(ifuse_aci_sets, IFUSE_ACI_SETS, uns, uns, 64, )
+DEF_PARAM(ifuse_aci_ways, IFUSE_ACI_WAYS, uns, uns, 4, )
 DEF_PARAM(ifuse_exec_pair_max_nodes, IFUSE_EXEC_PAIR_MAX_NODES, uns, uns, 524288, )
 DEF_PARAM(ifuse_exec_pair_num_buckets, IFUSE_EXEC_PAIR_NUM_BUCKETS, uns, uns, 4096, )

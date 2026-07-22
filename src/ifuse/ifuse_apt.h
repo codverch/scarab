@@ -33,7 +33,7 @@ typedef struct APT_Entry {
 } APT_Entry;
 
 /**
- * Initializes the ideal Active Pair Table.
+ * Initializes the set-associative Active Pair Table.
  */
 void apt_init(void);
 

@@ -5,11 +5,12 @@
 #define IFUSE_ACI_H
 
 /**
- * Access Check Index (ACI)
- * ========================
+ * Set-associative Access Check Index (ACI)
+ * =======================================
  * The ACI stores predicted LD2 cache blocks for live LD1 predictions. An
  * arriving LD2 checks the ACI using its actual cache block and the LD1
- * micro-op number returned by APT.
+ * micro-op number returned by APT. Each set holds up to IFUSE_ACI_WAYS
+ * entries with tree-PLRU replacement.
  */
 
 #define ACI_CACHE_LINE_BITS 6
@@ -21,7 +22,7 @@ typedef enum {
 } ACI_Result;
 
 /**
- * Initializes the ideal Access Check Index.
+ * Initializes the set-associative Access Check Index.
  */
 void aci_init(void);
 

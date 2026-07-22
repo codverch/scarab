@@ -7,162 +7,146 @@
 
 // Custom headers
 #include "ifuse_aci.h"
-#include "ifuse_ideal_alloc.h"
-#include "ifuse_ideal_limits.h"
+#include "ifuse_plru.h"
 #include "../general.param.h"
 #include "../statistics.h"
 #include "ifuse.param.h"
 
 /**
- * Ideal Access Check Index (ACI)
- * ==============================
- * The ACI is a live validation table for predicted LD2 cache blocks. LD1
- * inserts the cache block it expects LD2 to access; LD2 checks its actual cache
- * block and consumes the prediction owned by the LD1 returned by APT.
+ * Set-associative Access Check Index (ACI)
+ * ========================================
+ * LD1 inserts the predicted LD2 cache block; LD2 validates against the set
+ * selected by hash(cache block) and consumes the matching LD1-owned entry.
  *
- * This ideal baseline models no sets, ways, LRU, or capacity evictions. The
- * software buckets below are only for simulator lookup speed.
+ * On insert into a full set, tree-PLRU selects the victim way to replace.
  */
 
-typedef struct ACI_Node {
+typedef struct ACI_Entry {
     uint64_t predicted_ld2_effective_addr;
     uint64_t timestamp;
     uint64_t ld1_micro_op_num;
     uint64_t ld1_load_num;
-    struct ACI_Node* next;
-} ACI_Node;
+    bool     valid;
+} ACI_Entry;
 
-static ACI_Node** aci_buckets = NULL;
-static unsigned int aci_num_buckets = 0;
-static unsigned int aci_bucket_mask = 0;
-static bool      aci_initialized = false;
-static uint64_t  aci_next_timestamp = 0;
-static IfuseIdealAlloc aci_node_allocator;
+static ACI_Entry* entries = NULL;
+static uint8_t*   plru = NULL;
+static unsigned int num_sets = 0;
+static unsigned int num_ways = 0;
+static bool         aci_initialized = false;
+static uint64_t     aci_next_timestamp = 0;
 
-// Internal helper methods
-static uint64_t aci_get_cacheblock_addr(uint64_t effective_addr);
-static unsigned int aci_get_bucket_idx(uint64_t cacheblock_addr);
-static void aci_remove_node(unsigned int bucket_idx, ACI_Node* prev,
-                            ACI_Node* node);
-static ACI_Node* aci_find_prediction(uint64_t cacheblock_addr,
-                                     uint64_t ld1_micro_op_num,
-                                     ACI_Node** out_prev);
-static void aci_invalidate_cacheblock_prediction(uint64_t cacheblock_addr,
-                                                 uint64_t ld1_micro_op_num);
-
-static bool aci_validate_table_params(void) {
-    if (IFUSE_ACI_NUM_BUCKETS == 0U ||
-        IFUSE_ACI_NUM_BUCKETS > IFUSE_IDEAL_MAX_BUCKETS ||
-        (IFUSE_ACI_NUM_BUCKETS & (IFUSE_ACI_NUM_BUCKETS - 1U)) != 0U) {
-        fprintf(stderr,
-                "ACI: ifuse_aci_num_buckets must be a power of two <= %u\n",
-                IFUSE_IDEAL_MAX_BUCKETS);
-        return false;
-    }
-    if (IFUSE_ACI_MAX_NODES == 0U ||
-        IFUSE_ACI_MAX_NODES > IFUSE_IDEAL_MAX_NODES) {
-        fprintf(stderr,
-                "ACI: ifuse_aci_max_nodes must be in [1, %u]\n",
-                IFUSE_IDEAL_MAX_NODES);
-        return false;
-    }
-    return true;
+static bool aci_power_of_two(unsigned int value) {
+    return value && !(value & (value - 1U));
 }
 
-/**
- * Initializes the ideal Access Check Index.
- */
+static ACI_Entry* aci_entry_at(unsigned int set, unsigned int way) {
+    return &entries[set * num_ways + way];
+}
+
+static uint64_t aci_get_cacheblock_addr(uint64_t effective_addr) {
+    return effective_addr >> ACI_CACHE_LINE_BITS;
+}
+
+static unsigned int aci_set_index(uint64_t cacheblock_addr) {
+    uint64_t h = cacheblock_addr;
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33;
+    return (unsigned int)(h & (num_sets - 1U));
+}
+
+static ACI_Entry* aci_find_prediction(unsigned int set,
+                                      uint64_t cacheblock_addr,
+                                      uint64_t ld1_micro_op_num) {
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        ACI_Entry* entry = aci_entry_at(set, way);
+        if (entry->valid &&
+            aci_get_cacheblock_addr(entry->predicted_ld2_effective_addr) ==
+                cacheblock_addr &&
+            entry->ld1_micro_op_num == ld1_micro_op_num) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static ACI_Entry* aci_find_oldest_same_block(unsigned int set,
+                                             uint64_t cacheblock_addr) {
+    ACI_Entry* oldest = NULL;
+
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        ACI_Entry* entry = aci_entry_at(set, way);
+        if (!entry->valid ||
+            aci_get_cacheblock_addr(entry->predicted_ld2_effective_addr) !=
+                cacheblock_addr) {
+            continue;
+        }
+        if (!oldest || entry->timestamp < oldest->timestamp) {
+            oldest = entry;
+        }
+    }
+    return oldest;
+}
+
+static void aci_clear_entry(unsigned int set, unsigned int way) {
+    ACI_Entry* entry = aci_entry_at(set, way);
+    if (!entry->valid) {
+        return;
+    }
+    memset(entry, 0, sizeof(*entry));
+}
+
+static ACI_Entry* aci_allocate_entry(unsigned int set) {
+    unsigned int invalid_way = num_ways;
+
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        if (!aci_entry_at(set, way)->valid) {
+            invalid_way = way;
+            break;
+        }
+    }
+
+    unsigned int way = invalid_way;
+    if (way == num_ways) {
+        way = ifuse_plru_victim(plru, set, num_ways);
+        aci_clear_entry(set, way);
+        STAT_EVENT(0, ACI_EVICTIONS);
+    }
+
+    ACI_Entry* entry = aci_entry_at(set, way);
+    memset(entry, 0, sizeof(*entry));
+    entry->valid = true;
+    ifuse_plru_touch(plru, set, way, num_ways);
+    return entry;
+}
+
 void aci_init(void) {
     if (aci_initialized) {
         return;
     }
 
-    if (!aci_validate_table_params()) {
+    num_sets = IFUSE_ACI_SETS;
+    num_ways = IFUSE_ACI_WAYS;
+    if (!aci_power_of_two(num_sets) || (num_ways != 4U && num_ways != 8U)) {
+        fprintf(stderr,
+                "ACI: requires power-of-two sets and 4 or 8 ways (got %u x %u)\n",
+                num_sets, num_ways);
         exit(1);
     }
 
-    aci_num_buckets = IFUSE_ACI_NUM_BUCKETS;
-    aci_bucket_mask = aci_num_buckets - 1U;
-    aci_buckets = (ACI_Node**)calloc(aci_num_buckets, sizeof(ACI_Node*));
-    if (!aci_buckets) {
-        fprintf(stderr, "ACI: calloc failed for %u buckets\n", aci_num_buckets);
+    entries = (ACI_Entry*)calloc((size_t)num_sets * num_ways, sizeof(*entries));
+    plru = (uint8_t*)calloc(num_sets, sizeof(*plru));
+    if (!entries || !plru) {
+        fprintf(stderr, "ACI: allocation failed for %u sets x %u ways\n",
+                num_sets, num_ways);
         exit(1);
     }
 
-    memset(aci_buckets, 0, aci_num_buckets * sizeof(ACI_Node*));
     aci_next_timestamp = 0;
-    if (!ifuse_ideal_alloc_init_fixed(&aci_node_allocator, sizeof(ACI_Node),
-                                      IFUSE_ACI_MAX_NODES)) {
-        fprintf(stderr, "ACI: fixed pool alloc failed (%u nodes)\n",
-                IFUSE_ACI_MAX_NODES);
-        exit(1);
-    }
     aci_initialized = true;
 }
 
-/**
- * Returns the cache-block address containing effective_addr.
- */
-static uint64_t aci_get_cacheblock_addr(uint64_t effective_addr) {
-    return effective_addr >> ACI_CACHE_LINE_BITS;
-}
-
-/**
- * Returns the software bucket for cacheblock_addr.
- */
-static unsigned int aci_get_bucket_idx(uint64_t cacheblock_addr) {
-    uint64_t h = cacheblock_addr;
-    h ^= h >> 33;
-    h *= 0xff51afd7ed558ccdULL;
-    h ^= h >> 33;
-    return (unsigned int)(h & aci_bucket_mask);
-}
-
-/**
- * Removes node from bucket_idx and releases its allocator slot.
- */
-static void aci_remove_node(unsigned int bucket_idx, ACI_Node* prev,
-                            ACI_Node* node) {
-    if (prev) {
-        prev->next = node->next;
-    } else {
-        aci_buckets[bucket_idx] = node->next;
-    }
-    ifuse_ideal_alloc_put(&aci_node_allocator, node);
-}
-
-/**
- * Returns the prediction for cacheblock_addr and ld1_micro_op_num.
- *
- * @param out_prev Optional output for the predecessor of the returned node.
- */
-static ACI_Node* aci_find_prediction(uint64_t cacheblock_addr,
-                                     uint64_t ld1_micro_op_num,
-                                     ACI_Node** out_prev) {
-    unsigned int bucket_idx = aci_get_bucket_idx(cacheblock_addr);
-    ACI_Node*    prev = NULL;
-
-    for (ACI_Node* node = aci_buckets[bucket_idx]; node; node = node->next) {
-        if (aci_get_cacheblock_addr(node->predicted_ld2_effective_addr) ==
-                cacheblock_addr &&
-            node->ld1_micro_op_num == ld1_micro_op_num) {
-            if (out_prev) {
-                *out_prev = prev;
-            }
-            return node;
-        }
-        prev = node;
-    }
-
-    if (out_prev) {
-        *out_prev = NULL;
-    }
-    return NULL;
-}
-
-/**
- * Inserts the cache block predicted for a live LD1.
- */
 void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
                            uint64_t ld1_micro_op_num,
                            uint64_t ld1_load_num) {
@@ -172,53 +156,35 @@ void aci_insert_prediction(uint64_t predicted_ld2_effective_addr,
 
     uint64_t predicted_ld2_cacheblock_addr =
         aci_get_cacheblock_addr(predicted_ld2_effective_addr);
-    unsigned int bucket_idx = aci_get_bucket_idx(predicted_ld2_cacheblock_addr);
-    ACI_Node* replayed_prediction = NULL;
-    ACI_Node* oldest_same_block_prediction = NULL;
+    unsigned int set = aci_set_index(predicted_ld2_cacheblock_addr);
+    ACI_Entry* replayed =
+        aci_find_prediction(set, predicted_ld2_cacheblock_addr,
+                            ld1_micro_op_num);
+    ACI_Entry* oldest_same_block =
+        aci_find_oldest_same_block(set, predicted_ld2_cacheblock_addr);
 
-    for (ACI_Node* node = aci_buckets[bucket_idx]; node; node = node->next) {
-        if (aci_get_cacheblock_addr(node->predicted_ld2_effective_addr) !=
-            predicted_ld2_cacheblock_addr) {
-            continue;
-        }
-        if (node->ld1_micro_op_num == ld1_micro_op_num) {
-            replayed_prediction = node;
-        }
-        if (!oldest_same_block_prediction ||
-            node->timestamp < oldest_same_block_prediction->timestamp) {
-            oldest_same_block_prediction = node;
-        }
-    }
-
-    if (replayed_prediction) {
-        replayed_prediction->ld1_load_num = ld1_load_num;
-        replayed_prediction->timestamp = ++aci_next_timestamp;
+    if (replayed) {
+        replayed->ld1_load_num = ld1_load_num;
+        replayed->timestamp = ++aci_next_timestamp;
+        ifuse_plru_touch(plru, set,
+                         (unsigned int)(replayed - entries) % num_ways,
+                         num_ways);
         STAT_EVENT(0, ACI_REPLAYED_INSERTS);
         return;
     }
 
-    ACI_Node* node = (ACI_Node*)ifuse_ideal_alloc_get(&aci_node_allocator);
-    if (!node) {
-        STAT_EVENT(0, ACI_BACKING_ALLOC_FAILURES);
-        return;
-    }
-
-    node->predicted_ld2_effective_addr = predicted_ld2_effective_addr;
-    node->ld1_micro_op_num             = ld1_micro_op_num;
-    node->ld1_load_num                 = ld1_load_num;
-    node->timestamp                    = ++aci_next_timestamp;
-    node->next                         = aci_buckets[bucket_idx];
-    aci_buckets[bucket_idx]            = node;
+    ACI_Entry* entry = aci_allocate_entry(set);
+    entry->predicted_ld2_effective_addr = predicted_ld2_effective_addr;
+    entry->ld1_micro_op_num             = ld1_micro_op_num;
+    entry->ld1_load_num                 = ld1_load_num;
+    entry->timestamp                    = ++aci_next_timestamp;
 
     STAT_EVENT(0, ACI_PREDICTION_INSERTS);
-    if (oldest_same_block_prediction) {
+    if (oldest_same_block) {
         STAT_EVENT(0, ACI_SAME_CACHEBLOCK_INSERTS);
     }
 }
 
-/**
- * Checks actual_ld2_effective_addr and consumes the matching LD1 prediction.
- */
 ACI_Result aci_check_and_consume_prediction(
     uint64_t actual_ld2_effective_addr,
     uint64_t predicted_ld2_effective_addr,
@@ -229,10 +195,10 @@ ACI_Result aci_check_and_consume_prediction(
 
     uint64_t actual_ld2_cacheblock_addr =
         aci_get_cacheblock_addr(actual_ld2_effective_addr);
-    ACI_Node* prev = NULL;
-    ACI_Node* node =
-        aci_find_prediction(actual_ld2_cacheblock_addr, ld1_micro_op_num, &prev);
-    if (!node) {
+    unsigned int set = aci_set_index(actual_ld2_cacheblock_addr);
+    ACI_Entry* entry =
+        aci_find_prediction(set, actual_ld2_cacheblock_addr, ld1_micro_op_num);
+    if (!entry) {
         STAT_EVENT(0, ACI_LOOKUP_MISSES);
         if (predicted_ld2_effective_addr != 0 &&
             actual_ld2_cacheblock_addr !=
@@ -242,49 +208,42 @@ ACI_Result aci_check_and_consume_prediction(
         return ACI_LOOKUP_NO_MATCHING_ENTRY;
     }
 
-    aci_remove_node(aci_get_bucket_idx(actual_ld2_cacheblock_addr), prev, node);
+    unsigned int way = (unsigned int)(entry - entries) % num_ways;
+    aci_clear_entry(set, way);
     STAT_EVENT(0, ACI_LOOKUP_HITS);
     return ACI_LOOKUP_MATCH;
 }
 
-/**
- * Invalidates predictions for cacheblock_addr.
- */
 static void aci_invalidate_cacheblock_prediction(uint64_t cacheblock_addr,
                                                  uint64_t ld1_micro_op_num) {
     if (!aci_initialized) {
         return;
     }
 
-    unsigned int bucket_idx = aci_get_bucket_idx(cacheblock_addr);
-    ACI_Node* prev = NULL;
-    ACI_Node* node = aci_buckets[bucket_idx];
+    unsigned int set = aci_set_index(cacheblock_addr);
+    for (unsigned int way = 0; way < num_ways; ++way) {
+        ACI_Entry* entry = aci_entry_at(set, way);
+        if (!entry->valid) {
+            continue;
+        }
 
-    while (node) {
-        ACI_Node* next = node->next;
         bool same_cacheblock =
-            aci_get_cacheblock_addr(node->predicted_ld2_effective_addr) ==
+            aci_get_cacheblock_addr(entry->predicted_ld2_effective_addr) ==
             cacheblock_addr;
         bool same_load1 =
             ld1_micro_op_num == 0 ||
-            node->ld1_micro_op_num == ld1_micro_op_num;
+            entry->ld1_micro_op_num == ld1_micro_op_num;
 
         if (same_cacheblock && same_load1) {
-            aci_remove_node(bucket_idx, prev, node);
+            aci_clear_entry(set, way);
             STAT_EVENT(0, ACI_PREDICTION_INVALIDATIONS);
             if (ld1_micro_op_num != 0) {
                 return;
             }
-        } else {
-            prev = node;
         }
-        node = next;
     }
 }
 
-/**
- * Invalidates the prediction for predicted_ld2_effective_addr.
- */
 void aci_invalidate_prediction(uint64_t predicted_ld2_effective_addr,
                                uint64_t ld1_micro_op_num) {
     aci_invalidate_cacheblock_prediction(
@@ -292,28 +251,20 @@ void aci_invalidate_prediction(uint64_t predicted_ld2_effective_addr,
         ld1_micro_op_num);
 }
 
-/**
- * Removes predictions whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.
- */
 void aci_cleanup_stale(uint64_t current_load_num) {
     if (!aci_initialized) {
         return;
     }
 
-    for (unsigned int bucket_idx = 0; bucket_idx < aci_num_buckets; ++bucket_idx) {
-        ACI_Node* prev = NULL;
-        ACI_Node* node = aci_buckets[bucket_idx];
-
-        while (node) {
-            ACI_Node* next = node->next;
-            if (current_load_num - node->ld1_load_num >
+    for (unsigned int set = 0; set < num_sets; ++set) {
+        for (unsigned int way = 0; way < num_ways; ++way) {
+            ACI_Entry* entry = aci_entry_at(set, way);
+            if (entry->valid &&
+                current_load_num - entry->ld1_load_num >
                 IFUSE_FUSION_DISTANCE) {
-                aci_remove_node(bucket_idx, prev, node);
+                aci_clear_entry(set, way);
                 STAT_EVENT(0, ACI_STALE_PREDICTION_REMOVALS);
-            } else {
-                prev = node;
             }
-            node = next;
         }
     }
 }
