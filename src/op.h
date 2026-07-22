@@ -257,6 +257,8 @@ struct Op_struct {
   Flag                  ifuse_ld2_prediction_failed;
   Flag                  ifuse_flush_op;
   Flag                  ifuse_recovery_squashed;
+  /* Dynamic on-path load distance LD2 - LD1 at fetch (0 if not LOAD2). */
+  uint64_t              ifuse_pair_distance;
   // }}}
 
   FT* parent_FT;

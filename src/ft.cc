@@ -182,6 +182,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->ifuse_ld2_agu_completed = FALSE;
     op->ifuse_ld2_prediction_failed = FALSE;
     op->ifuse_flush_op = FALSE;
+    op->ifuse_pair_distance = 0;
 
     // IFuse load classification path.
     //
@@ -238,6 +239,8 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
         op->ifuse_load_role = LOAD2;
         op->ifuse_partner_op_num = waiting_pair->ld1_micro_op_num;
         op->ifuse_partner_ld1_pc = waiting_pair->ld1_pc_addr;
+        op->ifuse_pair_distance =
+            current_load_num - waiting_pair->ld1_load_num;
 
         // ACI verifies that LD2 accessed the cache block predicted by LD1.
         // The matching ACI entry is consumed when validation succeeds.

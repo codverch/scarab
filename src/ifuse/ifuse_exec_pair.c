@@ -180,6 +180,30 @@ static void ifuse_exec_pair_remove_ld2_if_current(const Op* ld2_op) {
     }
 }
 
+static void ifuse_exec_pair_record_prefetch_lead(const Op* ld2_op) {
+    Counter ld1_wake = ld2_op->wake_cycle;
+    Counter ld2_agu = ld2_op->dcache_cycle;
+    Counter prefetch_lead = 0;
+
+    STAT_EVENT(ld2_op->proc_id, IFUSE_PREFETCH_LEAD_OPPORTUNITIES);
+
+    if (ld1_wake != MAX_CTR && ld2_agu != MAX_CTR && ld2_agu > ld1_wake) {
+        prefetch_lead = ld2_agu - ld1_wake;
+        STAT_EVENT(ld2_op->proc_id, IFUSE_PREFETCH_LEAD_EVENTS);
+        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_PREFETCH_LEAD_CYCLES,
+                       prefetch_lead);
+        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_AVG_PREFETCH_LEAD,
+                       prefetch_lead);
+    }
+
+    if (ld2_op->ifuse_pair_distance > 0) {
+        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_PAIR_DISTANCE_TOTAL,
+                       ld2_op->ifuse_pair_distance);
+        INC_STAT_EVENT(ld2_op->proc_id, IFUSE_AVG_PAIR_DISTANCE,
+                       ld2_op->ifuse_pair_distance);
+    }
+}
+
 static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
     Counter serve_done;
 
@@ -204,6 +228,8 @@ static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
     } else {
         STAT_EVENT(ld2_op->proc_id, IFUSE_FULL_MITIGATED);
     }
+
+    ifuse_exec_pair_record_prefetch_lead(ld2_op);
 
     ld2_op->done_cycle = serve_done;
     ld2_op->state = OS_DONE;

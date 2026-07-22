@@ -108,6 +108,17 @@ DEF_STAT(IFUSE_PARTIAL_MITIGATED, COUNT, NO_RATIO)
 /* Sum of (LD1_wake - AGU) when LD1 was late; 0 for full mitigation. */
 DEF_STAT(IFUSE_REMAINING_WAIT_AFTER_AGU, COUNT, NO_RATIO)
 
+/* Prefetch timeliness: how early LD1 data was ready before LD2 reached AGU.
+ * prefetch_lead = max(0, LD2_AGU_cycle - LD1_wake_cycle) per fused LD2.
+ * Measures LD1 finishing ahead of when LD2 needs its fused result. */
+DEF_STAT(IFUSE_PREFETCH_LEAD_OPPORTUNITIES, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_PREFETCH_LEAD_EVENTS, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_PREFETCH_LEAD_CYCLES, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_AVG_PREFETCH_LEAD, RATIO, IFUSE_PREFETCH_LEAD_OPPORTUNITIES)
+/* Dynamic on-path load distance (LD2_load_num - LD1_load_num) at fusion. */
+DEF_STAT(IFUSE_PAIR_DISTANCE_TOTAL, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_AVG_PAIR_DISTANCE, RATIO, IFUSE_PREFETCH_LEAD_OPPORTUNITIES)
+
 /* --- Other load latency at retire (on-path only) --- */
 /* Sum over loads of (exec_cycle - fetch_cycle). */
 DEF_STAT(IFUSE_LD_EXEC_MINUS_FETCH, COUNT, NO_RATIO)
