@@ -391,6 +391,12 @@ void update_dcache_stage(Stage_Data* src_sd) {
     op->dcache_cycle = cycle_count;
     dc->idle_cycle = MAX2(dc->idle_cycle, cycle_count + DCACHE_CYCLES);
 
+    /* Count every demand access issued to the L1-D (hit or miss); gate on path. */
+    if (!op->off_path)
+      STAT_EVENT(op->proc_id, DCACHE_ACCESS_ONPATH);
+    else
+      STAT_EVENT(op->proc_id, DCACHE_ACCESS_OFFPATH);
+
     if (op->inst_info->table_info.mem_type == MEM_ST)
       STAT_EVENT(op->proc_id, POWER_DCACHE_WRITE_ACCESS);
     else
