@@ -1,10 +1,10 @@
 --mode full
 --model cmp
 --frontend memtrace
---inst_limit 91000000
+--inst_limit 51971280
 --sim_limit none
 --memtrace_roi_begin 1
---memtrace_roi_end 91000000
+--memtrace_roi_end 51971280
 --full_warmup 0
 --use_fetched_count 1
 --dump_params 1
@@ -12,11 +12,11 @@
 --dump_trace 0
 --helios_do_fusion 1
 --helios_enable_flushes 1
---helios_confidence_threshold 150
---helios_confidence_increment 10
+--helios_confidence_threshold 10000
+--helios_confidence_increment 1
 --helios_confidence_decrement 10
 --helios_fusion_window 64
---helios_fuse_stores 1
+--helios_fuse_stores 0
 --helios_fused_wait_tail_srcs 1
 --helios_extended_commit_group 1
 --mlc_present 1
@@ -169,7 +169,7 @@ Parameter status at compile time and values supplied on the command line:
 SIM_MODE                                 0                               full
 SIM_MODEL                                0                               cmp
 FRONTEND                                 FE_PIN_EXEC_DRIVEN              memtrace
-INST_LIMIT                               NULL                            91000000
+INST_LIMIT                               NULL                            51971280
 SIM_LIMIT                                "none"                          none
 FORWARD_PROGRESS_LIMIT                   100000000                       
 FORWARD_PROGRESS_INTERVAL                10000                           
@@ -177,7 +177,7 @@ FAST_FORWARD                             0
 FAST_FORWARD_TRACE_INS                   0                               
 FAST_FORWARD_UNTIL_ADDR                  0                               
 MEMTRACE_ROI_BEGIN                       0                               1
-MEMTRACE_ROI_END                         0                               91000000
+MEMTRACE_ROI_END                         0                               51971280
 FULL_WARMUP                              0                               0
 WARMUP                                   0                               
 HEARTBEAT_INTERVAL                       1000000                         
@@ -217,11 +217,11 @@ TRACE_FOOTPRINT_OUTPUT                   ""
 SEGMENT_INSTR_COUNT                      0                               
 HELIOS_DO_FUSION                         FALSE                           1
 HELIOS_ENABLE_FLUSHES                    TRUE                            1
-HELIOS_CONFIDENCE_THRESHOLD              150                             150
-HELIOS_CONFIDENCE_INCREMENT              10                              10
+HELIOS_CONFIDENCE_THRESHOLD              150                             10000
+HELIOS_CONFIDENCE_INCREMENT              10                              1
 HELIOS_CONFIDENCE_DECREMENT              10                              10
 HELIOS_FUSION_WINDOW                     64                              64
-HELIOS_FUSE_STORES                       TRUE                            1
+HELIOS_FUSE_STORES                       TRUE                            0
 HELIOS_FUSED_WAIT_TAIL_SRCS              TRUE                            1
 HELIOS_EXTENDED_COMMIT_GROUP             TRUE                            1
 ENABLE_SWPRF                             FALSE                           
