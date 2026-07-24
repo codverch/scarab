@@ -273,6 +273,19 @@ void rfp_reset_confidence_on_mispredict(uns8 proc_id, Addr pc) {
   STAT_EVENT(proc_id, RFP_CONF_RESET_ON_MISPRED);
 }
 
+/* ISCA'22 §3.2.1 — older in-flight stores can supply the prefetched data; if any
+   overlap the predicted load footprint, wait (LSQ scan + store-forwarding buffer). */
+Flag rfp_blocked_by_older_stores(uns8 proc_id, Counter load_op_num, Addr pred_addr, uns load_size) {
+  if (!RFP_ON || !pred_addr || !load_size)
+    return FALSE;
+
+  if (lsq_older_store_overlaps(proc_id, load_op_num, pred_addr, load_size))
+    return TRUE;
+  if (scan_stores(pred_addr, load_size))
+    return TRUE;
+  return FALSE;
+}
+
 /* Per-op RFP fetch-time reset (icache). Ved: F5 — the PT lookup/prediction itself moved to rename
    (rfp_prefetch_launch) so its lookahead reads the same inflight it increments; only the field resets
    remain here at fetch (ISCA'22 §3.4). */

@@ -22,6 +22,7 @@ DEF_STAT(RFP_PAT_ALLOC, COUNT, NO_RATIO)                         /* New PAT entr
 DEF_STAT(RFP_PAT_EVICT, COUNT, NO_RATIO)                         /* PAT set full; evicted an entry on insert */
 DEF_STAT(RFP_CONF_INC, COUNT, NO_RATIO)                          /* PT confidence counter was increased */
 DEF_STAT(RFP_CONF_RESET_ON_MISPRED, COUNT, NO_RATIO)             /* PT confidence cleared on execute address mismatch */
+DEF_STAT(RFP_STORE_BUFFER_DEFER, COUNT, NO_RATIO)              /* RFP L1 service deferred: older store overlaps predicted address */
 DEF_STAT(RFP_PREFETCH_INJECTED, COUNT, NO_RATIO)                 /* RFP request was put into the RFP FIFO */
 DEF_STAT(RFP_ISSUED, RATIO, RFP_ALL_LOADS)                       /* Same as PREFETCH_INJECTED, shown as fraction of all loads */
 DEF_STAT(RFP_ELIGIBLE_NOT_ISSUED, COUNT, NO_RATIO)               /* Predicted, but RFP was not launched (no dest reg or FIFO full) */

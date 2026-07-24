@@ -251,6 +251,7 @@ class LSQ_Unit {
   Flag rfp_enqueue(Op* owner_op, Addr predicted_line_addr, uns16 prfid, Counter launch_cycle);
   Flag rfp_peek(Lsq_Rfp_Req* out_req) const;
   void rfp_pop();
+  Flag older_store_overlaps(Counter younger_op_num, Addr addr, uns size) const;
 };
 
 LSQ_Unit::LSQ_Unit(uns8 proc_id) {
@@ -342,6 +343,40 @@ Flag LSQ_Unit::rfp_peek(Lsq_Rfp_Req* out_req) const {
 
 void LSQ_Unit::rfp_pop() {
   load_queue.pop_rfp();
+}
+
+/* ISCA'22 §3.2.1 — scan older in-flight stores (youngest-first) for address overlap. */
+Flag LSQ_Unit::older_store_overlaps(Counter younger_op_num, Addr addr, uns size) const {
+  uns st_size;
+  Addr st_va;
+
+  if (!addr || !size)
+    return FALSE;
+
+  for (const auto& entry : store_queue.get_entries()) {
+    Op* st_op;
+
+    if (entry.op_num >= younger_op_num)
+      continue;
+
+    st_op = entry.op;
+    if (!st_op || st_op->off_path)
+      continue;
+
+    st_va = st_op->oracle_info.va;
+    st_size = st_op->oracle_info.mem_size;
+    if (!st_size)
+      st_size = st_op->inst_info->table_info.mem_size;
+
+    /* Store address not yet known — MD would make RFP wait (§3.2.1). */
+    if (!st_va)
+      return TRUE;
+
+    if (BYTE_OVERLAP(st_va, st_size, addr, size))
+      return TRUE;
+  }
+
+  return FALSE;
 }
 
 /**************************************************************************************/
@@ -446,6 +481,12 @@ void lsq_rfp_pop(uns8 proc_id) {
   if (!LSQ_ENABLE || proc_id >= per_core_lsq_unit.size())
     return;
   per_core_lsq_unit[proc_id].rfp_pop();
+}
+
+Flag lsq_older_store_overlaps(uns8 proc_id, Counter younger_op_num, Addr addr, uns size) {
+  if (!LSQ_ENABLE || proc_id >= per_core_lsq_unit.size())
+    return FALSE;
+  return per_core_lsq_unit[proc_id].older_store_overlaps(younger_op_num, addr, size);
 }
 
 /**************************************************************************************/

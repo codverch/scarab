@@ -258,9 +258,8 @@ void update_dcache_stage(Stage_Data* src_sd) {
       /* Ved: M3 — RFP prefetches the load's VALUE into the register, so faithfulness demands an EXACT
          virtual-address match (paper §3.5: the predicted address "is later checked against the load
          address"), not just a same-cache-line match. A correct-line/wrong-offset prediction would have
-         brought the wrong value and must count as a misprediction. (Store-to-load ordering is left to
-         Scarab's existing oracle + memory-dependence mechanism, exactly as for normal L1-hit demand
-         loads, which likewise do not re-scan the store buffer on a hit.) */
+         brought the wrong value and must count as a misprediction. Store-to-load ordering for RFP is
+         enforced at launch and L1 service via §3.2.1 store-buffer scan (rfp_blocked_by_older_stores). */
       rfp_exact_match = (op->rfp_predicted_addr == op->oracle_info.va);
       rfp_valid = rfp_prf_ready(op->proc_id, op->rfp_prfid, op->oracle_info.va, op->rfp_launch_cycle,
                                 op->unique_num, &rfp_ready_cycle);
@@ -700,6 +699,18 @@ static inline Flag dcache_process_lsq_rfp_queue(void) {
         rfp_prf_ready(proc_id, req.prfid, owner->oracle_info.va, req.launch_cycle, req.owner_unique, NULL)) {
       lsq_rfp_pop(proc_id);
       continue;
+    }
+
+    {
+      uns load_size = owner->oracle_info.mem_size;
+      if (!load_size)
+        load_size = owner->inst_info->table_info.mem_size;
+
+      /* §3.2.1: defer L1 lookup until older overlapping stores complete. */
+      if (rfp_blocked_by_older_stores(proc_id, req.owner_op_num, owner->rfp_predicted_addr, load_size)) {
+        STAT_EVENT(proc_id, RFP_STORE_BUFFER_DEFER);
+        return FALSE;
+      }
     }
 
     /* Check if the RFP prefetch can win an L1 read port */

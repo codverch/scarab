@@ -65,5 +65,6 @@ void rfp_prefetch_launch(Op* op);
 void rfp_train_retire(Op* op);
 void rfp_track_squash(Op* op);
 void rfp_reset_confidence_on_mispredict(uns8 proc_id, Addr pc);
+Flag rfp_blocked_by_older_stores(uns8 proc_id, Counter load_op_num, Addr pred_addr, uns load_size);
 
 #endif
