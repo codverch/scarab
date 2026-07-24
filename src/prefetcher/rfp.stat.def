@@ -17,6 +17,9 @@ DEF_STAT(RFP_PT_ALLOC, COUNT, NO_RATIO)                          /* New PT entry
 DEF_STAT(RFP_PT_HIT, COUNT, NO_RATIO)                            /* Load PC already had a PT entry */
 DEF_STAT(RFP_STRIDE_CONFIRM, COUNT, NO_RATIO)                    /* Observed stride matched the PT entry */
 DEF_STAT(RFP_STRIDE_CHANGE, COUNT, NO_RATIO)                     /* Observed stride differed from the PT entry */
+DEF_STAT(RFP_STRIDE_OUT_OF_RANGE, COUNT, NO_RATIO)               /* Observed byte stride outside 5-bit PT field */
+DEF_STAT(RFP_PAT_ALLOC, COUNT, NO_RATIO)                         /* New PAT entry allocated for a page frame */
+DEF_STAT(RFP_PAT_EVICT, COUNT, NO_RATIO)                         /* PAT set full; evicted an entry on insert */
 DEF_STAT(RFP_CONF_INC, COUNT, NO_RATIO)                          /* PT confidence counter was increased */
 DEF_STAT(RFP_PREFETCH_INJECTED, COUNT, NO_RATIO)                 /* RFP request was put into the RFP FIFO */
 DEF_STAT(RFP_ISSUED, RATIO, RFP_ALL_LOADS)                       /* Same as PREFETCH_INJECTED, shown as fraction of all loads */

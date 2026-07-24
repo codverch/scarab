@@ -20,7 +20,85 @@
 #include "model.h"
 
 static RFP_PT_Entry rfp_pt[RFP_NUM_SETS][RFP_NUM_WAYS];
+static RFP_Pat_Entry rfp_pat[RFP_PAT_NUM_SETS][RFP_PAT_NUM_WAYS];
 #define RFP_INFLIGHT_MAX 127
+
+static inline Flag rfp_stride_in_range(int64 stride) {
+  return stride >= RFP_STRIDE_MIN && stride <= RFP_STRIDE_MAX;
+}
+
+static inline Addr rfp_va_pfn(Addr va) {
+  return (va >> RFP_PAGE_OFFSET_BITS) & RFP_PFN_MASK;
+}
+
+static inline uns16 rfp_va_page_offset(Addr va) {
+  return (uns16)(va & RFP_PAGE_OFFSET_MASK);
+}
+
+static inline uns rfp_pat_set(Addr pfn) {
+  return (uns)(pfn & (RFP_PAT_NUM_SETS - 1));
+}
+
+static inline uns8 rfp_pat_ptr_encode(uns set, uns way) {
+  ASSERT(0, set < RFP_PAT_NUM_SETS && way < RFP_PAT_NUM_WAYS);
+  return (uns8)(set * RFP_PAT_NUM_WAYS + way);
+}
+
+static inline void rfp_pat_ptr_decode(uns8 pat_ptr, uns* set, uns* way) {
+  ASSERT(0, pat_ptr < RFP_PAT_NUM_ENTRIES);
+  *set = pat_ptr / RFP_PAT_NUM_WAYS;
+  *way = pat_ptr % RFP_PAT_NUM_WAYS;
+}
+
+static inline Addr rfp_entry_va(const RFP_PT_Entry* entry) {
+  uns set;
+  uns way;
+
+  rfp_pat_ptr_decode(entry->pat_ptr, &set, &way);
+  ASSERT(0, rfp_pat[set][way].valid);
+  return (rfp_pat[set][way].pfn << RFP_PAGE_OFFSET_BITS) | entry->page_offset;
+}
+
+static int rfp_pat_lookup_ptr(Addr pfn) {
+  uns set = rfp_pat_set(pfn);
+
+  for (uns way = 0; way < RFP_PAT_NUM_WAYS; way++) {
+    if (rfp_pat[set][way].valid && rfp_pat[set][way].pfn == pfn)
+      return (int)rfp_pat_ptr_encode(set, way);
+  }
+  return -1;
+}
+
+static int rfp_pat_alloc_ptr(uns8 proc_id, Addr pfn) {
+  int ptr = rfp_pat_lookup_ptr(pfn);
+  if (ptr >= 0)
+    return ptr;
+
+  uns set = rfp_pat_set(pfn);
+
+  for (uns way = 0; way < RFP_PAT_NUM_WAYS; way++) {
+    if (!rfp_pat[set][way].valid) {
+      rfp_pat[set][way].valid = TRUE;
+      rfp_pat[set][way].pfn = pfn;
+      STAT_EVENT(proc_id, RFP_PAT_ALLOC);
+      return (int)rfp_pat_ptr_encode(set, way);
+    }
+  }
+
+  /* Set is full — evict way 0 (hardware would use replacement policy). */
+  STAT_EVENT(proc_id, RFP_PAT_EVICT);
+  rfp_pat[set][0].valid = TRUE;
+  rfp_pat[set][0].pfn = pfn;
+  return (int)rfp_pat_ptr_encode(set, 0);
+}
+
+static void rfp_entry_set_va(uns8 proc_id, RFP_PT_Entry* entry, Addr va) {
+  int pat_ptr = rfp_pat_alloc_ptr(proc_id, rfp_va_pfn(va));
+
+  ASSERT(proc_id, pat_ptr >= 0 && pat_ptr < RFP_PAT_NUM_ENTRIES);
+  entry->pat_ptr = (uns8)pat_ptr;
+  entry->page_offset = rfp_va_page_offset(va);
+}
 
 /* Initialize the RFP table */
 void rfp_init(void) {
@@ -31,6 +109,7 @@ void rfp_init(void) {
     rfp_prf_init();
 
   memset(rfp_pt, 0, sizeof(rfp_pt));
+  memset(rfp_pat, 0, sizeof(rfp_pat));
 }
 
 /* Calculate the set index from the PC */
@@ -114,7 +193,7 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
     /* No entry found, allocate a new entry */
     way = rfp_victim(set);
     rfp_pt[set][way].tag = tag;
-    rfp_pt[set][way].last_addr = va;
+    rfp_entry_set_va(proc_id, &rfp_pt[set][way], va);
     rfp_pt[set][way].stride = 0;
     rfp_pt[set][way].confidence = 0;
     rfp_pt[set][way].utility = 0;
@@ -127,7 +206,16 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   STAT_EVENT(proc_id, RFP_PT_HIT);
 
   RFP_PT_Entry *entry = &rfp_pt[set][way];
-  int64 observed_stride = (int64)((int64)va - (int64)entry->last_addr);
+  int64 observed_stride = (int64)((int64)va - (int64)rfp_entry_va(entry));
+
+  if (!rfp_stride_in_range(observed_stride)) {
+    /* Table 1 stores only a 5-bit signed byte stride. */
+    STAT_EVENT(proc_id, RFP_STRIDE_OUT_OF_RANGE);
+    entry->confidence = 0;
+    entry->utility = 0;
+    rfp_entry_set_va(proc_id, entry, va);
+    return;
+  }
 
   if (observed_stride == entry->stride) {
     STAT_EVENT(proc_id, RFP_STRIDE_CONFIRM);
@@ -144,12 +232,12 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   } else {
     /* Stride changed, reset confidence and utility */
     STAT_EVENT(proc_id, RFP_STRIDE_CHANGE);
-    entry->stride = observed_stride;
+    entry->stride = (int8)observed_stride;
     entry->confidence = 0;
     entry->utility = 0;
   }
 
-  entry->last_addr = va;
+  rfp_entry_set_va(proc_id, entry, va);
 }
 
 /* Predict the next address based on the RFP table */
@@ -165,7 +253,8 @@ Flag rfp_predict(Addr pc, Addr *predicted_addr) {
   RFP_PT_Entry *entry = &rfp_pt[set][way];
   /* Use outstanding instance depth from PT. */
   int64 lookahead = (int64)entry->inflight + 1;
-  *predicted_addr = (Addr)((int64)entry->last_addr + entry->stride * lookahead);
+  *predicted_addr =
+      (Addr)((int64)rfp_entry_va(entry) + (int64)entry->stride * lookahead);
   return TRUE;
 }
 
