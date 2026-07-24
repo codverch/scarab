@@ -19,9 +19,22 @@
 #include "memory/memory.param.h"
 #include "model.h"
 
-static RFP_PT_Entry rfp_pt[RFP_NUM_SETS][RFP_NUM_WAYS];
-static RFP_Pat_Entry rfp_pat[RFP_PAT_NUM_SETS][RFP_PAT_NUM_WAYS];
+static RFP_PT_Entry rfp_pt[RFP_PT_MAX_SETS][RFP_PT_MAX_WAYS];
+static RFP_Pat_Entry rfp_pat[RFP_PAT_MAX_SETS][RFP_PAT_MAX_WAYS];
+static uns rfp_set_index_mask;
+static uns rfp_pc_tag_shift;
 #define RFP_INFLIGHT_MAX 127
+
+static inline uns rfp_log2_u(uns v) {
+  uns shift = 0;
+  while (v >>= 1)
+    shift++;
+  return shift;
+}
+
+static inline uns rfp_pat_num_entries(void) {
+  return RFP_PAT_NUM_SETS * RFP_PAT_NUM_WAYS;
+}
 
 static inline Flag rfp_stride_in_range(int64 stride) {
   return stride >= RFP_STRIDE_MIN && stride <= RFP_STRIDE_MAX;
@@ -45,7 +58,7 @@ static inline uns8 rfp_pat_ptr_encode(uns set, uns way) {
 }
 
 static inline void rfp_pat_ptr_decode(uns8 pat_ptr, uns* set, uns* way) {
-  ASSERT(0, pat_ptr < RFP_PAT_NUM_ENTRIES);
+  ASSERT(0, pat_ptr < rfp_pat_num_entries());
   *set = pat_ptr / RFP_PAT_NUM_WAYS;
   *way = pat_ptr % RFP_PAT_NUM_WAYS;
 }
@@ -95,7 +108,7 @@ static int rfp_pat_alloc_ptr(uns8 proc_id, Addr pfn) {
 static void rfp_entry_set_va(uns8 proc_id, RFP_PT_Entry* entry, Addr va) {
   int pat_ptr = rfp_pat_alloc_ptr(proc_id, rfp_va_pfn(va));
 
-  ASSERT(proc_id, pat_ptr >= 0 && pat_ptr < RFP_PAT_NUM_ENTRIES);
+  ASSERT(proc_id, pat_ptr >= 0 && pat_ptr < (int)rfp_pat_num_entries());
   entry->pat_ptr = (uns8)pat_ptr;
   entry->page_offset = rfp_va_page_offset(va);
 }
@@ -104,6 +117,17 @@ static void rfp_entry_set_va(uns8 proc_id, RFP_PT_Entry* entry, Addr va) {
 void rfp_init(void) {
   if (!RFP_ON)
     return;
+
+  ASSERT(0, RFP_PT_NUM_SETS > 0 && RFP_PT_NUM_WAYS > 0);
+  ASSERT(0, RFP_PAT_NUM_SETS > 0 && RFP_PAT_NUM_WAYS > 0);
+  ASSERT(0, RFP_PT_NUM_SETS <= RFP_PT_MAX_SETS && RFP_PT_NUM_WAYS <= RFP_PT_MAX_WAYS);
+  ASSERT(0, RFP_PAT_NUM_SETS <= RFP_PAT_MAX_SETS && RFP_PAT_NUM_WAYS <= RFP_PAT_MAX_WAYS);
+  ASSERT(0, (RFP_PT_NUM_SETS & (RFP_PT_NUM_SETS - 1)) == 0);
+  ASSERT(0, (RFP_PAT_NUM_SETS & (RFP_PAT_NUM_SETS - 1)) == 0);
+  ASSERT(0, rfp_pat_num_entries() <= 256);
+
+  rfp_set_index_mask = RFP_PT_NUM_SETS - 1;
+  rfp_pc_tag_shift = RFP_PC_SET_SHIFT + rfp_log2_u(RFP_PT_NUM_SETS);
 
   if (rfp_use_prf_model())
     rfp_prf_init();
@@ -115,18 +139,18 @@ void rfp_init(void) {
 /* Calculate the set index from the PC */
 static inline uns rfp_set(Addr pc) {
   Addr index = pc >> RFP_PC_SET_SHIFT;
-  return (uns)(index & RFP_SET_INDEX_MASK);
+  return (uns)(index & rfp_set_index_mask);
 }
 
 /* Calculate the tag from the PC */
 static inline uns16 rfp_tag(Addr pc) {
-  Addr tag = pc >> RFP_PC_TAG_SHIFT;
+  Addr tag = pc >> rfp_pc_tag_shift;
   return (uns16)(tag & RFP_TAG_MASK);
 }
 
 /* Lookup the entry in the RFP table */
 static int rfp_lookup(uns set, uns16 tag) {
-  for (int way = 0; way < RFP_NUM_WAYS; way++)
+  for (int way = 0; way < (int)RFP_PT_NUM_WAYS; way++)
     if (rfp_pt[set][way].valid && rfp_pt[set][way].tag == tag)
       return way;
 
@@ -169,12 +193,12 @@ static inline void rfp_inflight_dec(Addr pc) {
  * utility.
  */
 static int rfp_victim(uns set) {
-  for (int way = 0; way < RFP_NUM_WAYS; way++)
+  for (int way = 0; way < (int)RFP_PT_NUM_WAYS; way++)
     if (!rfp_pt[set][way].valid)
       return way;
 
   int victim = 0;
-  for (int way = 1; way < RFP_NUM_WAYS; way++)
+  for (int way = 1; way < (int)RFP_PT_NUM_WAYS; way++)
     if (rfp_pt[set][way].utility < rfp_pt[set][victim].utility)
       victim = way;
   return victim;

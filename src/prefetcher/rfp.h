@@ -10,17 +10,17 @@ static inline Flag rfp_use_prf_model(void) {
   return RFP_ON;
 }
 
-/* Register File Prefetch (RFP) stride prefetch table. 1K entries, 8-way set
- * assosciative. */
-#define RFP_NUM_SETS 128
-#define RFP_NUM_WAYS 8
+/* Max PT/PAT sizes for the 24 KB storage sweep point (512x8 PT, 64x4 PAT). */
+#define RFP_PT_MAX_SETS 512
+#define RFP_PT_MAX_WAYS 8
+#define RFP_PAT_MAX_SETS 64
+#define RFP_PAT_MAX_WAYS 8
+
 #define RFP_TAG_BITS 16
 #define RFP_TAG_MASK ((1u << RFP_TAG_BITS) - 1)
 
-/* PC bits used to pick a set vs tag (8-way set-assoc, 128 sets, 16-bit tag). */
+/* PC bits used to pick a set vs tag (block offset = 4 bytes). */
 #define RFP_PC_SET_SHIFT 2
-#define RFP_PC_TAG_SHIFT 9
-#define RFP_SET_INDEX_MASK (RFP_NUM_SETS - 1)
 
 /* 1-bit confidence counter (ISCA'22 default; Table 1 budgets 3b of storage). */
 #define RFP_CONF_MAX 1
@@ -33,10 +33,6 @@ static inline Flag rfp_use_prf_model(void) {
 #define RFP_STRIDE_MIN (-(1 << (RFP_STRIDE_BITS - 1)))
 #define RFP_STRIDE_MAX ((1 << (RFP_STRIDE_BITS - 1)) - 1)
 
-#define RFP_PAT_NUM_SETS 16
-#define RFP_PAT_NUM_WAYS 4
-#define RFP_PAT_NUM_ENTRIES (RFP_PAT_NUM_SETS * RFP_PAT_NUM_WAYS)
-#define RFP_PAT_PTR_BITS 6
 #define RFP_PAGE_OFFSET_BITS 12
 #define RFP_PAGE_OFFSET_MASK ((1u << RFP_PAGE_OFFSET_BITS) - 1)
 #define RFP_PFN_BITS 44
@@ -49,7 +45,7 @@ typedef struct RFP_Pat_Entry_struct {
 
 typedef struct RFP_PT_Entry_struct {
   uns16 tag;         /* 16-bit tag. */
-  uns8 pat_ptr;      /* 6-bit PAT pointer (flat index into rfp_pat[][]). */
+  uns8 pat_ptr;      /* PAT pointer (flat index into rfp_pat[][]). */
   uns16 page_offset; /* 12-bit in-page byte offset. */
   int8 stride;       /* 5-bit signed byte stride. */
   uns8 confidence;   /* 1-bit confidence (3b in Table 1 storage budget). */

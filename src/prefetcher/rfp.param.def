@@ -17,3 +17,8 @@ DEF_PARAM(rfp_drop_on_l1_miss, RFP_DROP_ON_L1_MISS, Flag, Flag, TRUE, )
 /* Ved: DEPRECATED / IGNORED — kept only for backwards-compatible CLI parsing. Was the demand-reserve
  * gate for the now-discarded L1-miss-to-memory path. */
 DEF_PARAM(rfp_mem_buf_reserve, RFP_MEM_BUF_RESERVE, uns, uns, 4, )
+/* ISCA'22 Table 1 PT/PAT sizing (swept via scarab-infra json/hpca2027/rfp.json). */
+DEF_PARAM(rfp_pt_num_sets, RFP_PT_NUM_SETS, uns, uns, 128, )
+DEF_PARAM(rfp_pt_num_ways, RFP_PT_NUM_WAYS, uns, uns, 8, )
+DEF_PARAM(rfp_pat_num_sets, RFP_PAT_NUM_SETS, uns, uns, 16, )
+DEF_PARAM(rfp_pat_num_ways, RFP_PAT_NUM_WAYS, uns, uns, 4, )
