@@ -23,6 +23,26 @@ static RFP_PT_Entry rfp_pt[RFP_PT_MAX_SETS][RFP_PT_MAX_WAYS];
 static RFP_Pat_Entry rfp_pat[RFP_PAT_MAX_SETS][RFP_PAT_MAX_WAYS];
 static uns rfp_set_index_mask;
 static uns rfp_pc_tag_shift;
+
+static inline void rfp_power_pt_read(uns8 proc_id) {
+  if (RFP_ON)
+    STAT_EVENT(proc_id, POWER_RFP_PT_READ);
+}
+
+static inline void rfp_power_pt_write(uns8 proc_id) {
+  if (RFP_ON)
+    STAT_EVENT(proc_id, POWER_RFP_PT_WRITE);
+}
+
+static inline void rfp_power_pat_read(uns8 proc_id) {
+  if (RFP_ON)
+    STAT_EVENT(proc_id, POWER_RFP_PAT_READ);
+}
+
+static inline void rfp_power_pat_write(uns8 proc_id) {
+  if (RFP_ON)
+    STAT_EVENT(proc_id, POWER_RFP_PAT_WRITE);
+}
 #define RFP_INFLIGHT_MAX 127
 
 static inline uns rfp_log2_u(uns v) {
@@ -63,18 +83,20 @@ static inline void rfp_pat_ptr_decode(uns8 pat_ptr, uns* set, uns* way) {
   *way = pat_ptr % RFP_PAT_NUM_WAYS;
 }
 
-static inline Addr rfp_entry_va(const RFP_PT_Entry* entry) {
+static inline Addr rfp_entry_va(uns8 proc_id, const RFP_PT_Entry* entry) {
   uns set;
   uns way;
 
   rfp_pat_ptr_decode(entry->pat_ptr, &set, &way);
+  rfp_power_pat_read(proc_id);
   ASSERT(0, rfp_pat[set][way].valid);
   return (rfp_pat[set][way].pfn << RFP_PAGE_OFFSET_BITS) | entry->page_offset;
 }
 
-static int rfp_pat_lookup_ptr(Addr pfn) {
+static int rfp_pat_lookup_ptr(uns8 proc_id, Addr pfn) {
   uns set = rfp_pat_set(pfn);
 
+  rfp_power_pat_read(proc_id);
   for (uns way = 0; way < RFP_PAT_NUM_WAYS; way++) {
     if (rfp_pat[set][way].valid && rfp_pat[set][way].pfn == pfn)
       return (int)rfp_pat_ptr_encode(set, way);
@@ -83,7 +105,7 @@ static int rfp_pat_lookup_ptr(Addr pfn) {
 }
 
 static int rfp_pat_alloc_ptr(uns8 proc_id, Addr pfn) {
-  int ptr = rfp_pat_lookup_ptr(pfn);
+  int ptr = rfp_pat_lookup_ptr(proc_id, pfn);
   if (ptr >= 0)
     return ptr;
 
@@ -93,6 +115,7 @@ static int rfp_pat_alloc_ptr(uns8 proc_id, Addr pfn) {
     if (!rfp_pat[set][way].valid) {
       rfp_pat[set][way].valid = TRUE;
       rfp_pat[set][way].pfn = pfn;
+      rfp_power_pat_write(proc_id);
       STAT_EVENT(proc_id, RFP_PAT_ALLOC);
       return (int)rfp_pat_ptr_encode(set, way);
     }
@@ -102,6 +125,7 @@ static int rfp_pat_alloc_ptr(uns8 proc_id, Addr pfn) {
   STAT_EVENT(proc_id, RFP_PAT_EVICT);
   rfp_pat[set][0].valid = TRUE;
   rfp_pat[set][0].pfn = pfn;
+  rfp_power_pat_write(proc_id);
   return (int)rfp_pat_ptr_encode(set, 0);
 }
 
@@ -149,7 +173,8 @@ static inline uns16 rfp_tag(Addr pc) {
 }
 
 /* Lookup the entry in the RFP table */
-static int rfp_lookup(uns set, uns16 tag) {
+static int rfp_lookup(uns8 proc_id, uns set, uns16 tag) {
+  rfp_power_pt_read(proc_id);
   for (int way = 0; way < (int)RFP_PT_NUM_WAYS; way++)
     if (rfp_pt[set][way].valid && rfp_pt[set][way].tag == tag)
       return way;
@@ -158,10 +183,10 @@ static int rfp_lookup(uns set, uns16 tag) {
 }
 
 /* Get the entry from the RFP table */
-static inline RFP_PT_Entry* rfp_get_entry(Addr pc) {
+static inline RFP_PT_Entry* rfp_get_entry(uns8 proc_id, Addr pc) {
   uns set = rfp_set(pc);
   uns16 tag = rfp_tag(pc);
-  int way = rfp_lookup(set, tag);
+  int way = rfp_lookup(proc_id, set, tag);
   if (way < 0)
     return NULL;
   return &rfp_pt[set][way];
@@ -169,22 +194,26 @@ static inline RFP_PT_Entry* rfp_get_entry(Addr pc) {
 
 /* Increment the inflight count for the entry. Done on load allocation
 (at rename) for every on-path load, regardless of prediction. */
-static inline void rfp_inflight_inc(Addr pc) {
-  RFP_PT_Entry* entry = rfp_get_entry(pc);
+static inline void rfp_inflight_inc(uns8 proc_id, Addr pc) {
+  RFP_PT_Entry* entry = rfp_get_entry(proc_id, pc);
   if (!entry)
     return;
-  if (entry->inflight < RFP_INFLIGHT_MAX)
+  if (entry->inflight < RFP_INFLIGHT_MAX) {
     entry->inflight++;
+    rfp_power_pt_write(proc_id);
+  }
 }
 
 /* Decrement the inflight count for the entry. Done when a load retires
  or when squashed by a pipeline recovery. */
-static inline void rfp_inflight_dec(Addr pc) {
-  RFP_PT_Entry* entry = rfp_get_entry(pc);
+static inline void rfp_inflight_dec(uns8 proc_id, Addr pc) {
+  RFP_PT_Entry* entry = rfp_get_entry(proc_id, pc);
   if (!entry)
     return;
-  if (entry->inflight > 0)
+  if (entry->inflight > 0) {
     entry->inflight--;
+    rfp_power_pt_write(proc_id);
+  }
 }
 
 /**
@@ -211,7 +240,7 @@ static int rfp_victim(uns set) {
 static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   uns set = rfp_set(pc);
   uns16 tag = rfp_tag(pc);
-  int way = rfp_lookup(set, tag);
+  int way = rfp_lookup(proc_id, set, tag);
 
   if (way < 0) {
     /* No entry found, allocate a new entry */
@@ -223,6 +252,7 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
     rfp_pt[set][way].utility = 0;
     rfp_pt[set][way].inflight = 0;
     rfp_pt[set][way].valid = TRUE;
+    rfp_power_pt_write(proc_id);
     STAT_EVENT(proc_id, RFP_PT_ALLOC);
     return;
   }
@@ -230,7 +260,7 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   STAT_EVENT(proc_id, RFP_PT_HIT);
 
   RFP_PT_Entry *entry = &rfp_pt[set][way];
-  int64 observed_stride = (int64)((int64)va - (int64)rfp_entry_va(entry));
+  int64 observed_stride = (int64)((int64)va - (int64)rfp_entry_va(proc_id, entry));
 
   if (!rfp_stride_in_range(observed_stride)) {
     /* Table 1 stores only a 5-bit signed byte stride. */
@@ -238,6 +268,7 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
     entry->confidence = 0;
     entry->utility = 0;
     rfp_entry_set_va(proc_id, entry, va);
+    rfp_power_pt_write(proc_id);
     return;
   }
 
@@ -262,13 +293,14 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   }
 
   rfp_entry_set_va(proc_id, entry, va);
+  rfp_power_pt_write(proc_id);
 }
 
 /* Predict the next address based on the RFP table */
-Flag rfp_predict(Addr pc, Addr *predicted_addr) {
+Flag rfp_predict(uns8 proc_id, Addr pc, Addr *predicted_addr) {
   uns set = rfp_set(pc);
   uns16 tag = rfp_tag(pc);
-  int way = rfp_lookup(set, tag);
+  int way = rfp_lookup(proc_id, set, tag);
 
   /* RFP prediction is made only if confidence is maximum */
   if (way < 0 || rfp_pt[set][way].confidence < RFP_CONF_MAX)
@@ -278,7 +310,7 @@ Flag rfp_predict(Addr pc, Addr *predicted_addr) {
   /* Use outstanding instance depth from PT. */
   int64 lookahead = (int64)entry->inflight + 1;
   *predicted_addr =
-      (Addr)((int64)rfp_entry_va(entry) + (int64)entry->stride * lookahead);
+      (Addr)((int64)rfp_entry_va(proc_id, entry) + (int64)entry->stride * lookahead);
   return TRUE;
 }
 
@@ -289,11 +321,12 @@ void rfp_reset_confidence_on_mispredict(uns8 proc_id, Addr pc) {
   if (!RFP_ON)
     return;
 
-  entry = rfp_get_entry(pc);
+  entry = rfp_get_entry(proc_id, pc);
   if (!entry || entry->confidence == 0)
     return;
 
   entry->confidence = 0;
+  rfp_power_pt_write(proc_id);
   STAT_EVENT(proc_id, RFP_CONF_RESET_ON_MISPRED);
 }
 
@@ -373,14 +406,14 @@ void rfp_prefetch_launch(Op* op) {
      site) under-counted same-PC instances still between fetch and rename, shortening the lookahead in
      tight loops (ISCA'22 §3.4). */
   Addr predicted_addr = 0;
-  if (rfp_predict(op->inst_info->addr, &predicted_addr)) {
+  if (rfp_predict(op->proc_id, op->inst_info->addr, &predicted_addr)) {
     op->rfp_predicted = TRUE;
     op->rfp_predicted_addr = predicted_addr;
     STAT_EVENT(op->proc_id, RFP_PREDICTION_MADE);
     STAT_EVENT(op->proc_id, RFP_ELIGIBLE);
   }
 
-  rfp_inflight_inc(op->inst_info->addr);
+  rfp_inflight_inc(op->proc_id, op->inst_info->addr);
 
   if (!op->rfp_predicted)
     return;
@@ -410,7 +443,7 @@ void rfp_train_retire(Op *op) {
   if (op->inst_info->table_info.mem_type != MEM_LD)
     return;
   /* PT inflight tracks outstanding instances of this load-PC. */
-  rfp_inflight_dec(op->inst_info->addr);
+  rfp_inflight_dec(op->proc_id, op->inst_info->addr);
   if (!op->oracle_info.va)
     return;
 
@@ -447,5 +480,5 @@ void rfp_track_squash(Op* op) {
   if (op->off_path)
     return;
   /* Decrement inflight for squashed loads. */
-  rfp_inflight_dec(op->inst_info->addr);
+  rfp_inflight_dec(op->proc_id, op->inst_info->addr);
 }

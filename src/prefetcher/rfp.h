@@ -55,7 +55,7 @@ typedef struct RFP_PT_Entry_struct {
 } RFP_PT_Entry;
 
 void rfp_init(void);
-Flag rfp_predict(Addr pc, Addr* predicted_addr);
+Flag rfp_predict(uns8 proc_id, Addr pc, Addr* predicted_addr);
 void rfp_predict_at_fetch(Op* op);
 void rfp_prefetch_launch(Op* op);
 void rfp_train_retire(Op* op);
