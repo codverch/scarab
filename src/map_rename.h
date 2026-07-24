@@ -221,6 +221,7 @@ struct reg_table_ops {
 /**************************************************************************************/
 /* External Methods */
 
+void reg_file_collect_utilization_stat(void); // sample physical register-file occupancy once per cycle
 void reg_file_init(void);                     // init the register file and its register map tables
 Flag reg_file_available(uns stage_op_count);  // check if there are enough register entries
 void reg_file_rename(Op *op);                 // alloc destination registers for the operand
