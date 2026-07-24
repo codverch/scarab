@@ -22,7 +22,8 @@
  * reinforce a row and mispredictions penalize it.
  *
  * Simulator state is maintained in a large open-addressed hash table with
- * 2^IFUSE_FCT_HASH_BITS entries.
+ * 2^IFUSE_FCT_HASH_BITS entries. LD1/LD2 PCs are stored as partial tags
+ * (IFUSE_FCT_PC_TAG_BITS, default 32) for a modeled 83 bits/row payload.
  */
 
 static FCT_Row* fct_rows = NULL; // Software backing rows for the ideal FCT
@@ -30,6 +31,15 @@ static size_t   fct_num_hash_table_rows = 0;
 static bool     fct_is_initialized = false;
 
 static void fct_preload_from_file(void);
+
+static Addr fct_pc_tag(Addr pc) {
+    unsigned int bits = IFUSE_FCT_PC_TAG_BITS;
+    if (bits >= 64U)
+        return pc;
+    if (bits == 0U)
+        return 0;
+    return pc & (Addr)((1ULL << bits) - 1ULL);
+}
 
 void fct_init(void) {
     if (fct_is_initialized) {
@@ -41,6 +51,10 @@ void fct_init(void) {
         fprintf(stderr,
                 "FCT: ifuse_fct_hash_bits must be in [1, %u]\n",
                 IFUSE_IDEAL_FCT_MAX_HASH_BITS);
+        exit(1);
+    }
+    if (IFUSE_FCT_PC_TAG_BITS == 0U || IFUSE_FCT_PC_TAG_BITS > 64U) {
+        fprintf(stderr, "FCT: ifuse_fct_pc_tag_bits must be in [1, 64]\n");
         exit(1);
     }
 
@@ -63,7 +77,7 @@ void fct_init(void) {
  * lookup speed; it is not a modeled hardware index.
  */
 static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
-    uint64_t h = (uint64_t)ld1_pc_addr;
+    uint64_t h = (uint64_t)fct_pc_tag(ld1_pc_addr);
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccdULL;
     h ^= h >> 33;
@@ -112,8 +126,8 @@ static void fct_write_row(FCT_Row* row, Addr ld1_pc_addr, Addr ld2_pc_addr,
                           Counter ld1_micro_op_num,
                           Counter ld2_micro_op_num,
                           unsigned int confidence_score) {
-    row->ld1_pc_addr        = ld1_pc_addr;
-    row->ld2_pc_addr        = ld2_pc_addr;
+    row->ld1_pc_addr        = fct_pc_tag(ld1_pc_addr);
+    row->ld2_pc_addr        = fct_pc_tag(ld2_pc_addr);
     row->ld1_effective_addr = ld1_effective_addr;
     row->ld2_effective_addr = ld2_effective_addr;
     row->offset_delta       = offset_delta;
@@ -133,6 +147,7 @@ static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
         return NULL;
     }
 
+    Addr ld1_tag = fct_pc_tag(ld1_pc_addr);
     size_t row_index_mask = fct_num_hash_table_rows - 1U;
     size_t row_idx = fct_get_probe_start_idx(ld1_pc_addr, row_index_mask);
 
@@ -141,7 +156,7 @@ static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
         if (!row->valid) {
             return NULL;
         }
-        if (row->ld1_pc_addr == ld1_pc_addr) {
+        if (row->ld1_pc_addr == ld1_tag) {
             return row;
         }
         row_idx = (row_idx + 1U) & row_index_mask;
@@ -416,7 +431,8 @@ Flag fct_install_runtime_candidate(Addr ld1_pc_addr, Addr ld2_pc_addr,
 
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
     if (row) {
-        bool same_candidate = row->ld2_pc_addr == ld2_pc_addr &&
+        Addr ld2_tag = fct_pc_tag(ld2_pc_addr);
+        bool same_candidate = row->ld2_pc_addr == ld2_tag &&
                               row->offset_delta == offset_delta &&
                               row->direction == direction &&
                               row->ld2_mem_size == ld2_mem_size;

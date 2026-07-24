@@ -6,6 +6,8 @@
 /* Tree-PLRU replacement for 4- or 8-way set-associative I-Fuse tables. */
 void ifuse_plru_touch(uint8_t* state, unsigned int set_idx,
                       unsigned int way, unsigned int num_ways);
+void ifuse_plru_demote(uint8_t* state, unsigned int set_idx,
+                       unsigned int way, unsigned int num_ways);
 unsigned int ifuse_plru_victim(const uint8_t* state, unsigned int set_idx,
                                unsigned int num_ways);
 

@@ -1,14 +1,21 @@
 DEF_PARAM(ifuse_fusion_distance, IFUSE_FUSION_DISTANCE, uns, uns, 512, )
 DEF_PARAM(ifuse_apt_match_policy, IFUSE_APT_MATCH_POLICY, uns, uns, 0, )
 
-/* Retire-stage runtime discovery. 32 sets x 4 ways = 128 TT entries. */
+/* Retired load buffer: partial PC tags stored per entry (default 32 bits). */
+DEF_PARAM(ifuse_rlb_pc_tag_bits, IFUSE_RLB_PC_TAG_BITS, uns, uns, 32, )
+
+/* Retire-stage runtime discovery. 32 sets x 4 ways = 128 TT entries.
+ * Observations required before promoting a pair into the FCT; sweep with
+ * --ifuse_training_insert_threshold (e.g. 10, 100, 1000). */
 DEF_PARAM(ifuse_runtime_training_enabled, IFUSE_RUNTIME_TRAINING_ENABLED, Flag, Flag, TRUE, )
 DEF_PARAM(ifuse_training_insert_threshold, IFUSE_TRAINING_INSERT_THRESHOLD, uns, uns, 1000, )
 DEF_PARAM(ifuse_training_table_sets, IFUSE_TRAINING_TABLE_SETS, uns, uns, 32, )
 DEF_PARAM(ifuse_training_table_ways, IFUSE_TRAINING_TABLE_WAYS, uns, uns, 4, )
 DEF_PARAM(ifuse_training_table_pc_tag_bits, IFUSE_TRAINING_TABLE_PC_TAG_BITS, uns, uns, 48, )
+DEF_PARAM(ifuse_training_table_block_tag_bits, IFUSE_TRAINING_TABLE_BLOCK_TAG_BITS, uns, uns, 20, )
 
 /* FCT confidence (matches old pgo-ifuse: init 500, predict when > 499, -50 mispred). */
+DEF_PARAM(ifuse_fct_pc_tag_bits, IFUSE_FCT_PC_TAG_BITS, uns, uns, 32, )
 DEF_PARAM(ifuse_fct_conf_threshold, IFUSE_FCT_CONF_THRESHOLD, uns, uns, 499, )
 DEF_PARAM(ifuse_fct_mispred_conf_penalty, IFUSE_FCT_MISPRED_CONF_PENALTY, uns, uns, 50, )
 DEF_PARAM(ifuse_fct_preload_file, IFUSE_FCT_PRELOAD_FILE, char*, string, NULL, )

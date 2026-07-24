@@ -5,6 +5,7 @@
 #include "ifuse/ifuse_retired_load_history.h"
 
 const uns IFUSE_FUSION_DISTANCE = 512;
+const uns IFUSE_RLB_PC_TAG_BITS = 32;
 
 static void test_micro_op_distance(void) {
     RetiredLoadHistoryEntry match;
@@ -47,6 +48,12 @@ static void test_plru(void) {
     assert(ifuse_plru_victim(state, 0, 4) != 0);
     ifuse_plru_touch(state, 0, 7, 8);
     assert(ifuse_plru_victim(state, 0, 8) != 7);
+
+    state[0] = 0;
+    ifuse_plru_touch(state, 0, 0, 4);
+    ifuse_plru_touch(state, 0, 1, 4);
+    ifuse_plru_demote(state, 0, 0, 4);
+    assert(ifuse_plru_victim(state, 0, 4) == 0);
 }
 
 int main(void) {

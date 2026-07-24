@@ -28,6 +28,31 @@ void ifuse_plru_touch(uint8_t* state, unsigned int set_idx,
     state[set_idx] = value;
 }
 
+void ifuse_plru_demote(uint8_t* state, unsigned int set_idx,
+                       unsigned int way, unsigned int num_ways) {
+    if (!state || (num_ways != 4U && num_ways != 8U) || way >= num_ways)
+        return;
+
+    uint8_t value = state[set_idx];
+    unsigned int node = 0;
+    unsigned int span = num_ways;
+    unsigned int local_way = way;
+
+    while (span > 1U) {
+        unsigned int half = span / 2U;
+        if (local_way < half) {
+            value &= (uint8_t)~(1U << node); /* demote left, evict left */
+            node = node * 2U + 1U;
+        } else {
+            value |= (uint8_t)(1U << node);  /* demote right, evict right */
+            local_way -= half;
+            node = node * 2U + 2U;
+        }
+        span = half;
+    }
+    state[set_idx] = value;
+}
+
 unsigned int ifuse_plru_victim(const uint8_t* state, unsigned int set_idx,
                                unsigned int num_ways) {
     if (!state || (num_ways != 4U && num_ways != 8U))
