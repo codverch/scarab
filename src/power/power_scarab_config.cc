@@ -559,6 +559,55 @@ static void power_print_core_btb(std::ofstream& out, uint32_t core_id) {
   END_OF_COMPONENT(out, header);
 }
 
+static void power_print_core_helios(std::ofstream& out, uint32_t core_id) {
+  if (!HELIOS_DO_FUSION) {
+    return;
+  }
+
+  std::string header = "\t\t";
+  ADD_XML_COMPONENT(out, header, "system.core" + std::to_string(core_id) + ".helios", "helios",
+                    Helios load/store fusion structures);
+
+  ADD_XML_PARAM(out, header, "enabled", 1, );
+  ADD_XML_PARAM(out, header, "fp_sets", 512, );
+  ADD_XML_PARAM(out, header, "fp_ways", 4, );
+  ADD_XML_PARAM(out, header, "fp_entry_bytes", 16, );
+  ADD_XML_PARAM(out, header, "selector_entries", 2048, );
+  ADD_XML_PARAM(out, header, "selector_entry_bytes", 2, );
+  ADD_XML_PARAM(out, header, "load_head_entries", 140, );
+  ADD_XML_PARAM(out, header, "store_head_entries", 140, );
+  ADD_XML_PARAM(out, header, "head_entry_bytes", 24, );
+  ADD_XML_PARAM(out, header, "uch_load_entries", 6, );
+  ADD_XML_PARAM(out, header, "uch_store_entries", 1, );
+  ADD_XML_PARAM(out, header, "uch_entry_bytes", 32, );
+
+  const Counter onpath_mem_ops = GET_TOTAL_STAT_EVENT(core_id, HELIOS_ONPATH_LOADS) +
+                                 GET_TOTAL_STAT_EVENT(core_id, HELIOS_ONPATH_STORES);
+  const Counter fusion_candidates = GET_TOTAL_STAT_EVENT(core_id, HELIOS_FUSION_CANDIDATES);
+  const Counter fusions_committed = GET_TOTAL_STAT_EVENT(core_id, HELIOS_FUSIONS_COMMITTED);
+  const Counter fusion_mispredicts = GET_TOTAL_STAT_EVENT(core_id, HELIOS_FUSION_MISPREDICT);
+  const Counter fusions_predicted = GET_TOTAL_STAT_EVENT(core_id, HELIOS_FUSIONS);
+
+  const Counter predictor_read_accesses = onpath_mem_ops;
+  const Counter predictor_write_accesses =
+      fusions_committed + fusion_mispredicts + fusions_predicted + fusion_mispredicts;
+  const Counter head_table_read_accesses = fusion_candidates;
+  const Counter head_table_write_accesses =
+      onpath_mem_ops > fusion_candidates ? onpath_mem_ops - fusion_candidates : 0;
+  const Counter uch_read_accesses = onpath_mem_ops;
+  const Counter uch_write_accesses =
+      onpath_mem_ops > fusions_committed ? onpath_mem_ops - fusions_committed : 0;
+
+  ADD_XML_STAT(out, header, "predictor_read_accesses", predictor_read_accesses, );
+  ADD_XML_STAT(out, header, "predictor_write_accesses", predictor_write_accesses, );
+  ADD_XML_STAT(out, header, "head_table_read_accesses", head_table_read_accesses, );
+  ADD_XML_STAT(out, header, "head_table_write_accesses", head_table_write_accesses, );
+  ADD_XML_STAT(out, header, "uch_read_accesses", uch_read_accesses, );
+  ADD_XML_STAT(out, header, "uch_write_accesses", uch_write_accesses, );
+
+  END_OF_COMPONENT(out, header);
+}
+
 void power_print_core_params(std::ofstream& out, uint32_t core_id) {
   uns pipeline_depth = DECODE_CYCLES + MAP_CYCLES + 1 + 1 + 1 + 1;  // icache, node, exec, retire
 
@@ -588,6 +637,7 @@ void power_print_core_params(std::ofstream& out, uint32_t core_id) {
   power_print_core_dtlb(out, core_id);
   power_print_core_dcache(out, core_id);
   power_print_core_btb(out, core_id);
+  power_print_core_helios(out, core_id);
 
   END_OF_COMPONENT(out, header);
 }
