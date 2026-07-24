@@ -221,5 +221,6 @@ void reg_file_recover(Op *op);                // flush registers of mispredictio
 void reg_file_precommit(Op *op);              // update the register metadata when an op is non-spec
 void reg_file_commit(Op *op);                 // release the previous register with same architectural register id
 int  reg_file_get_reg_type(int reg_id);       // Ved: F3 — expose for RFP PRF-file disambiguation
+void reg_file_collect_utilization_stat(void); // sample physical register-file occupancy once per cycle
 
 #endif /* #ifndef __MAP_RENAME_H__ */
