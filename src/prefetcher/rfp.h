@@ -23,15 +23,12 @@ static inline Flag rfp_use_prf_model(void) {
 #define RFP_PC_SET_SHIFT 2
 
 /* 1-bit confidence counter (ISCA'22 default; Table 1 budgets 3b of storage). */
-#define RFP_CONF_MAX 1
+#define RFP_CONF_MAX_DEFAULT 1
+#define RFP_CONF_COUNTER_MAX 7
 
-/* Probabilistic confidence increment: P(inc) = 1 / 2^RFP_PROB_SHIFT. = 1/16 */
-#define RFP_PROB_SHIFT 4
-
-/* ISCA'22 §3.5 Table 1 — compressed PT entry fields. */
-#define RFP_STRIDE_BITS 5
-#define RFP_STRIDE_MIN (-(1 << (RFP_STRIDE_BITS - 1)))
-#define RFP_STRIDE_MAX ((1 << (RFP_STRIDE_BITS - 1)) - 1)
+/* ISCA'22 §3.5 Table 1 — compressed PT entry fields (width/encoding via --rfp_stride_*). */
+#define RFP_STRIDE_BITS_DEFAULT 5
+#define RFP_STRIDE_BITS_MAX 16
 
 #define RFP_PAGE_OFFSET_BITS 12
 #define RFP_PAGE_OFFSET_MASK ((1u << RFP_PAGE_OFFSET_BITS) - 1)
@@ -47,7 +44,7 @@ typedef struct RFP_PT_Entry_struct {
   uns16 tag;         /* 16-bit tag. */
   uns8 pat_ptr;      /* PAT pointer (flat index into rfp_pat[][]). */
   uns16 page_offset; /* 12-bit in-page byte offset. */
-  int8 stride;       /* 5-bit signed byte stride. */
+  int16 stride;      /* Byte stride (width/encoding set by --rfp_stride_bits/--rfp_stride_signed). */
   uns8 confidence;   /* 1-bit confidence (3b in Table 1 storage budget). */
   uns8 utility;      /* 2-bit replacement counter. Incremented until 3. */
   uns8 inflight;     /* 7-bit outstanding-instance counter. */

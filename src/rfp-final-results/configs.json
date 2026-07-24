@@ -1,0 +1,75 @@
+{
+  "experiment": "rfp-final-tuned",
+  "architecture": "golden_cove",
+  "pt_pat_storage": "24KB (512x8 PT, 64x4 PAT)",
+  "baseline_source": "/users/deepmish/scarab/src/simulations-confidence-1/baseline",
+  "per_app_config": {
+    "appworld": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    },
+    "bfs": {
+      "config_name": "rfp_prob_p22",
+      "rfp_prob_shift": 22,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^22",
+      "note": "Ultra-conservative P(conf++)=1/2^22 to avoid IPC loss on graph traversal"
+    },
+    "clickhouse": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    },
+    "core_bench": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    },
+    "dfs": {
+      "config_name": "rfp_prob_p22",
+      "rfp_prob_shift": 22,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^22",
+      "note": "Same as bfs"
+    },
+    "duckdb": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    },
+    "pagerank": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    },
+    "rocksdb": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    },
+    "terminal_bench": {
+      "config_name": "rfp_prob_p2",
+      "rfp_prob_shift": 2,
+      "rfp_conf_max": 1,
+      "p_conf_increment": "1/2^2",
+      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+    }
+  },
+  "degraded_apps_tuning": {
+    "bfs": "rfp_prob_shift=22 (was -0.3% at default); now 0.0%",
+    "dfs": "rfp_prob_shift=22 (was -0.4% at default); now 0.0%"
+  }
+}

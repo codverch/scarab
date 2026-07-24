@@ -56,8 +56,20 @@ static inline uns rfp_pat_num_entries(void) {
   return RFP_PAT_NUM_SETS * RFP_PAT_NUM_WAYS;
 }
 
+static inline int64 rfp_stride_min(void) {
+  if (RFP_STRIDE_SIGNED)
+    return -(1LL << (RFP_STRIDE_BITS - 1));
+  return 0;
+}
+
+static inline int64 rfp_stride_max(void) {
+  if (RFP_STRIDE_SIGNED)
+    return (1LL << (RFP_STRIDE_BITS - 1)) - 1;
+  return (1LL << RFP_STRIDE_BITS) - 1;
+}
+
 static inline Flag rfp_stride_in_range(int64 stride) {
-  return stride >= RFP_STRIDE_MIN && stride <= RFP_STRIDE_MAX;
+  return stride >= rfp_stride_min() && stride <= rfp_stride_max();
 }
 
 static inline Addr rfp_va_pfn(Addr va) {
@@ -149,6 +161,8 @@ void rfp_init(void) {
   ASSERT(0, (RFP_PT_NUM_SETS & (RFP_PT_NUM_SETS - 1)) == 0);
   ASSERT(0, (RFP_PAT_NUM_SETS & (RFP_PAT_NUM_SETS - 1)) == 0);
   ASSERT(0, rfp_pat_num_entries() <= 256);
+  ASSERT(0, RFP_CONF_MAX > 0 && RFP_CONF_MAX <= RFP_CONF_COUNTER_MAX);
+  ASSERT(0, RFP_STRIDE_BITS > 0 && RFP_STRIDE_BITS <= RFP_STRIDE_BITS_MAX);
 
   rfp_set_index_mask = RFP_PT_NUM_SETS - 1;
   rfp_pc_tag_shift = RFP_PC_SET_SHIFT + rfp_log2_u(RFP_PT_NUM_SETS);
@@ -263,7 +277,7 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   int64 observed_stride = (int64)((int64)va - (int64)rfp_entry_va(proc_id, entry));
 
   if (!rfp_stride_in_range(observed_stride)) {
-    /* Table 1 stores only a 5-bit signed byte stride. */
+    /* Observed delta does not fit the configured stride field. */
     STAT_EVENT(proc_id, RFP_STRIDE_OUT_OF_RANGE);
     entry->confidence = 0;
     entry->utility = 0;
@@ -275,8 +289,8 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   if (observed_stride == entry->stride) {
     STAT_EVENT(proc_id, RFP_STRIDE_CONFIRM);
     if (entry->confidence < RFP_CONF_MAX) {
-      /* Increment confidence with probability of 1/16 (2^4) */
-      if ((rand() & ((1u << RFP_PROB_SHIFT) - 1)) == 0) {
+      /* Increment confidence with probability 1 / 2^RFP_PROB_SHIFT (see --rfp_prob_shift). */
+      if (RFP_PROB_SHIFT == 0 || (rand() & ((1u << RFP_PROB_SHIFT) - 1)) == 0) {
         entry->confidence++;
         STAT_EVENT(proc_id, RFP_CONF_INC);
       }
@@ -287,7 +301,7 @@ static void rfp_train_entry(uns8 proc_id, Addr pc, Addr va) {
   } else {
     /* Stride changed, reset confidence and utility */
     STAT_EVENT(proc_id, RFP_STRIDE_CHANGE);
-    entry->stride = (int8)observed_stride;
+    entry->stride = (int16)observed_stride;
     entry->confidence = 0;
     entry->utility = 0;
   }

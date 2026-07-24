@@ -22,3 +22,10 @@ DEF_PARAM(rfp_pt_num_sets, RFP_PT_NUM_SETS, uns, uns, 128, )
 DEF_PARAM(rfp_pt_num_ways, RFP_PT_NUM_WAYS, uns, uns, 8, )
 DEF_PARAM(rfp_pat_num_sets, RFP_PAT_NUM_SETS, uns, uns, 16, )
 DEF_PARAM(rfp_pat_num_ways, RFP_PAT_NUM_WAYS, uns, uns, 4, )
+/* P(confidence++) = 1 / 2^rfp_prob_shift on stride confirm (paper default: 4 → 1/16). */
+DEF_PARAM(rfp_prob_shift, RFP_PROB_SHIFT, uns, uns, 4, )
+/* Prefetch when confidence reaches this value (train up to rfp_conf_max). */
+DEF_PARAM(rfp_conf_max, RFP_CONF_MAX, uns, uns, 1, )
+/* ISCA'22 Table 1 uses 5b stride; §3.1 logical entry uses 8b. Signed = two's-complement delta. */
+DEF_PARAM(rfp_stride_bits, RFP_STRIDE_BITS, uns, uns, 5, )
+DEF_PARAM(rfp_stride_signed, RFP_STRIDE_SIGNED, Flag, Flag, TRUE, )
