@@ -14,8 +14,8 @@
  * Direct-mapped retired load buffer: one slot per cache block (modulo table
  * size). Index = (block_addr >> 6) & (CAPACITY - 1). Each slot holds the most
  * recent retired load to that 64-byte block (or the block that aliases into
- * the slot). Each entry stores a partial PC tag (IFUSE_RLB_PC_TAG_BITS,
- * default 32), 33-bit block tag, 6-bit line offset, 3-bit log2(size), 10-bit
+ * the slot). Each entry stores a partial PC tag (IFUSE_PC_TAG_BITS, default
+ * 32), 33-bit block tag, 6-bit line offset, 3-bit log2(size), 10-bit micro-op
  * micro-op timestamp, and valid — 85 bits/entry, 512 * 85 = 43,520 bits ≈ 5.3 KiB.
  */
 typedef struct HistorySlot {
@@ -28,7 +28,7 @@ static HistorySlot slots[HISTORY_CAPACITY];
 static bool initialized;
 
 static Addr rlb_pc_tag(Addr pc) {
-    unsigned int bits = IFUSE_RLB_PC_TAG_BITS;
+    unsigned int bits = IFUSE_PC_TAG_BITS;
     if (bits >= 64U)
         return pc;
     if (bits == 0U)
@@ -58,7 +58,7 @@ void retired_load_history_init(void) {
                 HISTORY_CAPACITY, IFUSE_FUSION_DISTANCE);
         exit(1);
     }
-    if (IFUSE_RLB_PC_TAG_BITS == 0U || IFUSE_RLB_PC_TAG_BITS > 64U) {
+    if (IFUSE_PC_TAG_BITS == 0U || IFUSE_PC_TAG_BITS > 64U) {
         fprintf(stderr, "I-Fuse RLB PC tag bits must be 1-64\n");
         exit(1);
     }

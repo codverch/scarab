@@ -22,8 +22,8 @@
  * reinforce a row and mispredictions penalize it.
  *
  * Simulator state is maintained in a large open-addressed hash table with
- * 2^IFUSE_FCT_HASH_BITS entries. LD1/LD2 PCs are stored as partial tags
- * (IFUSE_FCT_PC_TAG_BITS, default 32) for a modeled 83 bits/row payload.
+ * 2^IFUSE_FCT_HASH_BITS entries. LD1/LD2 PCs use IFUSE_PC_TAG_BITS (shared
+ * with RLB and the training table) for a modeled 83 bits/row payload.
  */
 
 static FCT_Row* fct_rows = NULL; // Software backing rows for the ideal FCT
@@ -33,7 +33,7 @@ static bool     fct_is_initialized = false;
 static void fct_preload_from_file(void);
 
 static Addr fct_pc_tag(Addr pc) {
-    unsigned int bits = IFUSE_FCT_PC_TAG_BITS;
+    unsigned int bits = IFUSE_PC_TAG_BITS;
     if (bits >= 64U)
         return pc;
     if (bits == 0U)
@@ -53,8 +53,8 @@ void fct_init(void) {
                 IFUSE_IDEAL_FCT_MAX_HASH_BITS);
         exit(1);
     }
-    if (IFUSE_FCT_PC_TAG_BITS == 0U || IFUSE_FCT_PC_TAG_BITS > 64U) {
-        fprintf(stderr, "FCT: ifuse_fct_pc_tag_bits must be in [1, 64]\n");
+    if (IFUSE_PC_TAG_BITS == 0U || IFUSE_PC_TAG_BITS > 64U) {
+        fprintf(stderr, "FCT: ifuse_pc_tag_bits must be in [1, 64]\n");
         exit(1);
     }
 

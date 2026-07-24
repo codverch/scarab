@@ -30,7 +30,7 @@ must partition the retired-load history and TT by core before use.
 --ifuse_training_insert_threshold 1000
 --ifuse_training_table_sets 32
 --ifuse_training_table_ways 4
---ifuse_training_table_pc_tag_bits 48
+--ifuse_pc_tag_bits 32
 --ifuse_fct_runtime_insert_conf 500
 --ifuse_fct_preload_file <unset>
 ```
@@ -40,9 +40,10 @@ The default TT has 128 entries. The intended size sweep is 32, 64, 128, and
 
 ## Storage Accounting
 
-For the default direct encodings, one TT entry contains two 48-bit PC tags, a
-6-bit offset magnitude, 1 direction bit, 7 access-size bits, a 10-bit
-observation counter, and 1 valid bit: 121 bits per entry. A 128-entry TT is
+For the default direct encodings, one TT entry contains two partial PC tags
+(`IFUSE_PC_TAG_BITS`, default 32, shared with RLB and FCT), a 20-bit block tag,
+a 6-bit offset magnitude, 1 direction bit, 3 access-size bits, a 14-bit
+observation counter, and 1 valid bit: 141 bits per entry. A 128-entry TT is
 15,488 bits (1,936 bytes), plus 3 PLRU bits per set (12 bytes), for 1,948 bytes.
 The C structure is larger because of host alignment and is not the hardware
 size estimate.

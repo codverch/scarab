@@ -5,7 +5,7 @@
 #include "ifuse/ifuse_retired_load_history.h"
 
 const uns IFUSE_FUSION_DISTANCE = 512;
-const uns IFUSE_RLB_PC_TAG_BITS = 32;
+const uns IFUSE_PC_TAG_BITS = 32;
 
 static void test_micro_op_distance(void) {
     RetiredLoadHistoryEntry match;

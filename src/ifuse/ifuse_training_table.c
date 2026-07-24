@@ -47,7 +47,7 @@ static bool power_of_two(unsigned int value) {
 }
 
 static uint64_t pc_tag(Addr pc) {
-    unsigned int bits = IFUSE_TRAINING_TABLE_PC_TAG_BITS;
+    unsigned int bits = IFUSE_PC_TAG_BITS;
     if (bits >= 64U)
         return (uint64_t)pc;
     if (bits == 0U)
@@ -71,7 +71,7 @@ static uint32_t block_tag_for(Addr effective_addr) {
 }
 
 static uint64_t pair_pc_concat(uint64_t ld1_tag, uint64_t ld2_tag) {
-    unsigned int tag_bits = IFUSE_TRAINING_TABLE_PC_TAG_BITS;
+    unsigned int tag_bits = IFUSE_PC_TAG_BITS;
     uint64_t mask = (tag_bits >= 64U) ? ~0ULL : ((1ULL << tag_bits) - 1ULL);
     return ((ld1_tag & mask) << tag_bits) | (ld2_tag & mask);
 }
@@ -100,8 +100,7 @@ void training_table_init(void) {
                 num_sets, num_ways);
         exit(1);
     }
-    if (IFUSE_TRAINING_TABLE_PC_TAG_BITS == 0U ||
-        IFUSE_TRAINING_TABLE_PC_TAG_BITS > 64U) {
+    if (IFUSE_PC_TAG_BITS == 0U || IFUSE_PC_TAG_BITS > 64U) {
         fprintf(stderr, "I-Fuse training table PC tag bits must be 1-64\n");
         exit(1);
     }
@@ -244,7 +243,8 @@ void training_table_observe(Addr ld1_pc, Addr ld2_pc,
     if (entry->observations < IFUSE_TRAINING_INSERT_THRESHOLD)
         return;
 
-    if (fct_install_runtime_candidate(ld1_pc, ld2_pc, ld1_effective_addr,
+    if (fct_install_runtime_candidate((Addr)pc_tag(ld1_pc), (Addr)pc_tag(ld2_pc),
+                                      ld1_effective_addr,
                                       ld2_effective_addr, delta, direction,
                                       ld2_mem_size, ld1_micro_op_num,
                                       ld2_micro_op_num, proc_id)) {

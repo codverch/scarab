@@ -14,8 +14,8 @@
  * ============================
  * The FCT predicts load fusion candidates by mapping each LD1 PC to a single
  * LD2 candidate. Entries can be preloaded from an offline PGO file or promoted
- * by the retire-stage runtime training table. LD1/LD2 PCs use partial tags
- * (IFUSE_FCT_PC_TAG_BITS, default 32).
+ * by the retire-stage runtime training table. LD1/LD2 PCs use IFUSE_PC_TAG_BITS
+ * (shared with RLB and the training table, default 32).
  */
 
  /**
