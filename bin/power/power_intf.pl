@@ -51,7 +51,7 @@ my $debug = shift;
 my $file_tag = shift;
 
 sub parse_mcpat_output;
-sub parse_cacti_dram_output;
+sub parse_cacti_dram_output($$;$$);
 sub get_params;
 sub get_stats;
 sub traverse_stats;
@@ -86,7 +86,7 @@ my %values;
 
 print("Parsing McPAT output ($dir/$file_tag"."mcpat.out) and CACTI output ($dir/$file_tag"."cacti_dram.out)...\n");
 parse_mcpat_output("$dir/$file_tag"."mcpat.out", \%values, $get_voltage_and_freq);
-$values{"MEMORY"} = parse_cacti_dram_output("$dir/$file_tag"."cacti_dram.out", $get_voltage_and_freq);
+$values{"MEMORY"} = parse_cacti_dram_output("$dir/$file_tag"."cacti_dram.out", $get_voltage_and_freq, \%params, \%stats);
 
 open my $out, '>', $model_results_filename ||
     die "Could not open $model_results_filename\n";
@@ -197,10 +197,12 @@ sub parse_mcpat_output($$$)
     return \%values;
 }
 
-sub parse_cacti_dram_output($$)
+sub parse_cacti_dram_output($$;$$)
 {
     my $filename = shift;
     my $get_voltage_and_freq = shift;
+    my $params = shift;
+    my $stats = shift;
     open my $file, "<", $filename || die "Could not open $filename\n";
 
     my %values;
@@ -240,17 +242,19 @@ sub parse_cacti_dram_output($$)
 
     $values{"VOLTAGE"}     = $cacti_values{"Voltage (V)"}          if ($get_voltage_and_freq); 
     $values{"MIN_VOLTAGE"} = $values{"VOLTAGE"}                    if ($get_voltage_and_freq); # for now
-    $values{"FREQUENCY"}   = $params{"POWER_INTF_REF_MEMORY_FREQ"} if ($get_voltage_and_freq);
+    $values{"FREQUENCY"}   = $params->{"POWER_INTF_REF_MEMORY_FREQ"} if ($get_voltage_and_freq);
 
     my $power_dram_precharge_stat = 0;
     my $power_dram_activate_stat  = 0;
     my $power_dram_read_stat      = 0;
     my $power_dram_write_stat     = 0;
-    for my $core_id (0..$params{"NUM_CORES"}-1) {
-      $power_dram_precharge_stat += $stats{"POWER_DRAM_PRECHARGE"}[$core_id];
-      $power_dram_activate_stat  += $stats{"POWER_DRAM_ACTIVATE"}[$core_id];
-      $power_dram_read_stat      += $stats{"POWER_DRAM_READ"}[$core_id];
-      $power_dram_write_stat     += $stats{"POWER_DRAM_WRITE"}[$core_id];
+    my $num_cores = $params->{"NUM_CORES"};
+    $num_cores = 1 if !defined $num_cores || $num_cores < 1;
+    for my $core_id (0..$num_cores - 1) {
+      $power_dram_precharge_stat += $stats->{"POWER_DRAM_PRECHARGE"}[$core_id] // 0;
+      $power_dram_activate_stat  += $stats->{"POWER_DRAM_ACTIVATE"}[$core_id] // 0;
+      $power_dram_read_stat      += $stats->{"POWER_DRAM_READ"}[$core_id] // 0;
+      $power_dram_write_stat     += $stats->{"POWER_DRAM_WRITE"}[$core_id] // 0;
     }
 
     $values{"DYNAMIC"} =
@@ -276,11 +280,15 @@ sub parse_cacti_dram_output($$)
 
     $values{"DYNAMIC"} *= 1.0e-9; # convert from nJoules to Joules
 
-    my $time = $stats{"POWER_CYCLE"}[0]/$params{"POWER_INTF_REF_CHIP_FREQ"};
+    my $chip_freq = $params->{"POWER_INTF_REF_CHIP_FREQ"};
+    $chip_freq = 3.2e9 if !defined $chip_freq || $chip_freq == 0;
+    my $cycles = $stats->{"POWER_CYCLE"}[0] // 0;
+    my $time = $cycles / $chip_freq;
+    $time = 1 if $time <= 0;
     if($debug) {
       print("[parse_cacti_dram_output] time:\n");
-      my $num_cycles = $stats{"POWER_CYCLE"}[0];
-      my $core_freq  = $params{"POWER_INTF_REF_CHIP_FREQ"};
+      my $num_cycles = $cycles;
+      my $core_freq  = $chip_freq;
 
       print("$time sec = $num_cycles (cycles) / $core_freq (freq Hz)\n");
     }
