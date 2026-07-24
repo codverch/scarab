@@ -12,7 +12,7 @@
 
 /*
  * Hardware-design storage model (the C fields below intentionally use normal
- * host types): each entry packs two 48-bit PC tags, a 14-bit observation
+ * host types): each entry packs two IFUSE_PC_TAG_BITS-wide PC tags, a 14-bit observation
  * counter (supports insert thresholds up to 16383, e.g. 10/100/1000/10000),
  * a 6-bit cache-line offset delta, a 3-bit log2(LD2 access size), direction,
  * a partial cache-block tag, and valid. There are 32 sets * 4 ways = 128

@@ -18,8 +18,9 @@
 /**
  * Set-associative Active Pair Table (APT)
  * =======================================
- * LD1 inserts a live prediction keyed by LD2 PC; LD2 probes the set selected
- * by hash(LD2 PC) and claims one unmatched entry with a matching LD2 PC.
+ * LD1 inserts a live prediction keyed by LD2 PC tag; LD2 probes the set selected
+ * by hash(LD2 PC tag) and claims one unmatched entry with a matching LD2 tag.
+ * LD2 tags use IFUSE_PC_TAG_BITS (shared with RLB, TT, and FCT).
  *
  * Multiple dynamic LD1s may wait for the same LD2 PC (up to num_ways in the
  * set). IFUSE_APT_MATCH_POLICY chooses first- or most-recent-inserted.
@@ -44,8 +45,17 @@ static APT_Entry* apt_entry_at(unsigned int set, unsigned int way) {
     return &entries[set * num_ways + way];
 }
 
+static Addr apt_pc_tag(Addr pc) {
+    unsigned int bits = IFUSE_PC_TAG_BITS;
+    if (bits >= 64U)
+        return pc;
+    if (bits == 0U)
+        return 0;
+    return pc & (Addr)((1ULL << bits) - 1ULL);
+}
+
 static unsigned int apt_set_index(Addr ld2_pc_addr) {
-    uint64_t h = (uint64_t)ld2_pc_addr;
+    uint64_t h = (uint64_t)apt_pc_tag(ld2_pc_addr);
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccdULL;
     h ^= h >> 33;
@@ -204,6 +214,10 @@ void apt_init(void) {
                 num_sets, num_ways);
         exit(1);
     }
+    if (IFUSE_PC_TAG_BITS == 0U || IFUSE_PC_TAG_BITS > 64U) {
+        fprintf(stderr, "APT: ifuse_pc_tag_bits must be in [1, 64]\n");
+        exit(1);
+    }
 
     entries = (APT_Entry*)calloc((size_t)num_sets * num_ways, sizeof(*entries));
     plru = (uint8_t*)calloc(num_sets, sizeof(*plru));
@@ -240,8 +254,9 @@ APT_Entry* apt_lookup(Addr ld2_pc_addr) {
         return NULL;
     }
 
-    unsigned int set = apt_set_index(ld2_pc_addr);
-    APT_Entry* entry = apt_find_matching_entry(set, ld2_pc_addr);
+    Addr ld2_tag = apt_pc_tag(ld2_pc_addr);
+    unsigned int set = apt_set_index(ld2_tag);
+    APT_Entry* entry = apt_find_matching_entry(set, ld2_tag);
     if (!entry) {
         return NULL;
     }
@@ -265,10 +280,11 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
         return NULL;
     }
 
-    unsigned int set = apt_set_index(ld2_pc_addr);
+    Addr ld2_tag = apt_pc_tag(ld2_pc_addr);
+    unsigned int set = apt_set_index(ld2_tag);
     APT_Entry* entry = apt_allocate_entry(set);
 
-    entry->ld2_pc_addr                      = ld2_pc_addr;
+    entry->ld2_pc_addr                      = ld2_tag;
     entry->ld1_pc_addr                      = ld1_pc_addr;
     entry->ld1_effective_addr               = ld1_effective_addr;
     entry->ld1_micro_op_num                 = ld1_micro_op_num;
@@ -290,9 +306,10 @@ void apt_remove_entry_by_ld1_micro_op(Addr ld2_pc_addr,
         return;
     }
 
-    unsigned int set = apt_set_index(ld2_pc_addr);
+    Addr ld2_tag = apt_pc_tag(ld2_pc_addr);
+    unsigned int set = apt_set_index(ld2_tag);
     APT_Entry* entry =
-        apt_find_entry_by_ld1(set, ld2_pc_addr, ld1_micro_op_num);
+        apt_find_entry_by_ld1(set, ld2_tag, ld1_micro_op_num);
     if (entry) {
         apt_clear_entry(set, apt_entry_way(entry), false);
     }
@@ -315,9 +332,10 @@ bool apt_reopen_matched_entry(Addr ld2_pc_addr,
         return false;
     }
 
-    unsigned int set = apt_set_index(ld2_pc_addr);
+    Addr ld2_tag = apt_pc_tag(ld2_pc_addr);
+    unsigned int set = apt_set_index(ld2_tag);
     APT_Entry* entry =
-        apt_find_matched_entry(set, ld2_pc_addr, ld1_micro_op_num);
+        apt_find_matched_entry(set, ld2_tag, ld1_micro_op_num);
     if (!entry) {
         return false;
     }
@@ -352,9 +370,10 @@ bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
         return false;
     }
 
-    unsigned int set = apt_set_index(ld2_pc_addr);
+    Addr ld2_tag = apt_pc_tag(ld2_pc_addr);
+    unsigned int set = apt_set_index(ld2_tag);
     APT_Entry* entry =
-        apt_find_entry_by_ld1(set, ld2_pc_addr, ld1_micro_op_num);
+        apt_find_entry_by_ld1(set, ld2_tag, ld1_micro_op_num);
     if (!entry || entry->ld2_physical_reg_id == 0xFFFF) {
         return false;
     }
