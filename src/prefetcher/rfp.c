@@ -258,6 +258,21 @@ Flag rfp_predict(Addr pc, Addr *predicted_addr) {
   return TRUE;
 }
 
+/* Clear PT confidence after an execute-time address mismatch (ISCA'22 / README). */
+void rfp_reset_confidence_on_mispredict(uns8 proc_id, Addr pc) {
+  RFP_PT_Entry* entry;
+
+  if (!RFP_ON)
+    return;
+
+  entry = rfp_get_entry(pc);
+  if (!entry || entry->confidence == 0)
+    return;
+
+  entry->confidence = 0;
+  STAT_EVENT(proc_id, RFP_CONF_RESET_ON_MISPRED);
+}
+
 /* Per-op RFP fetch-time reset (icache). Ved: F5 — the PT lookup/prediction itself moved to rename
    (rfp_prefetch_launch) so its lookahead reads the same inflight it increments; only the field resets
    remain here at fetch (ISCA'22 §3.4). */

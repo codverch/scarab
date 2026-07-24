@@ -306,6 +306,7 @@ void update_dcache_stage(Stage_Data* src_sd) {
         }
         STAT_EVENT(op->proc_id, RFP_PREDICTION_WRONG);
         STAT_EVENT(op->proc_id, RFP_PRF_CLEARED_DUE_TO_MISPRED);
+        rfp_reset_confidence_on_mispredict(op->proc_id, op->inst_info->addr);
         op->rfp_mispred_accounted = TRUE;
       } else {
         /* The prefetch had NOT won L1 arbitration by the time the load dispatched (the RFP-inflight bit

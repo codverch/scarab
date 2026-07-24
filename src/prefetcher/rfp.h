@@ -64,5 +64,6 @@ void rfp_predict_at_fetch(Op* op);
 void rfp_prefetch_launch(Op* op);
 void rfp_train_retire(Op* op);
 void rfp_track_squash(Op* op);
+void rfp_reset_confidence_on_mispredict(uns8 proc_id, Addr pc);
 
 #endif
