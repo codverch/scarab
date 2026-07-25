@@ -14,21 +14,8 @@
  * The stride-learning, confidence, and prediction algorithm below is ported
  * verbatim from src/prefetcher/rfp.c (branch hpca2027-rfp) -- rfp_train_entry
  * and rfp_predict -- with the PRF/launch/timing machinery removed (nothing
- * here ever launches a request) and two intentional differences, both scoped
- * to removing capacity/replacement limits for an "ideal-capacity" oracle:
- *
- *   1. PT/PAT set/way counts are configured far larger than any realistic
- *      number of unique static load PCs / resident pages, so eviction should
- *      not occur in practice. This required no algorithm change -- table
- *      size was already a parameter.
- *
- *   2. RFP's real PAT entry pointer (rfp_pt[].pat_ptr) is a 1-byte field,
- *      hard-capping the PAT at 256 resident pages system-wide, independent of
- *      any size parameter. Here that field is widened to 32 bits so the
- *      shadow PAT can track arbitrarily many resident pages. This is the one
- *      deliberate divergence from "identical to RFP's hardware model" --
- *      confirmed acceptable since this predictor is not meant to be
- *      hardware-realistic.
+ * here ever launches a request). PT/PAT sizing and the 8-bit PAT pointer match
+ * the hardware model in rfp.h / rfp.param.def (default: 128x8 PT, 16x4 PAT).
  *
  * Everything else -- the 1-bit confidence counter, the probabilistic 1/16
  * confidence increment, the 5-bit signed stride field and its range check,

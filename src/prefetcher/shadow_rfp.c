@@ -1,11 +1,11 @@
-/* Shadow RFP -- oracle-capacity RFP stride predictor, observational only.
+/* Shadow RFP -- hardware-sized RFP stride predictor, observational only.
  *
  * Ported from src/prefetcher/rfp.c (branch hpca2027-rfp): rfp_train_entry and
  * rfp_predict are reproduced here unchanged in algorithm (same 5-bit signed
  * stride field + range check, same 1-bit confidence with the 1/16
  * probabilistic increment, same utility-based PT victim policy, same
- * inflight-based prediction lookahead). See shadow_rfp.h for the two
- * intentional differences (enlarged PT/PAT capacity, widened PAT pointer).
+ * inflight-based prediction lookahead). PT/PAT sizing defaults match
+ * rfp.param.def (128x8 PT, 16x4 PAT).
  */
 
 #include "prefetcher/shadow_rfp.h"
@@ -26,14 +26,12 @@ typedef enum Shadow_Rfp_Update_Reason_enum {
   SHADOW_RFP_UPDATE_CONFIRM,
 } Shadow_Rfp_Update_Reason;
 
-/* Max PT/PAT sizes: enlarged far past any realistic number of unique static
- * load PCs / resident pages so eviction should not occur in practice. Purely
- * a capacity knob -- the lookup/train/predict logic below is agnostic to
- * these sizes. */
-#define SHADOW_RFP_PT_MAX_SETS 65536
-#define SHADOW_RFP_PT_MAX_WAYS 16
-#define SHADOW_RFP_PAT_MAX_SETS 16384
-#define SHADOW_RFP_PAT_MAX_WAYS 16
+/* Max PT/PAT sizes for the 24 KB RFP sweep point (512x8 PT, 64x8 PAT),
+ * matching src/prefetcher/rfp.h on branch hpca2027-rfp. */
+#define SHADOW_RFP_PT_MAX_SETS 512
+#define SHADOW_RFP_PT_MAX_WAYS 8
+#define SHADOW_RFP_PAT_MAX_SETS 64
+#define SHADOW_RFP_PAT_MAX_WAYS 8
 
 #define SHADOW_RFP_TAG_BITS 16
 #define SHADOW_RFP_TAG_MASK ((1u << SHADOW_RFP_TAG_BITS) - 1)
@@ -65,10 +63,7 @@ typedef struct Shadow_Rfp_Pat_Entry_struct {
 
 typedef struct Shadow_Rfp_Pt_Entry_struct {
   uns16 tag;
-  /* Widened vs. real RFP's uns8 pat_ptr: that field hard-caps the real PAT at
-   * 256 resident pages regardless of any size parameter. This is the one
-   * deliberate divergence from the hardware model (see shadow_rfp.h). */
-  uns32 pat_ptr;
+  uns8 pat_ptr;
   uns16 page_offset;
   int8 stride;
   uns8 confidence;
@@ -120,12 +115,12 @@ static inline uns shadow_rfp_pat_set(Addr pfn) {
   return (uns)(pfn & (SHADOW_RFP_PAT_NUM_SETS - 1));
 }
 
-static inline uns32 shadow_rfp_pat_ptr_encode(uns set, uns way) {
+static inline uns8 shadow_rfp_pat_ptr_encode(uns set, uns way) {
   ASSERT(0, set < SHADOW_RFP_PAT_NUM_SETS && way < SHADOW_RFP_PAT_NUM_WAYS);
-  return (uns32)set * (uns32)SHADOW_RFP_PAT_NUM_WAYS + (uns32)way;
+  return (uns8)(set * SHADOW_RFP_PAT_NUM_WAYS + way);
 }
 
-static inline void shadow_rfp_pat_ptr_decode(uns32 pat_ptr, uns* set, uns* way) {
+static inline void shadow_rfp_pat_ptr_decode(uns8 pat_ptr, uns* set, uns* way) {
   ASSERT(0, pat_ptr < shadow_rfp_pat_num_entries());
   *set = pat_ptr / SHADOW_RFP_PAT_NUM_WAYS;
   *way = pat_ptr % SHADOW_RFP_PAT_NUM_WAYS;
@@ -150,10 +145,10 @@ static int shadow_rfp_pat_lookup_ptr(Addr pfn) {
   return -1;
 }
 
-static uns32 shadow_rfp_pat_alloc_ptr(Addr pfn) {
+static int shadow_rfp_pat_alloc_ptr(Addr pfn) {
   int ptr = shadow_rfp_pat_lookup_ptr(pfn);
   if (ptr >= 0)
-    return (uns32)ptr;
+    return ptr;
 
   uns set = shadow_rfp_pat_set(pfn);
 
@@ -162,23 +157,22 @@ static uns32 shadow_rfp_pat_alloc_ptr(Addr pfn) {
       shadow_rfp_pat[set][way].valid = TRUE;
       shadow_rfp_pat[set][way].pfn = pfn;
       STAT_EVENT(0, SHADOW_RFP_PAT_ALLOC);
-      return shadow_rfp_pat_ptr_encode(set, way);
+      return (int)shadow_rfp_pat_ptr_encode(set, way);
     }
   }
 
-  /* Should not happen at these sizes for real traces; kept only so an
-   * undersized configuration fails loudly instead of silently corrupting a
-   * stored address. */
+  /* Set is full — evict way 0 (matches rfp.c). */
   STAT_EVENT(0, SHADOW_RFP_PAT_EVICT);
   shadow_rfp_pat[set][0].valid = TRUE;
   shadow_rfp_pat[set][0].pfn = pfn;
-  return shadow_rfp_pat_ptr_encode(set, 0);
+  return (int)shadow_rfp_pat_ptr_encode(set, 0);
 }
 
 static void shadow_rfp_entry_set_va(Shadow_Rfp_Pt_Entry* entry, Addr va) {
-  uns32 pat_ptr = shadow_rfp_pat_alloc_ptr(shadow_rfp_va_pfn(va));
+  int pat_ptr = shadow_rfp_pat_alloc_ptr(shadow_rfp_va_pfn(va));
 
-  entry->pat_ptr = pat_ptr;
+  ASSERT(0, pat_ptr >= 0 && pat_ptr < (int)shadow_rfp_pat_num_entries());
+  entry->pat_ptr = (uns8)pat_ptr;
   entry->page_offset = shadow_rfp_va_page_offset(va);
 }
 
@@ -187,6 +181,7 @@ void shadow_rfp_init(void) {
   ASSERT(0, SHADOW_RFP_PAT_NUM_SETS > 0 && SHADOW_RFP_PAT_NUM_WAYS > 0);
   ASSERT(0, SHADOW_RFP_PT_NUM_SETS <= SHADOW_RFP_PT_MAX_SETS && SHADOW_RFP_PT_NUM_WAYS <= SHADOW_RFP_PT_MAX_WAYS);
   ASSERT(0, SHADOW_RFP_PAT_NUM_SETS <= SHADOW_RFP_PAT_MAX_SETS && SHADOW_RFP_PAT_NUM_WAYS <= SHADOW_RFP_PAT_MAX_WAYS);
+  ASSERT(0, shadow_rfp_pat_num_entries() <= 256);
   ASSERT(0, (SHADOW_RFP_PT_NUM_SETS & (SHADOW_RFP_PT_NUM_SETS - 1)) == 0);
   ASSERT(0, (SHADOW_RFP_PAT_NUM_SETS & (SHADOW_RFP_PAT_NUM_SETS - 1)) == 0);
 
