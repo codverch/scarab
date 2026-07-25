@@ -45,6 +45,7 @@
 
 #include "ft.h"
 #include "op_pool.h"
+#include "prefetcher/shadow_rfp.h"
 
 /**************************************************************************************/
 /* Macros */
@@ -111,6 +112,17 @@ void remove_from_seq_op_list(Thread_Data* td, Op* op) {
 /* recover_seq_op_list: */
 
 void recover_seq_op_list(Thread_Data* td, Counter op_num) {
+  /* Shadow RFP: decrement per-PC inflight bookkeeping for every on-path load
+   * that this recovery is about to squash, before the list below is
+   * cleared/clipped. Observation only: fires no prefetch, touches no
+   * cache/memory state, and does not affect I-Fuse or timing. */
+  Op** shadow_squash_op_p = (Op**)list_start_head_traversal(&td->seq_op_list);
+  for (; shadow_squash_op_p; shadow_squash_op_p = (Op**)list_next_element(&td->seq_op_list)) {
+    if ((*shadow_squash_op_p)->op_num > op_num) {
+      shadow_rfp_track_squash(*shadow_squash_op_p);
+    }
+  }
+
   // Traverse the sequential op list and remove everything younger than the
   // recovering op
   Op** op_p = (Op**)list_start_head_traversal(&td->seq_op_list);

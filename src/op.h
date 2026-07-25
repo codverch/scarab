@@ -84,6 +84,17 @@ typedef enum Fusion_Candidate_Type {
   PREDICTED_NOT_FUSED,
 } Fusion_Candidate_Type;
 
+/* Why the shadow RFP predictor (src/prefetcher/shadow_rfp.c) did not yield a
+ * confident, correct prediction for a dynamic load. Defined here (not in
+ * shadow_rfp.h) because shadow_rfp.h itself includes op.h. */
+typedef enum Shadow_Rfp_Reason_enum {
+  SHADOW_RFP_REASON_NONE = 0,            /* predicted (see shadow_rfp_predicted on the op) */
+  SHADOW_RFP_REASON_NO_HISTORY,          /* no PT entry has ever been allocated for this PC */
+  SHADOW_RFP_REASON_STRIDE_OUT_OF_RANGE, /* last observed byte stride didn't fit the 5-bit field */
+  SHADOW_RFP_REASON_STRIDE_CHANGED,      /* last observed stride differed from the stored stride */
+  SHADOW_RFP_REASON_NOT_CONFIDENT,       /* stride has been stable, confidence hasn't saturated yet */
+} Shadow_Rfp_Reason;
+
 /**************************************************************************************/
 
 typedef struct Wake_Up_Entry_struct {
@@ -259,6 +270,16 @@ struct Op_struct {
   Flag                  ifuse_recovery_squashed;
   /* Dynamic on-path load distance LD2 - LD1 at fetch (0 if not LOAD2). */
   uint64_t              ifuse_pair_distance;
+  // }}}
+
+  // {{{ shadow RFP (predictability oracle, see src/prefetcher/shadow_rfp.c)
+  /* Snapshotted at rename by shadow_rfp_predict_at_rename; read at retire by
+   * shadow_rfp_record_ifuse_outcome. Never used by I-Fuse or by timing. */
+  Flag             shadow_rfp_predicted;
+  Addr             shadow_rfp_predicted_addr;
+  uns8             shadow_rfp_confidence;
+  int8             shadow_rfp_stride;
+  Shadow_Rfp_Reason shadow_rfp_reason;
   // }}}
 
   FT* parent_FT;

@@ -64,6 +64,7 @@
 #include "map.h"
 #include "map_rename.h"
 #include "op_pool.h"
+#include "prefetcher/shadow_rfp.h"
 #include "sim.h"
 #include "statistics.h"
 #include "thread.h"
@@ -573,6 +574,11 @@ void node_retire() {
         if (fused_path) {
           STAT_EVENT(op->proc_id, IFUSE_NUM_FUSED_LOADS);
           STAT_EVENT(op->proc_id, IFUSE_LOAD_COVERAGE);
+          /* Shadow RFP: this load was successfully fused by I-Fuse -- query
+           * whether the (rename-time) shadow RFP prediction would also have
+           * covered it, and classify why not otherwise. Stats-only; never
+           * affects I-Fuse or timing. */
+          shadow_rfp_record_ifuse_outcome(op);
         } else {
           STAT_EVENT(op->proc_id, IFUSE_NUM_DEMAND_LOADS);
         }
@@ -629,6 +635,12 @@ void node_retire() {
 
     /* Learn only from committed operations and use all-uop program distance. */
     ifuse_train_retired_op(op);
+
+    /* Shadow RFP: train unconditionally on every retiring on-path load,
+     * mirroring RFP's own unconditional retire-time training. Must run
+     * regardless of I-Fuse outcome so the shadow table's knowledge matches
+     * what a real, always-on RFP would have learned by this point. */
+    shadow_rfp_train_retire(op);
 
     // Count completed fusions, not speculative frontend classifications.
     if (op->ifuse_load_role == LOAD2) {

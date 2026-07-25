@@ -1,0 +1,52 @@
+/* Shadow RFP (predictability oracle) statistics.
+ *
+ * Answers: among dynamic loads I-Fuse successfully fused, what fraction
+ * could also have been correctly predicted by RFP?
+ *
+ *   IFUSE_TOTAL_PREDICTED_LOADS = IFUSE_AND_RFP_PREDICTED + IFUSE_ONLY_PREDICTED
+ *   IFUSE_ONLY_PREDICTED        = RFP_NOT_CONFIDENT + RFP_STRIDE_CHANGED
+ *                                + RFP_STRIDE_OUT_OF_RANGE + RFP_NO_HISTORY
+ *                                + RFP_CONFIDENT_BUT_WRONG
+ *
+ * Every one of these fires only when I-Fuse successfully fused the load
+ * (shadow_rfp_record_ifuse_outcome is called from that retire-time path
+ * only); this is a coverage-overlap accounting, not a general RFP coverage
+ * stat over all loads.
+ */
+
+/* --- Denominator: I-Fuse-fused loads for which we queried the shadow predictor. --- */
+DEF_STAT(IFUSE_TOTAL_PREDICTED_LOADS, COUNT, NO_RATIO)
+
+/* --- Of those, would RFP also have predicted (confidently AND correctly)? --- */
+DEF_STAT(IFUSE_AND_RFP_PREDICTED, RATIO, IFUSE_TOTAL_PREDICTED_LOADS)
+/* Complement of the above: RFP would not have covered this load, for any reason
+ * below (including confident-but-wrong). */
+DEF_STAT(IFUSE_ONLY_PREDICTED, RATIO, IFUSE_TOTAL_PREDICTED_LOADS)
+
+/* --- Why RFP did not cover it (mutually exclusive, sum to IFUSE_ONLY_PREDICTED). --- */
+/* Entry existed, last update confirmed the stored stride, but the 1-bit
+ * confidence counter had not yet won its 1/16 probabilistic increment. */
+DEF_STAT(RFP_NOT_CONFIDENT, RATIO, IFUSE_ONLY_PREDICTED)
+/* Entry existed, but the immediately preceding observed stride differed from
+ * the stored one (confidence was just reset). */
+DEF_STAT(RFP_STRIDE_CHANGED, RATIO, IFUSE_ONLY_PREDICTED)
+/* Entry existed, but the immediately preceding observed byte stride did not
+ * fit RFP's 5-bit signed stride field. */
+DEF_STAT(RFP_STRIDE_OUT_OF_RANGE, RATIO, IFUSE_ONLY_PREDICTED)
+/* No PT entry has ever been allocated for this load PC (first dynamic
+ * instance, or only ever seen once). */
+DEF_STAT(RFP_NO_HISTORY, RATIO, IFUSE_ONLY_PREDICTED)
+/* Entry was confident (prediction ceiling reached) but the predicted address
+ * did not match the load's actual oracle address -- RFP would have
+ * prefetched the wrong line. Counted as an I-Fuse-only load: a confident
+ * wrong prediction is not coverage. */
+DEF_STAT(RFP_CONFIDENT_BUT_WRONG, RATIO, IFUSE_ONLY_PREDICTED)
+
+/* --- Internal shadow-table diagnostics (over the FULL load stream, not just
+ * I-Fuse-fused loads -- for sanity-checking the ported predictor itself,
+ * not part of the headline coverage-overlap result above). --- */
+DEF_STAT(SHADOW_RFP_PT_ALLOC, COUNT, NO_RATIO)
+DEF_STAT(SHADOW_RFP_PAT_ALLOC, COUNT, NO_RATIO)
+DEF_STAT(SHADOW_RFP_PAT_EVICT, COUNT, NO_RATIO)
+DEF_STAT(SHADOW_RFP_CONF_INC, COUNT, NO_RATIO)
+DEF_STAT(SHADOW_RFP_STRIDE_OUT_OF_RANGE_EVENTS, COUNT, NO_RATIO)

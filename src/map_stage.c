@@ -53,6 +53,7 @@
 #include "map_rename.h"
 #include "model.h"
 #include "op_pool.h"
+#include "prefetcher/shadow_rfp.h"
 #include "statistics.h"
 #include "thread.h"
 
@@ -264,6 +265,12 @@ static inline void stage_process_op(Op* op) {
 
   /* register renaming allocation */
   reg_file_rename(op);
+
+  /* Shadow RFP: oracle-capacity RFP predictor, observation only (never
+   * issues a prefetch, never affects timing or I-Fuse). Snapshots "would
+   * RFP have predicted this dynamic load?" for later comparison against
+   * I-Fuse's own outcome at retire. */
+  shadow_rfp_predict_at_rename(op);
 
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);

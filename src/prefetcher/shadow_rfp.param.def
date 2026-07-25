@@ -1,0 +1,12 @@
+/* Shadow RFP (predictability oracle) parameters.
+ *
+ * Defaults are sized far past any realistic number of unique static load PCs
+ * (PT) or resident pages (PAT) for our traces, so eviction should not occur
+ * in practice -- this is the "ideal capacity" predictor. See
+ * src/prefetcher/shadow_rfp.h for why PAT capacity required widening the
+ * pat_ptr field in addition to raising these counts.
+ */
+DEF_PARAM(shadow_rfp_pt_num_sets, SHADOW_RFP_PT_NUM_SETS, uns, uns, 16384, )
+DEF_PARAM(shadow_rfp_pt_num_ways, SHADOW_RFP_PT_NUM_WAYS, uns, uns, 8, )
+DEF_PARAM(shadow_rfp_pat_num_sets, SHADOW_RFP_PAT_NUM_SETS, uns, uns, 4096, )
+DEF_PARAM(shadow_rfp_pat_num_ways, SHADOW_RFP_PAT_NUM_WAYS, uns, uns, 8, )
