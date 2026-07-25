@@ -30,7 +30,7 @@
 --uop_cache_assoc 8
 --iprf_on_uop_cache_hit 1
 --dcache_size 49152
---dcache_assoc 12
+--dcache_assoc 8
 --dcache_line_size 64
 --dcache_cycles 5
 --dcache_read_ports 1
@@ -133,7 +133,6 @@
 --ibtb_off_path_writes 1                         # Allow off path ops to update the ibtb.
 --tc_entries 4096
 --tc_assoc 4
---power_intf_on 1
 --pref_stream_on 1
 --stream_prefetch_n 4
 --stream_start_dis 1
@@ -152,6 +151,7 @@
 --pref_update_interval 8192
 --pref_timely_thresh 0.01
 --pref_polpf_thresh 0.005
+--rfp_on 0
 1 1 1 1 1 1 1 
 
 --- Cut out everything below to use this file as PARAMS.in ---
@@ -274,7 +274,7 @@ FDIP_UC_INSERT_REPLPOL                   0
 MAP_STAGE_CONSUME_FROM_ICACHE_AND_UOC_SAME_CYCLE TRUE                            
 UOP_QUEUE_LENGTH                         7                               
 DCACHE_SIZE                              (64 * 1024)                     49152
-DCACHE_ASSOC                             1                               12
+DCACHE_ASSOC                             1                               8
 DCACHE_LINE_SIZE                         64                              64
 DCACHE_CYCLES                            2                               5
 PERFECT_DCACHE                           FALSE                           
@@ -873,7 +873,7 @@ H2P_TRACK_CALL                           FALSE
 H2P_TRACK_IBR                            FALSE                           
 H2P_TRACK_ICALL                          FALSE                           
 H2P_TRACK_RET                            FALSE                           
-POWER_INTF_ON                            FALSE                           1
+POWER_INTF_ON                            FALSE                           
 POWER_INTF_ENABLE_SCALING                FALSE                           
 POWER_INTF_EXEC                          "power/power_intf.py"            
 POWER_INTF_REF_CHIP_TECH_NM              22                              
@@ -1100,3 +1100,8 @@ PREF_MARKOV_SEND_ON_PREF_HIT             TRUE
 PREF_MARKOV_UPDATE_ON_PREF_HIT           TRUE                            
 PREF_MARKOV_TABLE_UPDATE_POLICY          0                               
 PREF_MARKOV_SEND_THRESHOLD               0                               
+RFP_ON                                   TRUE                            0
+RFP_MODEL                                1                               
+RFP_LSQ_FIFO_SIZE                        64                              
+RFP_DROP_ON_L1_MISS                      TRUE                            
+RFP_MEM_BUF_RESERVE                      4                               
