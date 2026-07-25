@@ -7,7 +7,6 @@
 --memtrace_roi_end 30000000
 --full_warmup 20000000
 --use_fetched_count 1
---bindir /home/deepmish/scarab_stage/rfp-prob-shift-sweep/scarab/bin
 --dump_params 1
 --dump_stats 1
 --dump_trace 0
@@ -158,7 +157,10 @@
 --rfp_pt_num_ways 8
 --rfp_pat_num_sets 64
 --rfp_pat_num_ways 4
---rfp_prob_shift 2
+--rfp_prob_shift 1
+--rfp_conf_max 1
+--rfp_stride_bits 16
+--rfp_stride_signed 1
 1 1 1 1 1 1 1 
 
 --- Cut out everything below to use this file as PARAMS.in ---
@@ -186,7 +188,7 @@ PERIODIC_DUMP                            FALSE
 FILE_TAG                                 ""                              
 OUTPUT_DIR                               "."                             
 STATUS_FILE                              NULL                            
-BINDIR                                   NULL                            /home/deepmish/scarab_stage/rfp-prob-shift-sweep/scarab/bin
+BINDIR                                   NULL                            
 DUMP_PARAMS                              TRUE                            1
 DUMP_STATS                               TRUE                            1
 DUMP_TRACE                               FALSE                           0
@@ -1116,4 +1118,7 @@ RFP_PT_NUM_SETS                          128                             512
 RFP_PT_NUM_WAYS                          8                               8
 RFP_PAT_NUM_SETS                         16                              64
 RFP_PAT_NUM_WAYS                         4                               4
-RFP_PROB_SHIFT                           4                               2
+RFP_PROB_SHIFT                           4                               1
+RFP_CONF_MAX                             1                               1
+RFP_STRIDE_BITS                          5                               16
+RFP_STRIDE_SIGNED                        TRUE                            1
