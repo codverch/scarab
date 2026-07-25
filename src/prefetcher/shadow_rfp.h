@@ -64,7 +64,7 @@ void shadow_rfp_track_squash(Op* op);
 /* Call exactly when I-Fuse has successfully fused this dynamic load (i.e.
  * where the caller already knows op is the retiring, fused-path load).
  * Compares the rename-time shadow-RFP snapshot on op against
- * op->oracle_info.va and fires the IFUSE_*/RFP_* coverage-overlap stats
+ * op->oracle_info.va and fires the IFUSE_/RFP_ coverage-overlap stats
  * (see shadow_rfp.stat.def). Read-only: fires stats only, never mutates
  * timing or the shadow table itself. */
 void shadow_rfp_record_ifuse_outcome(Op* op);
