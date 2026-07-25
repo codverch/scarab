@@ -1,0 +1,48 @@
+Scarab gitrev: 2fbd24f1f
+Scarab started at Fri Jul 24 08:56:35 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (47.62 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 50.00 KIPS (48.78 KIPS)
+** Heartbeat:  10% -- { 3000005 } -- 52.63 KIPS (50.00 KIPS)
+** Heartbeat:  13% -- { 4000007 } -- 50.00 KIPS (50.00 KIPS)
+** Heartbeat:  16% -- { 5000007 } -- 50.00 KIPS (50.00 KIPS)
+** Heartbeat:  20% -- { 6000008 } -- 50.00 KIPS (50.00 KIPS)
+** Heartbeat:  23% -- { 7000009 } -- 52.63 KIPS (50.36 KIPS)
+** Heartbeat:  26% -- { 8000009 } -- 50.00 KIPS (50.31 KIPS)
+** Heartbeat:  30% -- { 9000009 } -- 52.63 KIPS (50.56 KIPS)
+Patching gap in trace by injecting a Jmp, prior PC: 7f8bf46a3298 next PC: 7f8bf4a5ccd4
+** Heartbeat:  33% -- { 10000013 } -- 50.00 KIPS (50.51 KIPS)
+** Heartbeat:  36% -- { 11000019 } -- 50.00 KIPS (50.46 KIPS)
+** Heartbeat:  40% -- { 12000020 } -- 50.00 KIPS (50.42 KIPS)
+** Heartbeat:  43% -- { 13000020 } -- 55.56 KIPS (50.78 KIPS)
+** Heartbeat:  46% -- { 14000021 } -- 50.00 KIPS (50.72 KIPS)
+** Heartbeat:  50% -- { 15000022 } -- 52.63 KIPS (50.85 KIPS)
+** Heartbeat:  53% -- { 16000026 } -- 50.00 KIPS (50.79 KIPS)
+** Heartbeat:  56% -- { 17000028 } -- 52.63 KIPS (50.90 KIPS)
+** Heartbeat:  60% -- { 18000034 } -- 50.00 KIPS (50.85 KIPS)
+** Heartbeat:  63% -- { 19000034 } -- 50.00 KIPS (50.80 KIPS)
+** Heartbeat:  66% -- { 20000035 } -- 50.00 KIPS (50.76 KIPS)
+** Heartbeat:  70% -- { 21000042 } -- 52.63 KIPS (50.85 KIPS)
+** Heartbeat:  73% -- { 22000048 } -- 50.00 KIPS (50.81 KIPS)
+** Heartbeat:  76% -- { 23000050 } -- 55.56 KIPS (51.00 KIPS)
+** Heartbeat:  80% -- { 24000054 } -- 76.92 KIPS (51.72 KIPS)
+** Heartbeat:  83% -- { 25000054 } -- 71.43 KIPS (52.30 KIPS)
+Patching gap in trace by injecting a Jmp, prior PC: 7f8c0bf70808 next PC: 7f8c0bf7080f
+** Heartbeat:  86% -- { 26000055 } -- 76.92 KIPS (52.95 KIPS)
+** Heartbeat:  90% -- { 27000060 } -- 76.92 KIPS (53.57 KIPS)
+** Heartbeat:  93% -- { 28000065 } -- 76.92 KIPS (54.16 KIPS)
+** Heartbeat:  96% -- { 29000069 } -- 83.33 KIPS (54.82 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f8bf4863ed0
+sh: 1: Syntax error: word unexpected (expecting ")")
+** Core 0 Finished:    insts:30000000    cycles:17847525    time:5577351562500       -- 1.68 IPC (1.68 IPC) --  N/A  KIPS (55.35 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33799659  I=30000000  C=17847525):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33799659  I=30000000  C=17847525):  Command "python3 (null)/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/runtime-ifuse-train-threshold-sweep/scarab/src/scarab_current(+0x274156) [0x5555557c8156]
+/home/deepmish/scarab_stage/runtime-ifuse-train-threshold-sweep/scarab/src/scarab_current(+0x31e74e) [0x55555587274e]
+/home/deepmish/scarab_stage/runtime-ifuse-train-threshold-sweep/scarab/src/scarab_current(+0x1e6e73) [0x55555573ae73]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/runtime-ifuse-train-threshold-sweep/scarab/src/scarab_current(+0x1eb66e) [0x55555573f66e]
