@@ -1,75 +1,104 @@
 {
-  "experiment": "rfp-final-tuned",
-  "architecture": "golden_cove",
-  "pt_pat_storage": "24KB (512x8 PT, 64x4 PAT)",
-  "baseline_source": "/users/deepmish/scarab/src/simulations-confidence-1/baseline",
-  "per_app_config": {
-    "appworld": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
-      "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
-    },
+  "apps": {
     "bfs": {
-      "config_name": "rfp_prob_p22",
-      "rfp_prob_shift": 22,
+      "config": "rfp_p3_s16",
+      "prob_shift": 3,
       "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^22",
-      "note": "Ultra-conservative P(conf++)=1/2^22 to avoid IPC loss on graph traversal"
-    },
-    "clickhouse": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
-      "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
-    },
-    "core_bench": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
-      "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 3 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 4,
+      "rfp_simpoints": 4
     },
     "dfs": {
-      "config_name": "rfp_prob_p22",
-      "rfp_prob_shift": 22,
+      "config": "rfp_p0_s16",
+      "prob_shift": 0,
       "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^22",
-      "note": "Same as bfs"
-    },
-    "duckdb": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
-      "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 0 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 4,
+      "rfp_simpoints": 4
     },
     "pagerank": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
+      "config": "rfp_p1_s16",
+      "prob_shift": 1,
       "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 1 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 5,
+      "rfp_simpoints": 5
+    },
+    "appworld": {
+      "config": "rfp_prob_p2",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 2 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 3,
+      "rfp_simpoints": 3
+    },
+    "clickhouse": {
+      "config": "rfp_prob_p2",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 2 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 1,
+      "rfp_simpoints": 1
+    },
+    "core_bench": {
+      "config": "rfp_prob_p2",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 2 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 3,
+      "rfp_simpoints": 3
+    },
+    "duckdb": {
+      "config": "rfp_prob_p2",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 2 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 2,
+      "rfp_simpoints": 2
     },
     "rocksdb": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
+      "config": "rfp_prob_p2",
+      "prob_shift": 2,
       "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 2 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 3,
+      "rfp_simpoints": 3
     },
     "terminal_bench": {
-      "config_name": "rfp_prob_p2",
-      "rfp_prob_shift": 2,
+      "config": "rfp_prob_p2",
+      "prob_shift": 2,
       "rfp_conf_max": 1,
-      "p_conf_increment": "1/2^2",
-      "note": "P(conf++)=1/4 \u2014 best IPC/coverage tradeoff from prob-shift sweep"
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_prob_shift 2 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "sim_root": "simulations",
+      "baseline_simpoints": 2,
+      "rfp_simpoints": 2
     }
   },
-  "degraded_apps_tuning": {
-    "bfs": "rfp_prob_shift=22 (was -0.3% at default); now 0.0%",
-    "dfs": "rfp_prob_shift=22 (was -0.4% at default); now 0.0%"
-  }
+  "baseline": "simulations-confidence-1/baseline"
 }

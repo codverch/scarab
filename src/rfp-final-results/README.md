@@ -1,49 +1,52 @@
-# RFP Final Tuned Results
+# RFP Final Results Package
 
-Per-app confidence tuning so **all 9 apps have non-negative IPC** vs baseline.
+Per-app tuned RFP prefetcher results (9 workloads). Each app folder contains
+`baseline/` and `rfp/` simpoint symlinks into the source simulation trees.
 
 ## Layout
 
 ```
-simulations/
-  baseline/<workload>/<cluster_id>/   # no RFP (rfp_on=0)
-  rfp_tuned/<workload>/<cluster_id>/  # per-app best confidence config
-configs.json                          # per-app parameters
-summary.csv                           # IPC + prefetch funnel summary
+rfp-final-results/
+  <app>/
+    baseline/<simpoint_id>/   -> simulations-confidence-1/baseline/<app>/<id>
+    rfp/<simpoint_id>/        -> per-app best RFP config (see below)
+  configs.json
+  summary.csv
 ```
 
-## Tuning strategy
+## Baseline
 
-| Apps | `rfp_prob_shift` | P(conf++) | Why |
-|------|------------------|-----------|-----|
-| **bfs, dfs** | 22 | 1/4,194,304 | Graph traversals showed ~0.3% IPC loss at default; ultra-conservative training eliminates overhead |
-| **all others** | 2 | 1/4 | Best balance from prob-shift sweep (+0.8% to +8% IPC) |
+All workloads use `simulations-confidence-1/baseline/<app>/<simpoint_id>/`.
 
-All configs use **24KB** RFP storage (`--rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4`).
+## Per-app RFP configs
 
-## Results summary
+| App | Config | prob_shift | stride_bits | stride_signed | conf_max |
+|-----|--------|------------|-------------|---------------|----------|
+| bfs | rfp_p3_s16 | 3 | 16 | signed (1) | 1 |
+| dfs | rfp_p0_s16 | 0 | 16 | signed (1) | 1 |
+| pagerank | rfp_p1_s16 | 1 | 16 | signed (1) | 1 |
+| appworld | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
+| clickhouse | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
+| core_bench | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
+| duckdb | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
+| rocksdb | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
+| terminal_bench | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
 
-| App | Speedup vs baseline | Injected | Useful |
-|-----|---------------------|----------|--------|
-| AppWorld | +1.61% | 23.0% | 12.0% |
-| BFS | +0.00% | 0.0% | 0.0% |
-| ClickHouse | +0.94% | 11.8% | 4.7% |
-| CoreBench | +3.32% | 33.9% | 14.8% |
-| DFS | +0.00% | 0.0% | 0.0% |
-| DuckDB | +1.79% | 49.8% | 10.3% |
-| PR | +0.41% | 45.3% | 26.7% |
-| RocksDB | +2.47% | 55.5% | 13.9% |
-| TerminalBench | +7.95% | 60.4% | 18.0% |
+Graph workloads (bfs, dfs, pagerank) use 16-bit signed stride after per-app tuning
+(`rfp-graph-stride` / `rfp-graph-stride2` sweeps). Other apps use the original
+`rfp_prob_p2` config from the confidence-1 storage sweep.
 
-**Overall geomean speedup: +2.03%**
+## Common Scarab flags (all apps)
 
-## Reproduce
-
-```bash
-python /users/deepmish/scarab-infra/hpca2027-main-graphs/package_rfp_final_results.py
+```
+--rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4
 ```
 
-Source simulations (not copied, symlinked):
-- Baseline: `/users/deepmish/scarab/src/simulations-confidence-1/baseline`
-- bfs/dfs tuned: `/users/deepmish/scarab/src/simulations/rfp_prob_p22`
-- Other apps: `/users/deepmish/scarab/src/simulations/rfp_prob_p2`
+## Full CLI example (BFS)
+
+```
+--rfp_prob_shift 3 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 16 \
+--rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4
+```
+
+See `configs.json` for per-app `params` strings and simpoint counts.
