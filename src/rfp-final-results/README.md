@@ -1,52 +1,57 @@
-# RFP Final Results Package
+# RFP Final Results (24KB storage)
 
-Per-app tuned RFP prefetcher results (9 workloads). Each app folder contains
-`baseline/` and `rfp/` simpoint symlinks into the source simulation trees.
+Per-app tuned RFP prefetcher results for all 11 workloads. Each app folder
+contains inlined `baseline/` and `rfp/` simpoint result files.
+
+## Storage budget
+
+- **PT**: 512 sets × 8 ways = 32 KiB (modeled in McPAT as `RFP_PT`)
+- **PAT**: 64 sets × 4 ways = 2 KiB (modeled in McPAT as `RFP_PAT`)
+- **Total RFP SRAM**: 24 KiB (PT+PAT structures; McPAT configs in `mcpat_infile.xml`)
+
+Power modeling: `--power_intf_on 1` with RFP PT/PAT components in McPAT input.
 
 ## Layout
 
 ```
 rfp-final-results/
   <app>/
-    baseline/<simpoint_id>/   -> simulations-confidence-1/baseline/<app>/<id>
-    rfp/<simpoint_id>/        -> per-app best RFP config (see below)
+    baseline/<simpoint_id>/
+    rfp/<simpoint_id>/
   configs.json
   summary.csv
 ```
 
-## Baseline
+## Per-app configs
 
-All workloads use `simulations-confidence-1/baseline/<app>/<simpoint_id>/`.
-
-## Per-app RFP configs
-
-| App | Config | prob_shift | stride_bits | stride_signed | conf_max |
-|-----|--------|------------|-------------|---------------|----------|
-| bfs | rfp_p3_s16 | 3 | 16 | signed (1) | 1 |
-| dfs | rfp_p0_s16 | 0 | 16 | signed (1) | 1 |
-| pagerank | rfp_p1_s16 | 1 | 16 | signed (1) | 1 |
-| appworld | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
-| clickhouse | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
-| core_bench | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
-| duckdb | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
-| rocksdb | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
-| terminal_bench | rfp_prob_p2 | 2 | 5 | signed (1) | 1 |
-
-Graph workloads (bfs, dfs, pagerank) use 16-bit signed stride after per-app tuning
-(`rfp-graph-stride` / `rfp-graph-stride2` sweeps). Other apps use the original
-`rfp_prob_p2` config from the confidence-1 storage sweep.
+| App | Config | prob_shift | stride_bits | Speedup vs baseline | mcpat.out |
+|-----|--------|------------|-------------|---------------------|-----------|
+| appworld | p2/s5b/signed/24KB | 2 | 5 | +1.61 | 3/3 |
+| bfs_web-google | p3/s16b/signed/24KB | 3 | 16 | +1.12 | 4/4 |
+| clickhouse | p2/s5b/signed/24KB | 2 | 5 | +0.94 | 1/1 |
+| core_bench | p2/s5b/signed/24KB | 2 | 5 | +2.20 | 4/4 |
+| dfs_web-google | p0/s16b/signed/24KB | 0 | 16 | -0.00 | 3/3 |
+| duckdb | p2/s5b/signed/24KB | 2 | 5 | +1.79 | 2/2 |
+| leveldb | p2/s5b/signed/24KB | 2 | 5 | +3.69 | 2/2 |
+| pagerank_gnutella31 | p1/s16b/signed/24KB | 1 | 16 | +0.42 | 5/5 |
+| rocksdb | p2/s5b/signed/24KB | 2 | 5 | +2.47 | 3/3 |
+| sssp_ego-facebook | p1/s16b/signed/24KB | 1 | 16 | +0.32 | 2/2 |
+| terminal_bench | p2/s5b/signed/24KB | 2 | 5 | +7.93 | 2/2 |
 
 ## Common Scarab flags (all apps)
 
 ```
---rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4
+--rfp_conf_max 1 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4
 ```
 
-## Full CLI example (BFS)
+## Simulation window
 
-```
---rfp_prob_shift 3 --rfp_conf_max 1 --rfp_stride_signed 1 --rfp_stride_bits 16 \
---rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4
-```
+- `full_warmup`: 20,000,000 instructions
+- `inst_limit`: 30,000,000 instructions (20M warmup + 10M measured)
+- Traces: `/dev/shm/baseline/simpoint_traces`
+
+## All apps positive speedup
+
+No — re-run `./json/hpca2027/rfp.sh --tune`
 
 See `configs.json` for per-app `params` strings and simpoint counts.
