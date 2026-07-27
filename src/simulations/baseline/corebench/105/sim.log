@@ -1,0 +1,52 @@
+Scarab gitrev: cb2ec6957
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Mon Jul 27 02:09:28 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (166.67 KIPS)
+** Heartbeat:   6% -- { 2000010 } -- 200.00 KIPS (181.82 KIPS)
+** Heartbeat:  10% -- { 3000011 } -- 166.67 KIPS (176.47 KIPS)
+** Heartbeat:  13% -- { 4000017 } -- 142.86 KIPS (166.67 KIPS)
+** Heartbeat:  16% -- { 5000017 } -- 200.00 KIPS (172.41 KIPS)
+** Heartbeat:  20% -- { 6000021 } -- 200.00 KIPS (176.47 KIPS)
+** Heartbeat:  23% -- { 7000024 } -- 142.86 KIPS (170.73 KIPS)
+** Heartbeat:  26% -- { 8000029 } -- 166.67 KIPS (170.21 KIPS)
+** Heartbeat:  30% -- { 9000033 } -- 200.00 KIPS (173.08 KIPS)
+** Heartbeat:  33% -- { 10000033 } -- 166.67 KIPS (172.41 KIPS)
+** Heartbeat:  36% -- { 11000033 } -- 166.67 KIPS (171.88 KIPS)
+** Heartbeat:  40% -- { 12000037 } -- 200.00 KIPS (173.91 KIPS)
+** Heartbeat:  43% -- { 13000038 } -- 166.67 KIPS (173.33 KIPS)
+** Heartbeat:  46% -- { 14000041 } -- 166.67 KIPS (172.84 KIPS)
+** Heartbeat:  50% -- { 15000047 } -- 166.67 KIPS (172.41 KIPS)
+** Heartbeat:  53% -- { 16000048 } -- 200.00 KIPS (173.91 KIPS)
+** Heartbeat:  56% -- { 17000053 } -- 166.67 KIPS (173.47 KIPS)
+** Heartbeat:  60% -- { 18000055 } -- 111.11 KIPS (168.22 KIPS)
+** Heartbeat:  63% -- { 19000060 } -- 166.67 KIPS (168.14 KIPS)
+** Heartbeat:  66% -- { 20000061 } -- 200.00 KIPS (169.49 KIPS)
+** Heartbeat:  70% -- { 21000061 } -- 142.86 KIPS (168.00 KIPS)
+** Heartbeat:  73% -- { 22000061 } -- 166.67 KIPS (167.94 KIPS)
+** Heartbeat:  76% -- { 23000066 } -- 166.67 KIPS (167.88 KIPS)
+** Heartbeat:  80% -- { 24000069 } -- 166.67 KIPS (167.83 KIPS)
+** Heartbeat:  83% -- { 25000075 } -- 142.86 KIPS (166.67 KIPS)
+** Heartbeat:  86% -- { 26000077 } -- 200.00 KIPS (167.74 KIPS)
+** Heartbeat:  90% -- { 27000082 } -- 166.67 KIPS (167.70 KIPS)
+** Heartbeat:  93% -- { 28000082 } -- 142.86 KIPS (166.67 KIPS)
+** Heartbeat:  96% -- { 29000085 } -- 166.67 KIPS (166.67 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff471251f
+Running McPat...
+sh: 1: /misc/pool1/mcpat/mcpat_v1.0/mcpat: not found
+Error running McPAT: /misc/pool1/mcpat/mcpat_v1.0/mcpat -dump_design -infile ./mcpat_infile.xml > ./mcpat.out
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/baseline/scarab/bin/power/power_intf.pl', '/misc/pool1/mcpat/mcpat_v1.0/mcpat', '/misc/pool1/mcpat/cacti65/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 2
+** Core 0 Finished:    insts:30000000    cycles:11497140    time:3592856250000       -- 2.61 IPC (2.61 IPC) --  N/A  KIPS (166.67 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33551903  I=30020478  C=11497140):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33551903  I=30020478  C=11497140):  Command "python3 /home/deepmish/scarab_stage/baseline/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_cb2ec6957(+0x26bab6) [0x5555557bfab6]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_cb2ec6957(+0x300e0e) [0x555555854e0e]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_cb2ec6957(+0x1e41b3) [0x5555557381b3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/baseline/scarab/src/scarab_cb2ec6957(+0x1e863e) [0x55555573c63e]
