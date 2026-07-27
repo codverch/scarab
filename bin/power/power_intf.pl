@@ -329,9 +329,10 @@ sub get_params($@) {
         $filter_hash{$filter} = 1;
     }
 
+    # Use Perl glob — /bin/sh (dash) does not expand bash brace patterns like {out,out.gz}.
     my $cmd = "";
-    for my $file (`ls $dir/${file_tag}PARAMS.*{out,out.gz} 2> /dev/null`) {
-        chomp $file;
+    for my $file (glob("$dir/${file_tag}PARAMS.out"), glob("$dir/${file_tag}PARAMS.out.gz")) {
+        next unless -r $file;
         $cmd .= ($file =~ /gz$/ ? "zcat" : "cat")." $file ; ";
     }
 
@@ -383,12 +384,11 @@ sub traverse_stats($$$$$) {
     my $func = shift;
     my $power_intf = shift;
 
-    my @files = $power_intf ?
-        `ls $dir/${file_tag}*.stat.*{out,out.gz} 2> /dev/null` :
-        `ls $dir/${file_tag}*.stat.*{out,out.gz} 2> /dev/null | grep -v scarab_power`;
+    # Use Perl glob — /bin/sh (dash) does not expand bash brace patterns like {out,out.gz}.
+    my @files = (glob("$dir/${file_tag}*.stat.*.out"), glob("$dir/${file_tag}*.stat.*.out.gz"));
+    @files = grep { $_ !~ /scarab_power/ } @files unless $power_intf;
 
     for my $file (@files) {
-        chomp $file;
         next if $file =~ /ramulator/;
         die "Cannot parse core id from $file\n" unless $file =~ /stat\.(\d+)\.out/;
         my $file_core_id = $1;
