@@ -1,0 +1,58 @@
+Scarab gitrev: 740c40604
+Scarab started at Mon Jul 27 19:04:39 2026
+
+Initialized Ramulator. 
+Ideal fusion pass 2: loaded 2871761 candidate pair(s) from '/dev/shm/baseline/ideal_fusion_candidates/appworld/5.csv' (distance < 512, skipped 0)
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (62.50 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 83.33 KIPS (71.43 KIPS)
+** Heartbeat:  10% -- { 3000006 } -- 90.91 KIPS (76.92 KIPS)
+** Heartbeat:  13% -- { 4000011 } -- 100.00 KIPS (81.63 KIPS)
+** Heartbeat:  16% -- { 5000012 } -- 125.00 KIPS (87.72 KIPS)
+** Heartbeat:  20% -- { 6000014 } -- 125.00 KIPS (92.31 KIPS)
+** Heartbeat:  23% -- { 7000020 } -- 142.86 KIPS (97.22 KIPS)
+** Heartbeat:  26% -- { 8000021 } -- 166.67 KIPS (102.56 KIPS)
+** Heartbeat:  30% -- { 9000022 } -- 200.00 KIPS (108.43 KIPS)
+** Heartbeat:  33% -- { 10000026 } -- 111.11 KIPS (108.70 KIPS)
+** Heartbeat:  36% -- { 11000026 } -- 142.86 KIPS (111.11 KIPS)
+** Heartbeat:  40% -- { 12000026 } -- 142.86 KIPS (113.21 KIPS)
+** Heartbeat:  43% -- { 13000026 } -- 90.91 KIPS (111.11 KIPS)
+** Heartbeat:  46% -- { 14000031 } -- 111.11 KIPS (111.11 KIPS)
+** Heartbeat:  50% -- { 15000034 } -- 111.11 KIPS (111.11 KIPS)
+** Heartbeat:  53% -- { 16000040 } -- 142.86 KIPS (112.68 KIPS)
+** Heartbeat:  56% -- { 17000046 } -- 166.67 KIPS (114.87 KIPS)
+** Heartbeat:  60% -- { 18000051 } -- 166.67 KIPS (116.88 KIPS)
+** Heartbeat:  63% -- { 19000056 } -- 125.00 KIPS (117.28 KIPS)
+** Heartbeat:  66% -- { 20000056 } -- 142.86 KIPS (118.34 KIPS)
+** Heartbeat:  70% -- { 21000058 } -- 142.86 KIPS (119.32 KIPS)
+** Heartbeat:  73% -- { 22000059 } -- 142.86 KIPS (120.22 KIPS)
+** Heartbeat:  76% -- { 23000062 } -- 142.86 KIPS (121.05 KIPS)
+** Heartbeat:  80% -- { 24000062 } -- 142.86 KIPS (121.83 KIPS)
+** Heartbeat:  83% -- { 25000066 } -- 125.00 KIPS (121.95 KIPS)
+** Heartbeat:  86% -- { 26000070 } -- 142.86 KIPS (122.64 KIPS)
+** Heartbeat:  90% -- { 27000074 } -- 166.67 KIPS (123.85 KIPS)
+** Heartbeat:  93% -- { 28000079 } -- 125.00 KIPS (123.89 KIPS)
+** Heartbeat:  96% -- { 29000080 } -- 166.67 KIPS (125.00 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7fa78ce8de55
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ideal-fusion/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ideal-fusion/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ideal-fusion/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ideal-fusion/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ideal-fusion/scarab/bin/power/power_intf.pl', '/dev/shm/baseline/mcpat_build/mcpat', '/dev/shm/baseline/mcpat_build/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:14949432    time:4671697500000       -- 2.01 IPC (2.01 IPC) --  N/A  KIPS (125.00 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33704846  I=30219131  C=14949432):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33704846  I=30219131  C=14949432):  Command "python3 /home/deepmish/scarab_stage/ideal-fusion/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ideal-fusion/scarab/src/scarab_740c40604_1(+0x26daf6) [0x5555557c1af6]
+/home/deepmish/scarab_stage/ideal-fusion/scarab/src/scarab_740c40604_1(+0x3034ae) [0x5555558574ae]
+/home/deepmish/scarab_stage/ideal-fusion/scarab/src/scarab_740c40604_1(+0x1e50b3) [0x5555557390b3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ideal-fusion/scarab/src/scarab_740c40604_1(+0x1e953e) [0x55555573d53e]
