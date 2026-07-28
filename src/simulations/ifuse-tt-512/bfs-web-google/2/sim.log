@@ -1,0 +1,58 @@
+Scarab gitrev: 1585163f1
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Tue Jul 28 07:42:24 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000006 } -- 0.00 KIPS (71.43 KIPS)
+** Heartbeat:   6% -- { 2000008 } -- 71.43 KIPS (71.43 KIPS)
+** Heartbeat:  10% -- { 3000014 } -- 66.67 KIPS (69.77 KIPS)
+** Heartbeat:  13% -- { 4000020 } -- 62.50 KIPS (67.80 KIPS)
+** Heartbeat:  16% -- { 5000023 } -- 66.67 KIPS (67.57 KIPS)
+** Heartbeat:  20% -- { 6000023 } -- 66.67 KIPS (67.42 KIPS)
+** Heartbeat:  23% -- { 7000027 } -- 66.67 KIPS (67.31 KIPS)
+** Heartbeat:  26% -- { 8000030 } -- 45.45 KIPS (63.49 KIPS)
+** Heartbeat:  30% -- { 9000030 } -- 37.04 KIPS (58.82 KIPS)
+** Heartbeat:  33% -- { 10000030 } -- 34.48 KIPS (54.95 KIPS)
+** Heartbeat:  36% -- { 11000033 } -- 43.48 KIPS (53.66 KIPS)
+** Heartbeat:  40% -- { 12000038 } -- 76.92 KIPS (55.05 KIPS)
+** Heartbeat:  43% -- { 13000040 } -- 45.45 KIPS (54.17 KIPS)
+** Heartbeat:  46% -- { 14000041 } -- 76.92 KIPS (55.34 KIPS)
+** Heartbeat:  50% -- { 15000042 } -- 55.56 KIPS (55.35 KIPS)
+** Heartbeat:  53% -- { 16000043 } -- 62.50 KIPS (55.75 KIPS)
+** Heartbeat:  56% -- { 17000043 } -- 55.56 KIPS (55.74 KIPS)
+** Heartbeat:  60% -- { 18000045 } -- 55.56 KIPS (55.73 KIPS)
+** Heartbeat:  63% -- { 19000049 } -- 58.82 KIPS (55.88 KIPS)
+** Heartbeat:  66% -- { 20000049 } -- 55.56 KIPS (55.87 KIPS)
+** Heartbeat:  70% -- { 21000054 } -- 76.92 KIPS (56.60 KIPS)
+** Heartbeat:  73% -- { 22000057 } -- 47.62 KIPS (56.12 KIPS)
+** Heartbeat:  76% -- { 23000060 } -- 76.92 KIPS (56.79 KIPS)
+** Heartbeat:  80% -- { 24000065 } -- 38.46 KIPS (55.68 KIPS)
+** Heartbeat:  83% -- { 25000067 } -- 58.82 KIPS (55.80 KIPS)
+** Heartbeat:  86% -- { 26000067 } -- 34.48 KIPS (54.51 KIPS)
+** Heartbeat:  90% -- { 27000071 } -- 31.25 KIPS (53.05 KIPS)
+** Heartbeat:  93% -- { 28000071 } -- 50.00 KIPS (52.93 KIPS)
+** Heartbeat:  96% -- { 29000071 } -- 27.03 KIPS (51.24 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff3daeeb1
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:29310902    time:9159656875000       -- 1.02 IPC (1.02 IPC) --  N/A  KIPS (49.59 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=36722679  I=30000000  C=29310902):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=36722679  I=30000000  C=29310902):  Command "python3 /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x273d56) [0x5555557c7d56]
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x3173ae) [0x55555586b3ae]
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x1e6163) [0x55555573a163]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x1ea95e) [0x55555573e95e]

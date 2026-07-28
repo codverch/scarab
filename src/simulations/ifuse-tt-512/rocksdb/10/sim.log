@@ -1,0 +1,57 @@
+Scarab gitrev: 1585163f1
+Scarab started at Tue Jul 28 08:06:54 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (47.62 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 52.63 KIPS (50.00 KIPS)
+** Heartbeat:  10% -- { 3000005 } -- 50.00 KIPS (50.00 KIPS)
+** Heartbeat:  13% -- { 4000007 } -- 50.00 KIPS (50.00 KIPS)
+** Heartbeat:  16% -- { 5000007 } -- 52.63 KIPS (50.51 KIPS)
+** Heartbeat:  20% -- { 6000008 } -- 50.00 KIPS (50.42 KIPS)
+** Heartbeat:  23% -- { 7000009 } -- 43.48 KIPS (49.30 KIPS)
+** Heartbeat:  26% -- { 8000009 } -- 50.00 KIPS (49.38 KIPS)
+** Heartbeat:  30% -- { 9000009 } -- 52.63 KIPS (49.72 KIPS)
+** Heartbeat:  33% -- { 10000009 } -- 55.56 KIPS (50.25 KIPS)
+** Heartbeat:  36% -- { 11000014 } -- 52.63 KIPS (50.46 KIPS)
+** Heartbeat:  40% -- { 12000019 } -- 50.00 KIPS (50.42 KIPS)
+** Heartbeat:  43% -- { 13000025 } -- 52.63 KIPS (50.58 KIPS)
+** Heartbeat:  46% -- { 14000029 } -- 52.63 KIPS (50.72 KIPS)
+** Heartbeat:  50% -- { 15000034 } -- 47.62 KIPS (50.51 KIPS)
+** Heartbeat:  53% -- { 16000038 } -- 50.00 KIPS (50.47 KIPS)
+** Heartbeat:  56% -- { 17000039 } -- 52.63 KIPS (50.60 KIPS)
+** Heartbeat:  60% -- { 18000039 } -- 45.45 KIPS (50.28 KIPS)
+** Heartbeat:  63% -- { 19000042 } -- 43.48 KIPS (49.87 KIPS)
+** Heartbeat:  66% -- { 20000042 } -- 50.00 KIPS (49.88 KIPS)
+** Heartbeat:  70% -- { 21000044 } -- 50.00 KIPS (49.88 KIPS)
+** Heartbeat:  73% -- { 22000048 } -- 50.00 KIPS (49.89 KIPS)
+** Heartbeat:  76% -- { 23000049 } -- 45.45 KIPS (49.68 KIPS)
+** Heartbeat:  80% -- { 24000049 } -- 45.45 KIPS (49.48 KIPS)
+** Heartbeat:  83% -- { 25000054 } -- 43.48 KIPS (49.21 KIPS)
+** Heartbeat:  86% -- { 26000055 } -- 50.00 KIPS (49.24 KIPS)
+** Heartbeat:  90% -- { 27000059 } -- 52.63 KIPS (49.36 KIPS)
+** Heartbeat:  93% -- { 28000060 } -- 52.63 KIPS (49.47 KIPS)
+** Heartbeat:  96% -- { 29000064 } -- 55.56 KIPS (49.66 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f8c0bff7e43
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:17559726    time:5487414375000       -- 1.71 IPC (1.71 IPC) --  N/A  KIPS (49.83 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33800487  I=30000000  C=17559726):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33800487  I=30000000  C=17559726):  Command "python3 /home/deepmish/scarab_stage/ifuse-tt-512/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x273d56) [0x5555557c7d56]
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x3173ae) [0x55555586b3ae]
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x1e6163) [0x55555573a163]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse-tt-512/scarab/src/scarab_79fd57711_0(+0x1ea95e) [0x55555573e95e]
