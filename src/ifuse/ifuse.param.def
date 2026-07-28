@@ -30,10 +30,18 @@ DEF_PARAM(ifuse_fct_runtime_insert_conf, IFUSE_FCT_RUNTIME_INSERT_CONF, uns, uns
 DEF_PARAM(ifuse_fct_pc_tag_bits, IFUSE_FCT_PC_TAG_BITS, uns, uns, 32, )
 
 /* Tunable table capacities. 2^9 = 512 FCT rows.
- * APT/ACI: set-associative tables with tree-PLRU replacement (default 64x4). */
+ * APT/ACI: set-associative tables with tree-PLRU replacement. */
 DEF_PARAM(ifuse_fct_hash_bits, IFUSE_FCT_HASH_BITS, uns, uns, 9, )
-DEF_PARAM(ifuse_apt_sets, IFUSE_APT_SETS, uns, uns, 64, )
-DEF_PARAM(ifuse_apt_ways, IFUSE_APT_WAYS, uns, uns, 4, )
+/* 32 sets x 8 ways (was 64x4, same 256-entry total): APT eviction rate was
+ * uncorrelated with occupancy (peak never exceeded 61 of 256 across 55
+ * benchmark runs; correlation with eviction rate was 0.006) -- thrashing
+ * comes from a handful of hot static LD1/LD2 PCs producing many concurrent
+ * dynamic instances that all hash to the same set, not from cross-PC set
+ * collisions. More ways per set directly targets that; more sets would not,
+ * since a given static PC always lands in the same set regardless of set
+ * count. */
+DEF_PARAM(ifuse_apt_sets, IFUSE_APT_SETS, uns, uns, 32, )
+DEF_PARAM(ifuse_apt_ways, IFUSE_APT_WAYS, uns, uns, 8, )
 DEF_PARAM(ifuse_aci_sets, IFUSE_ACI_SETS, uns, uns, 64, )
 DEF_PARAM(ifuse_aci_ways, IFUSE_ACI_WAYS, uns, uns, 4, )
 DEF_PARAM(ifuse_exec_pair_max_nodes, IFUSE_EXEC_PAIR_MAX_NODES, uns, uns, 524288, )
