@@ -1,0 +1,57 @@
+Scarab gitrev: a8bfbbebb
+Scarab started at Tue Jul 28 16:20:08 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (76.92 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 76.92 KIPS (76.92 KIPS)
+** Heartbeat:  10% -- { 3000005 } -- 83.33 KIPS (78.95 KIPS)
+** Heartbeat:  13% -- { 4000006 } -- 90.91 KIPS (81.63 KIPS)
+** Heartbeat:  16% -- { 5000008 } -- 83.33 KIPS (81.97 KIPS)
+** Heartbeat:  20% -- { 6000008 } -- 83.33 KIPS (82.19 KIPS)
+** Heartbeat:  23% -- { 7000012 } -- 90.91 KIPS (83.33 KIPS)
+** Heartbeat:  26% -- { 8000014 } -- 76.92 KIPS (82.47 KIPS)
+** Heartbeat:  30% -- { 9000016 } -- 76.92 KIPS (81.82 KIPS)
+** Heartbeat:  33% -- { 10000017 } -- 83.33 KIPS (81.97 KIPS)
+** Heartbeat:  36% -- { 11000021 } -- 83.33 KIPS (82.09 KIPS)
+** Heartbeat:  40% -- { 12000022 } -- 76.92 KIPS (81.63 KIPS)
+** Heartbeat:  43% -- { 13000027 } -- 83.33 KIPS (81.76 KIPS)
+** Heartbeat:  46% -- { 14000029 } -- 71.43 KIPS (80.93 KIPS)
+** Heartbeat:  50% -- { 15000033 } -- 71.43 KIPS (80.21 KIPS)
+** Heartbeat:  53% -- { 16000037 } -- 83.33 KIPS (80.40 KIPS)
+** Heartbeat:  56% -- { 17000039 } -- 76.92 KIPS (80.19 KIPS)
+** Heartbeat:  60% -- { 18000043 } -- 83.33 KIPS (80.36 KIPS)
+** Heartbeat:  63% -- { 19000046 } -- 76.92 KIPS (80.17 KIPS)
+** Heartbeat:  66% -- { 20000050 } -- 76.92 KIPS (80.00 KIPS)
+** Heartbeat:  70% -- { 21000053 } -- 83.33 KIPS (80.15 KIPS)
+** Heartbeat:  73% -- { 22000060 } -- 83.33 KIPS (80.29 KIPS)
+** Heartbeat:  76% -- { 23000062 } -- 111.11 KIPS (81.27 KIPS)
+** Heartbeat:  80% -- { 24000067 } -- 125.00 KIPS (82.47 KIPS)
+** Heartbeat:  83% -- { 25000070 } -- 100.00 KIPS (83.06 KIPS)
+** Heartbeat:  86% -- { 26000071 } -- 100.00 KIPS (83.60 KIPS)
+** Heartbeat:  90% -- { 27000072 } -- 125.00 KIPS (84.64 KIPS)
+** Heartbeat:  93% -- { 28000073 } -- 142.86 KIPS (85.89 KIPS)
+** Heartbeat:  96% -- { 29000078 } -- 111.11 KIPS (86.57 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f2641a3c043
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:18143011    time:5669690937500       -- 1.65 IPC (1.65 IPC) --  N/A  KIPS (87.21 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33560820  I=30000000  C=18143011):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33560820  I=30000000  C=18143011):  Command "python3 /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x273a96) [0x5555557c7a96]
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x31773e) [0x55555586b73e]
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x1e5e83) [0x555555739e83]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x1ea67e) [0x55555573e67e]

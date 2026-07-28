@@ -1,0 +1,58 @@
+Scarab gitrev: a8bfbbebb
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Tue Jul 28 16:01:35 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (83.33 KIPS)
+** Heartbeat:   6% -- { 2000008 } -- 111.11 KIPS (95.24 KIPS)
+** Heartbeat:  10% -- { 3000009 } -- 90.91 KIPS (93.75 KIPS)
+** Heartbeat:  13% -- { 4000009 } -- 90.91 KIPS (93.02 KIPS)
+** Heartbeat:  16% -- { 5000009 } -- 90.91 KIPS (92.59 KIPS)
+** Heartbeat:  20% -- { 6000009 } -- 90.91 KIPS (92.31 KIPS)
+** Heartbeat:  23% -- { 7000011 } -- 100.00 KIPS (93.33 KIPS)
+** Heartbeat:  26% -- { 8000016 } -- 90.91 KIPS (93.02 KIPS)
+** Heartbeat:  30% -- { 9000020 } -- 100.00 KIPS (93.75 KIPS)
+** Heartbeat:  33% -- { 10000022 } -- 100.00 KIPS (94.34 KIPS)
+** Heartbeat:  36% -- { 11000028 } -- 90.91 KIPS (94.02 KIPS)
+** Heartbeat:  40% -- { 12000030 } -- 90.91 KIPS (93.75 KIPS)
+** Heartbeat:  43% -- { 13000030 } -- 90.91 KIPS (93.53 KIPS)
+** Heartbeat:  46% -- { 14000030 } -- 90.91 KIPS (93.33 KIPS)
+** Heartbeat:  50% -- { 15000032 } -- 90.91 KIPS (93.17 KIPS)
+** Heartbeat:  53% -- { 16000038 } -- 90.91 KIPS (93.02 KIPS)
+** Heartbeat:  56% -- { 17000042 } -- 83.33 KIPS (92.39 KIPS)
+** Heartbeat:  60% -- { 18000045 } -- 71.43 KIPS (90.91 KIPS)
+** Heartbeat:  63% -- { 19000051 } -- 76.92 KIPS (90.05 KIPS)
+** Heartbeat:  66% -- { 20000053 } -- 76.92 KIPS (89.29 KIPS)
+** Heartbeat:  70% -- { 21000055 } -- 83.33 KIPS (88.98 KIPS)
+** Heartbeat:  73% -- { 22000062 } -- 90.91 KIPS (89.07 KIPS)
+** Heartbeat:  76% -- { 23000065 } -- 90.91 KIPS (89.15 KIPS)
+** Heartbeat:  80% -- { 24000070 } -- 100.00 KIPS (89.55 KIPS)
+** Heartbeat:  83% -- { 25000076 } -- 83.33 KIPS (89.29 KIPS)
+** Heartbeat:  86% -- { 26000082 } -- 100.00 KIPS (89.66 KIPS)
+** Heartbeat:  90% -- { 27000086 } -- 90.91 KIPS (89.70 KIPS)
+** Heartbeat:  93% -- { 28000090 } -- 90.91 KIPS (89.74 KIPS)
+** Heartbeat:  96% -- { 29000090 } -- 90.91 KIPS (89.78 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x41df50
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:7709319     time:2409162187500       -- 3.89 IPC (3.89 IPC) --  N/A  KIPS (89.82 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=35088742  I=30000078  C=7709319):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=35088742  I=30000078  C=7709319):  Command "python3 /home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x273a96) [0x5555557c7a96]
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x31773e) [0x55555586b73e]
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x1e5e83) [0x555555739e83]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse-rob-sweep/scarab/src/scarab_a8bfbbebb_0(+0x1ea67e) [0x55555573e67e]
