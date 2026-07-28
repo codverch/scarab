@@ -7,7 +7,6 @@
 
 #include "../statistics.h"
 #include "ifuse_fct.h"
-#include "ifuse_plru.h"
 #include "ifuse.param.h"
 
 /*
@@ -15,23 +14,33 @@
  * host types): each entry packs two 48-bit PC tags, a 14-bit observation
  * counter (supports insert thresholds up to 16383, e.g. 10/100/1000/10000),
  * a 6-bit cache-line offset delta, a 3-bit log2(LD2 access size), direction,
- * and valid, totaling 121 bits. There are 32 sets * 4 ways = 128 entries.
- * Three tree-PLRU bits per set add 96 bits, so the packed training table
- * costs 128 * 121 + 32 * 3 = 15,584 bits = 1.90234375 KiB.
+ * valid, and a 2-bit RRPV replacement-priority field, totaling 123 bits.
+ * There are 32 sets * 4 ways = 128 entries, so the packed training table
+ * costs 128 * 123 = 15,744 bits = 1.921875 KiB.
+ *
+ * Replacement is RRIP-style (SRRIP): a newly inserted candidate starts at
+ * RRPV = IFUSE_TT_RRPV_INSERT (one below max), not at max and not at zero,
+ * so it must be re-observed to earn protection instead of being either
+ * evicted immediately or fully protected on arrival. Each repeat observation
+ * decrements RRPV toward 0 (protected); eviction always takes the way with
+ * the highest RRPV in the set (ties break to the lowest way index).
  */
 #define IFUSE_TRAINING_OBS_COUNTER_MAX 16383U
+#define IFUSE_TT_RRPV_BITS 2U
+#define IFUSE_TT_RRPV_MAX ((1U << IFUSE_TT_RRPV_BITS) - 1U)
+#define IFUSE_TT_RRPV_INSERT (IFUSE_TT_RRPV_MAX - 1U)
 typedef struct TrainingEntry {
     uint64_t ld1_tag;
     uint64_t ld2_tag;
     uint16_t observations;
     uint8_t offset_delta;
     uint8_t ld2_mem_size;
+    uint8_t rrpv;
     bool direction;
     bool valid;
 } TrainingEntry;
 
 static TrainingEntry* entries;
-static uint8_t* plru;
 static unsigned int num_sets;
 static unsigned int num_ways;
 static uint64_t live_entries;
@@ -96,12 +105,26 @@ void training_table_init(void) {
 
     entries = (TrainingEntry*)calloc((size_t)num_sets * num_ways,
                                      sizeof(*entries));
-    plru = (uint8_t*)calloc(num_sets, sizeof(*plru));
-    if (!entries || !plru) {
+    if (!entries) {
         fprintf(stderr, "Could not allocate I-Fuse runtime training table\n");
         exit(1);
     }
     initialized = true;
+}
+
+/* RRIP victim: the way with the highest RRPV (least protected) in the set,
+ * ties breaking to the lowest way index. */
+static unsigned int rrip_victim(unsigned int set) {
+    unsigned int victim = 0;
+    uint8_t victim_rrpv = entry_at(set, 0)->rrpv;
+    for (unsigned int way = 1; way < num_ways; ++way) {
+        uint8_t rrpv = entry_at(set, way)->rrpv;
+        if (rrpv > victim_rrpv) {
+            victim = way;
+            victim_rrpv = rrpv;
+        }
+    }
+    return victim;
 }
 
 static bool keys_match(const TrainingEntry* entry, uint64_t ld1_tag,
@@ -126,7 +149,8 @@ static TrainingEntry* find_or_allocate(Addr ld1_pc, Addr ld2_pc,
         TrainingEntry* entry = entry_at(set, way);
         if (keys_match(entry, ld1_tag, ld2_tag, delta, direction, mem_size)) {
             STAT_EVENT(proc_id, TRAINING_TABLE_HITS);
-            ifuse_plru_touch(plru, set, way, num_ways);
+            if (entry->rrpv > 0)
+                --entry->rrpv;
             return entry;
         }
         if (!entry->valid && invalid_way == num_ways)
@@ -136,7 +160,7 @@ static TrainingEntry* find_or_allocate(Addr ld1_pc, Addr ld2_pc,
     STAT_EVENT(proc_id, TRAINING_TABLE_MISSES);
     unsigned int way = invalid_way;
     if (way == num_ways) {
-        way = ifuse_plru_victim(plru, set, num_ways);
+        way = rrip_victim(set);
         STAT_EVENT(proc_id, TRAINING_TABLE_EVICTIONS);
     } else {
         ++live_entries;
@@ -154,8 +178,8 @@ static TrainingEntry* find_or_allocate(Addr ld1_pc, Addr ld2_pc,
     entry->ld2_mem_size = (uint8_t)mem_size;
     entry->direction = direction;
     entry->observations = 0;
+    entry->rrpv = (uint8_t)IFUSE_TT_RRPV_INSERT;
     entry->valid = true;
-    ifuse_plru_touch(plru, set, way, num_ways);
     STAT_EVENT(proc_id, TRAINING_TABLE_INSERTS);
     return entry;
 }
