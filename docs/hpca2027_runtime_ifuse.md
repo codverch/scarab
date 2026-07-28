@@ -50,16 +50,52 @@ The default TT has 128 entries. The intended size sweep is 32, 64, 128, and
 
 ## Storage Accounting
 
-For the default direct encodings, one TT entry contains two 48-bit PC tags, a
-6-bit offset magnitude, 1 direction bit, 7 access-size bits, a 10-bit
-observation counter, a 2-bit RRPV, and 1 valid bit: 123 bits per entry. A
-128-entry TT is 15,744 bits (1,968 bytes). The C structure is larger because
-of host alignment and is not the hardware size estimate.
+For the default direct encodings, one TT entry contains a 32-bit LD1 PC tag
+(`ifuse_training_table_pc_tag_bits`) plus a full 48-bit LD2 PC -- ld2 is kept
+untruncated because it doubles as the value forwarded to
+`FCT_Row.ld2_pc_addr`, which must be full precision, the same reasoning as
+FCT's own `ld2_pc_addr` -- a 6-bit offset magnitude, 1 direction bit, a 3-bit
+log2(access size), an 11-bit observation counter (supports insert thresholds
+up to 2047, 2x headroom over the highest threshold actually swept, 1000), a
+2-bit RRPV, and 1 valid bit: 104 bits per entry. A 128-entry TT is 13,312
+bits (1,664 bytes). The LD1 tag is truncated only for the TT's internal
+hit/miss decision; a promoted candidate always carries the full-precision PC
+observed at that call (see `find_or_allocate()` in
+`ifuse_training_table.c`), so a narrower LD1 tag can only misattribute an
+observation count between two colliding candidates, never promote a
+truncated PC. The C structure is larger because of host alignment and is not
+the hardware size estimate.
 
-The retired-load history must be reported separately rather than hidden as
-simulator bookkeeping. The current model holds up to 512 recent loads. Its
-hardware organization, lookup bandwidth, and compressed PC/address widths are
-still design parameters and must be included in the final area/power estimate.
+For the FCT, one row contains a 32-bit LD1 PC tag (`ifuse_fct_pc_tag_bits`,
+same truncation reasoning as the TT), a 48-bit LD2 PC (kept full width: this
+is a predicted value that must exact-match a real future op's PC, not a
+disambiguation tag, so truncating it would raise the false-fusion-match rate
+directly), a 6-bit offset magnitude, 1 direction bit, a 3-bit log2(access
+size), a 10-bit confidence score (2x headroom over the current default
+ceiling of 500), and 1 valid bit: 101 bits per row. A 512-row FCT
+(`ifuse_fct_hash_bits = 9`) is 51,712 bits (6,464 bytes). `ld1_effective_addr`,
+`ld2_effective_addr`, `ld1_micro_op_num`, and `ld2_micro_op_num` are kept on
+`FCT_Row` for simulator-side address bookkeeping but are not part of the
+modeled hardware row: the prediction path (`ft.cc`) computes the predicted
+LD2 address from the live dynamic op plus this row's offset_delta/direction,
+and ACI validates it against the real cache block, so a looked-up row's
+stored addresses are never read back.
+
+The retired-load history (RLB) must be reported separately rather than hidden
+as simulator bookkeeping. Each entry is a 48-bit PC, 48-bit effective address,
+3-bit log2(access size), 10-bit modulo-1024 micro-op timestamp, and 1 valid
+bit: 110 bits/entry. `ifuse_rlb_capacity` (default 128) is deliberately
+smaller than `ifuse_fusion_distance` (default 512): entries only need to
+cover the loads live within the distance window, not one slot per micro-op in
+it, and measured load density (~20-30% of instructions across the workload
+set) rarely fills more than ~150-160 slots in a 512-op window. At 128 entries
+the RLB is 14,080 bits (1.71875 KiB), down from 6.875 KiB at 512. Capacity and
+distance are independent: `RLB_AGE_EVICTIONS` counts entries that aged past
+the distance window, `RLB_CAPACITY_EVICTIONS` counts entries forced out early
+because the buffer was full; a rising `RLB_CAPACITY_EVICTIONS` share is the
+signal that a workload's load density needs a larger `ifuse_rlb_capacity`.
+Its hardware lookup bandwidth and compressed PC/address widths remain design
+parameters for the final area/power estimate.
 
 ## Warmup And Measurement
 

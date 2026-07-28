@@ -19,19 +19,42 @@
 
  /**
  * One FCT row contains one LD2 candidate and metadata for a single LD1 PC.
+ *
+ * Hardware-design storage model (the C fields below intentionally use normal
+ * host types): a modeled row is a 32-bit LD1 PC tag (IFUSE_FCT_PC_TAG_BITS,
+ * truncated the same way as the training table's tags -- see
+ * ifuse_training_table.c), a 48-bit LD2 PC (kept full width: this is a
+ * predicted value that must exact-match a real future op's PC in
+ * apt_lookup(), not a disambiguation tag, so truncating it would raise the
+ * false-fusion-match rate directly instead of just aliasing a hash bucket),
+ * a 6-bit offset magnitude, a 1-bit direction, a 3-bit log2(LD2 access
+ * size), a 10-bit confidence score (IFUSE_FCT_CONFIDENCE_MAX), and 1 valid
+ * bit: 101 bits/row. A 512-row FCT (ifuse_fct_hash_bits = 9) costs
+ * 512 * 101 = 51,712 bits = 6.3125 KiB.
+ *
+ * ld1_effective_addr, ld2_effective_addr, ld1_micro_op_num, and
+ * ld2_micro_op_num are simulator-side bookkeeping, not part of the modeled
+ * hardware row: ft.cc computes the actual predicted LD2 address from the
+ * live dynamic op's oracle_info plus this row's offset_delta/direction, and
+ * ACI validates the result against the real cache block at execution time --
+ * neither ever reads these four fields back off a looked-up row. They are
+ * kept here for simulator-side address bookkeeping and are excluded from the
+ * storage estimate above.
  */
 typedef struct FCT_Row {
     // Load identification
     Addr         ld1_pc_addr;
     Addr         ld2_pc_addr;
 
-    // Memory access information
+    // Memory access information -- effective addrs are simulator bookkeeping
+    // only; see the storage-model comment above.
     Addr         ld1_effective_addr;
     Addr         ld2_effective_addr;
     unsigned int offset_delta;
     unsigned int ld2_mem_size;
 
-    // Execution context
+    // Execution context -- simulator bookkeeping only; see the storage-model
+    // comment above.
     Counter      ld1_micro_op_num;
     Counter      ld2_micro_op_num;
 
