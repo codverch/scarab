@@ -29,7 +29,30 @@ static FCT_Row* fct_rows = NULL; // Software backing rows for the ideal FCT
 static size_t   fct_num_hash_table_rows = 0;
 static bool     fct_is_initialized = false;
 
+/* Modeled hardware width of confidence_score -- see the FCT_Row storage-model
+ * comment in ifuse_fct.h. 10 bits gives 2x headroom over the current default
+ * confidence ceiling of 500 (max of ifuse_fct_preload_conf and
+ * ifuse_fct_runtime_insert_conf). */
+#define IFUSE_FCT_CONFIDENCE_MAX 1023U
+
 static void fct_preload_from_file(void);
+
+/*
+ * Truncates ld1_pc_addr to IFUSE_FCT_PC_TAG_BITS for storage/comparison, the
+ * same way ifuse_training_table.c's pc_tag() truncates TT tags. Only the
+ * stored/compared LD1 tag shrinks; fct_get_probe_start_idx() below still
+ * hashes the full PC for slot selection (simulator lookup speed only, not a
+ * modeled hardware index), and ld2_pc_addr is never truncated -- see the
+ * FCT_Row storage-model comment in ifuse_fct.h for why.
+ */
+static uint64_t fct_pc_tag(Addr pc) {
+    unsigned int bits = IFUSE_FCT_PC_TAG_BITS;
+    if (bits >= 64U)
+        return (uint64_t)pc;
+    if (bits == 0U)
+        return 0U;
+    return (uint64_t)pc & ((1ULL << bits) - 1ULL);
+}
 
 void fct_init(void) {
     if (fct_is_initialized) {
@@ -41,6 +64,18 @@ void fct_init(void) {
         fprintf(stderr,
                 "FCT: ifuse_fct_hash_bits must be in [1, %u]\n",
                 IFUSE_IDEAL_FCT_MAX_HASH_BITS);
+        exit(1);
+    }
+    if (IFUSE_FCT_PC_TAG_BITS == 0U || IFUSE_FCT_PC_TAG_BITS > 64U) {
+        fprintf(stderr, "FCT: ifuse_fct_pc_tag_bits must be 1-64\n");
+        exit(1);
+    }
+    if (IFUSE_FCT_PRELOAD_CONF > IFUSE_FCT_CONFIDENCE_MAX ||
+        IFUSE_FCT_RUNTIME_INSERT_CONF > IFUSE_FCT_CONFIDENCE_MAX) {
+        fprintf(stderr,
+                "FCT: ifuse_fct_preload_conf and ifuse_fct_runtime_insert_conf "
+                "must be <= %u for the modeled 10-bit confidence field\n",
+                IFUSE_FCT_CONFIDENCE_MAX);
         exit(1);
     }
 
@@ -112,7 +147,7 @@ static void fct_write_row(FCT_Row* row, Addr ld1_pc_addr, Addr ld2_pc_addr,
                           Counter ld1_micro_op_num,
                           Counter ld2_micro_op_num,
                           unsigned int confidence_score) {
-    row->ld1_pc_addr        = ld1_pc_addr;
+    row->ld1_pc_addr        = fct_pc_tag(ld1_pc_addr);
     row->ld2_pc_addr        = ld2_pc_addr;
     row->ld1_effective_addr = ld1_effective_addr;
     row->ld2_effective_addr = ld2_effective_addr;
@@ -133,6 +168,7 @@ static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
         return NULL;
     }
 
+    uint64_t ld1_tag = fct_pc_tag(ld1_pc_addr);
     size_t row_index_mask = fct_num_hash_table_rows - 1U;
     size_t row_idx = fct_get_probe_start_idx(ld1_pc_addr, row_index_mask);
 
@@ -141,7 +177,7 @@ static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
         if (!row->valid) {
             return NULL;
         }
-        if (row->ld1_pc_addr == ld1_pc_addr) {
+        if (row->ld1_pc_addr == ld1_tag) {
             return row;
         }
         row_idx = (row_idx + 1U) & row_index_mask;

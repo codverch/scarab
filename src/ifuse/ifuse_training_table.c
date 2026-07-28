@@ -11,12 +11,19 @@
 
 /*
  * Hardware-design storage model (the C fields below intentionally use normal
- * host types): each entry packs two 48-bit PC tags, a 14-bit observation
- * counter (supports insert thresholds up to 16383, e.g. 10/100/1000/10000),
- * a 6-bit cache-line offset delta, a 3-bit log2(LD2 access size), direction,
- * valid, and a 2-bit RRPV replacement-priority field, totaling 123 bits.
- * There are 32 sets * 4 ways = 128 entries, so the packed training table
- * costs 128 * 123 = 15,744 bits = 1.921875 KiB.
+ * host types): each entry packs a 32-bit LD1 PC tag (IFUSE_TRAINING_TABLE_
+ * PC_TAG_BITS -- with at most a few hundred live entries, aliasing
+ * probability is ~3e-5, and a collision only ever merges two candidates'
+ * observation counts, never corrupts a promoted PC; see the note on
+ * find_or_allocate() below for why) plus a full 48-bit LD2 PC (kept
+ * untruncated: it doubles as the value forwarded to FCT_Row.ld2_pc_addr,
+ * which must be full precision -- see pc_tag()'s comment below), an 11-bit
+ * observation counter (supports insert thresholds up to 2047, i.e. 2x
+ * headroom over the highest threshold actually swept, 1000), a 6-bit
+ * cache-line offset delta, a 3-bit log2(LD2 access size), direction, valid,
+ * and a 2-bit RRPV replacement-priority field, totaling 104 bits. There are
+ * 32 sets * 4 ways = 128 entries by default, so the packed training table
+ * costs 128 * 104 = 13,312 bits = 1.625 KiB.
  *
  * Replacement is RRIP-style (SRRIP): a newly inserted candidate starts at
  * RRPV = IFUSE_TT_RRPV_INSERT (one below max), not at max and not at zero,
@@ -25,7 +32,7 @@
  * decrements RRPV toward 0 (protected); eviction always takes the way with
  * the highest RRPV in the set (ties break to the lowest way index).
  */
-#define IFUSE_TRAINING_OBS_COUNTER_MAX 16383U
+#define IFUSE_TRAINING_OBS_COUNTER_MAX 2047U
 #define IFUSE_TT_RRPV_BITS 2U
 #define IFUSE_TT_RRPV_MAX ((1U << IFUSE_TT_RRPV_BITS) - 1U)
 #define IFUSE_TT_RRPV_INSERT (IFUSE_TT_RRPV_MAX - 1U)
@@ -51,6 +58,14 @@ static bool power_of_two(unsigned int value) {
     return value && !(value & (value - 1U));
 }
 
+/*
+ * Truncates ld1_pc to IFUSE_TRAINING_TABLE_PC_TAG_BITS. Applied only to the
+ * LD1 tag: ld1_pc is a pure lookup/disambiguation role in the TT (never read
+ * back as a value), whereas ld2_pc doubles as the value forwarded to
+ * fct_install_runtime_candidate() -> FCT_Row.ld2_pc_addr, which must be a
+ * full-precision PC (same reasoning as FCT_Row.ld2_pc_addr in ifuse_fct.h),
+ * so ld2_tag is stored and compared at full width, untouched by this.
+ */
 static uint64_t pc_tag(Addr pc) {
     unsigned int bits = IFUSE_TRAINING_TABLE_PC_TAG_BITS;
     if (bits >= 64U)
@@ -98,7 +113,7 @@ void training_table_init(void) {
         IFUSE_TRAINING_INSERT_THRESHOLD > IFUSE_TRAINING_OBS_COUNTER_MAX) {
         fprintf(stderr,
                 "I-Fuse training threshold must be 1-%u for the modeled "
-                "14-bit counter\n",
+                "11-bit counter\n",
                 IFUSE_TRAINING_OBS_COUNTER_MAX);
         exit(1);
     }
@@ -135,13 +150,26 @@ static bool keys_match(const TrainingEntry* entry, uint64_t ld1_tag,
            entry->direction == direction && entry->ld2_mem_size == mem_size;
 }
 
+/*
+ * ld1_tag (truncated via pc_tag()) exists only to answer "is this the same
+ * candidate as an existing entry" for the hit/miss/observation-count
+ * decision below -- it is never read back out to reconstruct a PC.
+ * training_table_observe() always forwards its own full-precision ld1_pc
+ * argument (the caller's real dynamic PC) to
+ * fct_install_runtime_candidate(), not this entry's stored ld1_tag. ld2_tag
+ * is kept at full width (see pc_tag()'s comment above) precisely so that
+ * even a stored-and-compared value, not just the call-site parameter,
+ * carries the exact LD2 PC forward -- belt-and-suspenders alongside the
+ * call-site guarantee, at essentially no extra risk since ld1_tag's 32 bits
+ * already make an accidental match astronomically unlikely on their own.
+ */
 static TrainingEntry* find_or_allocate(Addr ld1_pc, Addr ld2_pc,
                                        unsigned int delta, bool direction,
                                        unsigned int mem_size, uns proc_id) {
     uint64_t hash = pair_hash(ld1_pc, ld2_pc, delta, direction, mem_size);
     unsigned int set = (unsigned int)(hash & (num_sets - 1U));
     uint64_t ld1_tag = pc_tag(ld1_pc);
-    uint64_t ld2_tag = pc_tag(ld2_pc);
+    uint64_t ld2_tag = (uint64_t)ld2_pc;
     unsigned int invalid_way = num_ways;
 
     STAT_EVENT(proc_id, TRAINING_TABLE_LOOKUPS);

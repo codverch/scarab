@@ -6,23 +6,31 @@
 #include <string.h>
 
 #include "../general.param.h"
+#include "../statistics.h"
 #include "ifuse.param.h"
 
-#define HISTORY_CAPACITY 512U
-#define HISTORY_BUCKETS  1024U
 #define HISTORY_LINE_SIZE 64U
 
 /*
  * Hardware-design storage model (distinct from HistoryRow below, whose links
- * and full-width types are simulator bookkeeping): each of the 512 retired
- * load buffer entries needs a 48-bit PC, 48-bit effective address, 3-bit
- * log2(access size), 10-bit modulo-1024 micro-op timestamp, and 1 valid bit,
- * for 110 bits/entry. The timestamp is required because fusion distance is
- * measured in all micro-ops, not merely in loads; a global 10-bit timestamp
- * advances once per micro-op and age is their modulo-1024 difference. Thus
- * the packed RLB costs 512 * 110 = 56,320 bits = 6.875 KiB, plus global
- * timestamp/head/tail control bits. Ten timestamp bits distinguish ages
- * 0..511 from expired entries across wraparound.
+ * and full-width types are simulator bookkeeping): each retired load buffer
+ * entry needs a 48-bit PC, 48-bit effective address, 3-bit log2(access
+ * size), 10-bit modulo-1024 micro-op timestamp, and 1 valid bit, for 110
+ * bits/entry. The timestamp is required because fusion distance is measured
+ * in all micro-ops, not merely in loads; a global 10-bit timestamp advances
+ * once per micro-op and age is their modulo-1024 difference. Ten timestamp
+ * bits distinguish ages 0..511 from expired entries across wraparound; this
+ * is sized off IFUSE_FUSION_DISTANCE alone and does not change with capacity.
+ *
+ * IFUSE_RLB_CAPACITY (default 128) is deliberately smaller than
+ * IFUSE_FUSION_DISTANCE (default 512): the buffer only needs to hold the
+ * loads live within the distance window, not one slot per micro-op in it.
+ * Measured load density is ~20-30% of instructions, so a 512-op window
+ * rarely holds more than ~150-160 live loads. Running out of slots early
+ * (RLB_CAPACITY_EVICTIONS) just forces the globally oldest live load out
+ * ahead of schedule, same effect as if it had aged out on its own -- capacity
+ * and distance are independent knobs. At 128 entries the packed RLB costs
+ * 128 * 110 = 14,080 bits = 1.71875 KiB, versus 6.875 KiB at 512.
  */
 typedef struct HistoryRow {
     RetiredLoadHistoryEntry load;
@@ -35,8 +43,10 @@ typedef struct HistoryRow {
     bool valid;
 } HistoryRow;
 
-static HistoryRow rows[HISTORY_CAPACITY];
-static int bucket_heads[HISTORY_BUCKETS];
+static HistoryRow* rows;
+static int* bucket_heads;
+static unsigned int history_capacity;
+static unsigned int history_bucket_mask;
 static int oldest_row;
 static int newest_row;
 static int free_head;
@@ -51,21 +61,46 @@ static unsigned int bucket_for(Addr block) {
     key ^= key >> 33;
     key *= 0xff51afd7ed558ccdULL;
     key ^= key >> 33;
-    return (unsigned int)(key & (HISTORY_BUCKETS - 1U));
+    return (unsigned int)(key & history_bucket_mask);
+}
+
+static unsigned int next_pow2_at_least(unsigned int value) {
+    unsigned int p = 1U;
+    while (p < value)
+        p <<= 1;
+    return p;
 }
 
 void retired_load_history_init(void) {
-    if (!IFUSE_FUSION_DISTANCE || IFUSE_FUSION_DISTANCE > HISTORY_CAPACITY) {
-        fprintf(stderr, "Runtime I-Fuse fusion distance must be 1-%u "
-                        "micro-ops (got %u)\n",
-                HISTORY_CAPACITY, IFUSE_FUSION_DISTANCE);
+    if (!IFUSE_FUSION_DISTANCE) {
+        fprintf(stderr,
+                "Runtime I-Fuse fusion distance must be >= 1 micro-op\n");
         exit(1);
     }
-    memset(rows, 0, sizeof(rows));
-    for (unsigned int i = 0; i < HISTORY_BUCKETS; ++i)
+    if (!IFUSE_RLB_CAPACITY) {
+        fprintf(stderr, "Runtime I-Fuse RLB capacity must be >= 1 entry\n");
+        exit(1);
+    }
+
+    free(rows);
+    free(bucket_heads);
+
+    history_capacity = IFUSE_RLB_CAPACITY;
+    unsigned int buckets = next_pow2_at_least(2U * history_capacity);
+    history_bucket_mask = buckets - 1U;
+
+    rows = (HistoryRow*)calloc(history_capacity, sizeof(*rows));
+    bucket_heads = (int*)malloc((size_t)buckets * sizeof(*bucket_heads));
+    if (!rows || !bucket_heads) {
+        fprintf(stderr,
+                "Could not allocate I-Fuse retired load history (%u entries)\n",
+                history_capacity);
+        exit(1);
+    }
+    for (unsigned int i = 0; i < buckets; ++i)
         bucket_heads[i] = -1;
-    for (unsigned int i = 0; i < HISTORY_CAPACITY; ++i)
-        rows[i].free_next = i + 1U < HISTORY_CAPACITY ? (int)(i + 1U) : -1;
+    for (unsigned int i = 0; i < history_capacity; ++i)
+        rows[i].free_next = i + 1U < history_capacity ? (int)(i + 1U) : -1;
     oldest_row = -1;
     newest_row = -1;
     free_head = 0;
@@ -103,9 +138,10 @@ static void prune(Counter current_micro_op_num) {
     while (oldest_row >= 0) {
         Counter older = rows[oldest_row].load.micro_op_num;
         if (current_micro_op_num > older &&
-            current_micro_op_num - older >= IFUSE_FUSION_DISTANCE)
+            current_micro_op_num - older >= IFUSE_FUSION_DISTANCE) {
+            STAT_EVENT(0, RLB_AGE_EVICTIONS);
             remove_row(oldest_row);
-        else
+        } else
             break;
     }
 }
@@ -115,8 +151,10 @@ void retired_load_history_insert(Addr pc, Addr effective_addr, uns mem_size,
     if (!initialized)
         retired_load_history_init();
     prune(micro_op_num);
-    if (free_head < 0)
+    if (free_head < 0) {
+        STAT_EVENT(0, RLB_CAPACITY_EVICTIONS);
         remove_row(oldest_row);
+    }
 
     int row_idx = free_head;
     HistoryRow* row = &rows[row_idx];

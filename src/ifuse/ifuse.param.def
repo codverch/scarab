@@ -1,4 +1,8 @@
 DEF_PARAM(ifuse_fusion_distance, IFUSE_FUSION_DISTANCE, uns, uns, 512, )
+/* RLB physical capacity, decoupled from ifuse_fusion_distance: entries only
+ * need to cover the loads live within the distance window, not every
+ * micro-op in it. 128 entries = 1.71875 KiB at 110 bits/entry. */
+DEF_PARAM(ifuse_rlb_capacity, IFUSE_RLB_CAPACITY, uns, uns, 128, )
 DEF_PARAM(ifuse_apt_match_policy, IFUSE_APT_MATCH_POLICY, uns, uns, 1, )
 
 /* Retire-stage runtime discovery. 32 sets x 4 ways = 128 TT entries. */
@@ -6,7 +10,13 @@ DEF_PARAM(ifuse_runtime_training_enabled, IFUSE_RUNTIME_TRAINING_ENABLED, Flag, 
 DEF_PARAM(ifuse_training_insert_threshold, IFUSE_TRAINING_INSERT_THRESHOLD, uns, uns, 1000, )
 DEF_PARAM(ifuse_training_table_sets, IFUSE_TRAINING_TABLE_SETS, uns, uns, 32, )
 DEF_PARAM(ifuse_training_table_ways, IFUSE_TRAINING_TABLE_WAYS, uns, uns, 4, )
-DEF_PARAM(ifuse_training_table_pc_tag_bits, IFUSE_TRAINING_TABLE_PC_TAG_BITS, uns, uns, 48, )
+/* Tag width for TT's ld1_tag only (ld2_tag stays a full 48-bit PC -- it
+ * doubles as the value forwarded to FCT_Row.ld2_pc_addr, which must be full
+ * precision). With a few hundred live entries at most, 32 bits keeps
+ * ld1_tag's alias-collision probability negligible (~3e-5); a collision only
+ * costs a shared observation counter, never a wrong promoted PC -- see
+ * ifuse_training_table.c for why. */
+DEF_PARAM(ifuse_training_table_pc_tag_bits, IFUSE_TRAINING_TABLE_PC_TAG_BITS, uns, uns, 32, )
 
 /* FCT confidence (matches old pgo-ifuse: init 500, predict when > 499, -50 mispred). */
 DEF_PARAM(ifuse_fct_conf_threshold, IFUSE_FCT_CONF_THRESHOLD, uns, uns, 499, )
@@ -14,6 +24,10 @@ DEF_PARAM(ifuse_fct_mispred_conf_penalty, IFUSE_FCT_MISPRED_CONF_PENALTY, uns, u
 DEF_PARAM(ifuse_fct_preload_file, IFUSE_FCT_PRELOAD_FILE, char*, string, NULL, )
 DEF_PARAM(ifuse_fct_preload_conf, IFUSE_FCT_PRELOAD_CONF, uns, uns, 500, )
 DEF_PARAM(ifuse_fct_runtime_insert_conf, IFUSE_FCT_RUNTIME_INSERT_CONF, uns, uns, 500, )
+/* FCT LD1 PC tag width: same collision reasoning as ifuse_training_table_pc_tag_bits,
+ * applied only to ld1_pc_addr (the lookup tag). ld2_pc_addr stays full width --
+ * see the FCT_Row storage-model comment in ifuse_fct.h for why. */
+DEF_PARAM(ifuse_fct_pc_tag_bits, IFUSE_FCT_PC_TAG_BITS, uns, uns, 32, )
 
 /* Tunable table capacities. 2^9 = 512 FCT rows.
  * APT/ACI: set-associative tables with tree-PLRU replacement (default 64x4). */
