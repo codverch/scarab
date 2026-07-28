@@ -1,0 +1,54 @@
+Scarab gitrev: 1585163f1
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Tue Jul 28 05:01:27 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000007 } -- 0.00 KIPS (83.33 KIPS)
+** Heartbeat:   6% -- { 2000009 } -- 90.91 KIPS (86.96 KIPS)
+** Heartbeat:  10% -- { 3000014 } -- 83.33 KIPS (85.71 KIPS)
+** Heartbeat:  13% -- { 4000018 } -- 83.33 KIPS (85.11 KIPS)
+** Heartbeat:  16% -- { 5000020 } -- 100.00 KIPS (87.72 KIPS)
+** Heartbeat:  20% -- { 6000024 } -- 90.91 KIPS (88.24 KIPS)
+** Heartbeat:  23% -- { 7000026 } -- 90.91 KIPS (88.61 KIPS)
+** Heartbeat:  26% -- { 8000026 } -- 90.91 KIPS (88.89 KIPS)
+** Heartbeat:  30% -- { 9000028 } -- 83.33 KIPS (88.24 KIPS)
+** Heartbeat:  33% -- { 10000032 } -- 83.33 KIPS (87.72 KIPS)
+** Heartbeat:  36% -- { 11000032 } -- 90.91 KIPS (88.00 KIPS)
+** Heartbeat:  40% -- { 12000034 } -- 90.91 KIPS (88.24 KIPS)
+** Heartbeat:  43% -- { 13000035 } -- 83.33 KIPS (87.84 KIPS)
+** Heartbeat:  46% -- { 14000039 } -- 83.33 KIPS (87.50 KIPS)
+** Heartbeat:  50% -- { 15000041 } -- 90.91 KIPS (87.72 KIPS)
+** Heartbeat:  53% -- { 16000043 } -- 83.33 KIPS (87.43 KIPS)
+** Heartbeat:  56% -- { 17000045 } -- 83.33 KIPS (87.18 KIPS)
+** Heartbeat:  60% -- { 18000046 } -- 83.33 KIPS (86.96 KIPS)
+** Heartbeat:  63% -- { 19000049 } -- 90.91 KIPS (87.16 KIPS)
+** Heartbeat:  66% -- { 20000050 } -- 83.33 KIPS (86.96 KIPS)
+** Heartbeat:  70% -- { 21000054 } -- 76.92 KIPS (86.42 KIPS)
+** Heartbeat:  73% -- { 22000056 } -- 90.91 KIPS (86.61 KIPS)
+** Heartbeat:  76% -- { 23000063 } -- 83.33 KIPS (86.47 KIPS)
+** Heartbeat:  80% -- { 24000070 } -- 90.91 KIPS (86.64 KIPS)
+** Heartbeat:  83% -- { 25000077 } -- 83.33 KIPS (86.51 KIPS)
+** Heartbeat:  86% -- { 26000080 } -- 83.33 KIPS (86.38 KIPS)
+** Heartbeat:  90% -- { 27000081 } -- 90.91 KIPS (86.54 KIPS)
+** Heartbeat:  93% -- { 28000087 } -- 90.91 KIPS (86.69 KIPS)
+** Heartbeat:  96% -- { 29000090 } -- 83.33 KIPS (86.57 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff744cc14
+Traceback (most recent call last):
+  File "/home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.py", line 24, in <module>
+    from scarab_globals import *
+  File "/home/deepmish/scarab_stage/ifuse/scarab/bin/scarab_globals/scarab_batch_types.py", line 47, in <module>
+    import scarab_stats
+  File "/home/deepmish/scarab_stage/ifuse/scarab/bin/scarab_globals/scarab_stats.py", line 28, in <module>
+    import pandas as pd
+ModuleNotFoundError: No module named 'pandas'
+** Core 0 Finished:    insts:30000000    cycles:6837220     time:2136631250000       -- 4.39 IPC (4.39 IPC) --  N/A  KIPS (86.71 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT_RESOLVED_VIA_MCPAT_BACKFILL (P=0  O=34188899  I=30000000  C=6837220):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT_RESOLVED_VIA_MCPAT_BACKFILL (P=0  O=34188899  I=30000000  C=6837220):  Command "python3 /home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x273d56) [0x5555557c7d56]
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x3173ae) [0x55555586b3ae]
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x1e6163) [0x55555573a163]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x1ea95e) [0x55555573e95e]
