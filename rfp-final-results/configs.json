@@ -1,0 +1,141 @@
+{
+  "storage_kb": 24,
+  "pt": "512 sets x 8 ways",
+  "pat": "64 sets x 4 ways",
+  "baseline": "simulations/baseline",
+  "rfp": "simulations/rfp_24kb",
+  "apps": {
+    "appworld": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 3,
+      "rfp_simpoints": 3,
+      "mcpat_out_count": 3,
+      "speedup_pct": 1.610827239997481
+    },
+    "bfs_web-google": {
+      "label": "p3/s16b/signed/24KB",
+      "prob_shift": 3,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 3 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 4,
+      "rfp_simpoints": 4,
+      "mcpat_out_count": 4,
+      "speedup_pct": 1.1174421568811654
+    },
+    "clickhouse": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 1,
+      "rfp_simpoints": 1,
+      "mcpat_out_count": 1,
+      "speedup_pct": 0.9375522741627673
+    },
+    "core_bench": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 7,
+      "rfp_simpoints": 4,
+      "mcpat_out_count": 4,
+      "speedup_pct": 2.1969120606138315
+    },
+    "dfs_web-google": {
+      "label": "p0/s16b/signed/24KB",
+      "prob_shift": 0,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 0 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 3,
+      "rfp_simpoints": 3,
+      "mcpat_out_count": 3,
+      "speedup_pct": -0.0023948157898856515
+    },
+    "duckdb": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 2,
+      "rfp_simpoints": 2,
+      "mcpat_out_count": 2,
+      "speedup_pct": 1.7850058085574494
+    },
+    "leveldb": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 2,
+      "rfp_simpoints": 2,
+      "mcpat_out_count": 2,
+      "speedup_pct": 3.691531572177831
+    },
+    "pagerank_gnutella31": {
+      "label": "p1/s16b/signed/24KB",
+      "prob_shift": 1,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 1 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 5,
+      "rfp_simpoints": 5,
+      "mcpat_out_count": 5,
+      "speedup_pct": 0.42105057236663246
+    },
+    "rocksdb": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 3,
+      "rfp_simpoints": 3,
+      "mcpat_out_count": 3,
+      "speedup_pct": 2.4659092905666036
+    },
+    "sssp_ego-facebook": {
+      "label": "p1/s16b/signed/24KB",
+      "prob_shift": 1,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 16,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 1 --rfp_stride_signed 1 --rfp_stride_bits 16 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 2,
+      "rfp_simpoints": 2,
+      "mcpat_out_count": 2,
+      "speedup_pct": 0.31906615139112304
+    },
+    "terminal_bench": {
+      "label": "p2/s5b/signed/24KB",
+      "prob_shift": 2,
+      "rfp_conf_max": 1,
+      "rfp_stride_bits": 5,
+      "rfp_stride_signed": 1,
+      "params": "--rfp_on 1 --rfp_conf_max 1 --rfp_prob_shift 2 --rfp_stride_signed 1 --rfp_stride_bits 5 --rfp_pt_num_sets 512 --rfp_pt_num_ways 8 --rfp_pat_num_sets 64 --rfp_pat_num_ways 4",
+      "baseline_simpoints": 2,
+      "rfp_simpoints": 2,
+      "mcpat_out_count": 2,
+      "speedup_pct": 7.931529311584007
+    }
+  }
+}
