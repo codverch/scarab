@@ -1,0 +1,58 @@
+Scarab gitrev: 1585163f1
+Scarab started at Tue Jul 28 07:08:53 2026
+
+Initialized Ramulator. 
+Stray memory record detected at seq. 1647: PC: 0x7faa7f974f19, PID: 7, TID: 7, Addr: 0x7faa7fa1c08d. Suppressing further messages.
+** Heartbeat:   3% -- { 1000001 } -- 0.00 KIPS (55.56 KIPS)
+** Heartbeat:   6% -- { 2000001 } -- 58.82 KIPS (57.14 KIPS)
+** Heartbeat:  10% -- { 3000003 } -- 62.50 KIPS (58.82 KIPS)
+** Heartbeat:  13% -- { 4000004 } -- 55.56 KIPS (57.97 KIPS)
+** Heartbeat:  16% -- { 5000009 } -- 58.82 KIPS (58.14 KIPS)
+** Heartbeat:  20% -- { 6000009 } -- 58.82 KIPS (58.25 KIPS)
+** Heartbeat:  23% -- { 7000014 } -- 55.56 KIPS (57.85 KIPS)
+** Heartbeat:  26% -- { 8000019 } -- 47.62 KIPS (56.34 KIPS)
+** Heartbeat:  30% -- { 9000019 } -- 47.62 KIPS (55.21 KIPS)
+** Heartbeat:  33% -- { 10000019 } -- 55.56 KIPS (55.25 KIPS)
+** Heartbeat:  36% -- { 11000020 } -- 52.63 KIPS (55.00 KIPS)
+** Heartbeat:  40% -- { 12000020 } -- 58.82 KIPS (55.30 KIPS)
+** Heartbeat:  43% -- { 13000020 } -- 50.00 KIPS (54.85 KIPS)
+** Heartbeat:  46% -- { 14000022 } -- 58.82 KIPS (55.12 KIPS)
+** Heartbeat:  50% -- { 15000024 } -- 52.63 KIPS (54.95 KIPS)
+** Heartbeat:  53% -- { 16000028 } -- 47.62 KIPS (54.42 KIPS)
+** Heartbeat:  56% -- { 17000031 } -- 55.56 KIPS (54.49 KIPS)
+** Heartbeat:  60% -- { 18000037 } -- 52.63 KIPS (54.38 KIPS)
+** Heartbeat:  63% -- { 19000039 } -- 52.63 KIPS (54.29 KIPS)
+** Heartbeat:  66% -- { 20000043 } -- 55.56 KIPS (54.35 KIPS)
+** Heartbeat:  70% -- { 21000044 } -- 52.63 KIPS (54.26 KIPS)
+** Heartbeat:  73% -- { 22000048 } -- 52.63 KIPS (54.19 KIPS)
+** Heartbeat:  76% -- { 23000051 } -- 55.56 KIPS (54.25 KIPS)
+** Heartbeat:  80% -- { 24000051 } -- 52.63 KIPS (54.18 KIPS)
+** Heartbeat:  83% -- { 25000058 } -- 52.63 KIPS (54.11 KIPS)
+** Heartbeat:  86% -- { 26000060 } -- 52.63 KIPS (54.05 KIPS)
+** Heartbeat:  90% -- { 27000064 } -- 52.63 KIPS (54.00 KIPS)
+** Heartbeat:  93% -- { 28000064 } -- 52.63 KIPS (53.95 KIPS)
+** Heartbeat:  96% -- { 29000069 } -- 55.56 KIPS (54.00 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7faa7f904040
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:13934546    time:4354545625000       -- 2.15 IPC (2.15 IPC) --  N/A  KIPS (54.05 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34131513  I=30038785  C=13934546):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34131513  I=30038785  C=13934546):  Command "python3 /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x273d56) [0x5555557c7d56]
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x3173ae) [0x55555586b3ae]
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x1e6163) [0x55555573a163]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x1ea95e) [0x55555573e95e]

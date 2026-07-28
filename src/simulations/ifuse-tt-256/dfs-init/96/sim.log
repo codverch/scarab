@@ -1,0 +1,58 @@
+Scarab gitrev: 1585163f1
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Tue Jul 28 07:09:04 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000002 } -- 0.00 KIPS (83.33 KIPS)
+** Heartbeat:   6% -- { 2000006 } -- 90.91 KIPS (86.96 KIPS)
+** Heartbeat:  10% -- { 3000012 } -- 90.91 KIPS (88.24 KIPS)
+** Heartbeat:  13% -- { 4000016 } -- 76.92 KIPS (85.11 KIPS)
+** Heartbeat:  16% -- { 5000016 } -- 90.91 KIPS (86.21 KIPS)
+** Heartbeat:  20% -- { 6000016 } -- 90.91 KIPS (86.96 KIPS)
+** Heartbeat:  23% -- { 7000017 } -- 100.00 KIPS (88.61 KIPS)
+** Heartbeat:  26% -- { 8000021 } -- 125.00 KIPS (91.95 KIPS)
+** Heartbeat:  30% -- { 9000021 } -- 125.00 KIPS (94.74 KIPS)
+** Heartbeat:  33% -- { 10000022 } -- 142.86 KIPS (98.04 KIPS)
+** Heartbeat:  36% -- { 11000022 } -- 111.11 KIPS (99.10 KIPS)
+** Heartbeat:  40% -- { 12000027 } -- 100.00 KIPS (99.17 KIPS)
+** Heartbeat:  43% -- { 13000032 } -- 111.11 KIPS (100.00 KIPS)
+** Heartbeat:  46% -- { 14000036 } -- 125.00 KIPS (101.45 KIPS)
+** Heartbeat:  50% -- { 15000039 } -- 90.91 KIPS (100.67 KIPS)
+** Heartbeat:  53% -- { 16000045 } -- 90.91 KIPS (100.00 KIPS)
+** Heartbeat:  56% -- { 17000046 } -- 83.33 KIPS (98.84 KIPS)
+** Heartbeat:  60% -- { 18000048 } -- 83.33 KIPS (97.83 KIPS)
+** Heartbeat:  63% -- { 19000049 } -- 90.91 KIPS (97.44 KIPS)
+** Heartbeat:  66% -- { 20000053 } -- 90.91 KIPS (97.09 KIPS)
+** Heartbeat:  70% -- { 21000060 } -- 76.92 KIPS (95.89 KIPS)
+** Heartbeat:  73% -- { 22000060 } -- 83.33 KIPS (95.24 KIPS)
+** Heartbeat:  76% -- { 23000063 } -- 90.91 KIPS (95.04 KIPS)
+** Heartbeat:  80% -- { 24000064 } -- 83.33 KIPS (94.49 KIPS)
+** Heartbeat:  83% -- { 25000070 } -- 90.91 KIPS (94.34 KIPS)
+** Heartbeat:  86% -- { 26000073 } -- 83.33 KIPS (93.86 KIPS)
+** Heartbeat:  90% -- { 27000073 } -- 90.91 KIPS (93.75 KIPS)
+** Heartbeat:  93% -- { 28000077 } -- 83.33 KIPS (93.33 KIPS)
+** Heartbeat:  96% -- { 29000079 } -- 90.91 KIPS (93.25 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x40e63b
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:7788123     time:2433788437500       -- 3.85 IPC (3.85 IPC) --  N/A  KIPS (93.17 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=35087724  I=30000078  C=7788123):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=35087724  I=30000078  C=7788123):  Command "python3 /home/deepmish/scarab_stage/tt-256/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x273d56) [0x5555557c7d56]
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x3173ae) [0x55555586b3ae]
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x1e6163) [0x55555573a163]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/tt-256/scarab/src/scarab_79fd57711_0(+0x1ea95e) [0x55555573e95e]
