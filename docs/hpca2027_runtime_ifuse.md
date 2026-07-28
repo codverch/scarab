@@ -16,6 +16,16 @@ configured threshold, the pair is inserted into the existing Fusion Candidate
 Table (FCT) at prediction-eligible confidence. A trusted conflicting FCT row is
 preserved; a row whose confidence has fallen below threshold may be replaced.
 
+TT replacement is RRIP-style (SRRIP). Each entry carries a 2-bit RRPV
+(re-reference prediction value, range 0-3). A newly inserted candidate starts
+at RRPV 2, not at the fully-protected 0 and not at the immediately-evictable
+max of 3 — it must be re-observed to earn protection. Each repeat observation
+of an existing entry decrements its RRPV toward 0. On a TT miss with no
+invalid way available, the victim is the way in the set with the highest RRPV
+(ties break to the lowest way index), so a candidate that has proven itself
+through repeat observations is not evicted ahead of a brand-new, unobserved
+one.
+
 The PGO preload path remains available for controlled comparisons, but runtime
 experiments must leave `--ifuse_fct_preload_file` unset.
 
@@ -42,10 +52,9 @@ The default TT has 128 entries. The intended size sweep is 32, 64, 128, and
 
 For the default direct encodings, one TT entry contains two 48-bit PC tags, a
 6-bit offset magnitude, 1 direction bit, 7 access-size bits, a 10-bit
-observation counter, and 1 valid bit: 121 bits per entry. A 128-entry TT is
-15,488 bits (1,936 bytes), plus 3 PLRU bits per set (12 bytes), for 1,948 bytes.
-The C structure is larger because of host alignment and is not the hardware
-size estimate.
+observation counter, a 2-bit RRPV, and 1 valid bit: 123 bits per entry. A
+128-entry TT is 15,744 bits (1,968 bytes). The C structure is larger because
+of host alignment and is not the hardware size estimate.
 
 The retired-load history must be reported separately rather than hidden as
 simulator bookkeeping. The current model holds up to 512 recent loads. Its
