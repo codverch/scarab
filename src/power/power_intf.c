@@ -136,7 +136,10 @@ void run_power_model_exec(void) {
   ASSERT(0, len < MAX_STR_LENGTH);
 
   int rc = system(cmd);
-  ASSERTM(0, rc == 0, "Command \"%s\" failed\n", cmd);
+  if (rc != 0) {
+    WARNING(0, "Power model command \"%s\" failed (rc=%d); continuing without power results\n",
+            cmd, rc);
+  }
 }
 
 void parse_power_model_results(void) {
@@ -148,7 +151,10 @@ void parse_power_model_results(void) {
   }
 
   FILE* file = file_tag_fopen(NULL, model_results_filename, "r");
-  ASSERTM(0, file, "Could not open %s\n", model_results_filename);
+  if (!file) {
+    WARNING(0, "Could not open %s; skipping power result parse\n", model_results_filename);
+    return;
+  }
 
   char line[MAX_STR_LENGTH + 1];
   char domain_str[MAX_STR_LENGTH + 1];

@@ -462,11 +462,12 @@ static void power_print_core_icache(std::ofstream& out, uint32_t core_id) {
   ADD_XML_COMPONENT(out, header, "system.core" + std::to_string(core_id) + ".icache", "icache", );
   /* Note: icache cycles (scarab assumes 1, that may be too fast for McPAT,
    * bug #25). */
+  const uns mcpat_icache_banks = 1; /* McPAT cannot size high-bank small I$ */
   ADD_XML_PARAM_str(out, header, "icache_config",
                     std::to_string(ICACHE_SIZE) + "," +          /*Capacity*/
                         std::to_string(ICACHE_LINE_SIZE) + "," + /*Block_width*/
                         std::to_string(ICACHE_ASSOC) + "," +     /*associativity*/
-                        std::to_string(ICACHE_BANKS) +           /*bank*/
+                        std::to_string(mcpat_icache_banks) +     /*bank*/
                         ",1,3,32,1", /* throughput w.r.t. core clock, latency w.r.t. core clock,
                                       * output_width, cache policy (0 no write or write-though
                                       * with non-write allocate; 1 write-back with
@@ -506,11 +507,12 @@ static void power_print_core_dcache(std::ofstream& out, uint32_t core_id) {
   std::string header = "\t\t";
   ADD_XML_COMPONENT(out, header, "system.core" + std::to_string(core_id) + ".dcache", "dcache", );
   /*all the buffer related are optional*/
+  const uns mcpat_dcache_banks = 1; /* McPAT bank clamp */
   ADD_XML_PARAM_str(out, header, "dcache_config",
                     std::to_string(DCACHE_SIZE) + "," +          /*Capactiy*/
                         std::to_string(DCACHE_LINE_SIZE) + "," + /*Block_width*/
                         std::to_string(DCACHE_ASSOC) + "," +     /*associativity*/
-                        std::to_string(DCACHE_BANKS) + "," +     /*bank*/
+                        std::to_string(mcpat_dcache_banks) + "," + /*bank*/
                         "1," +                                   /*throughput w.r.t. core clock*/
                         std::to_string(DCACHE_CYCLES) + "," +    /*latency w.r.t. core clock*/
                         "64,1",                                  /*output_width, cache policy
