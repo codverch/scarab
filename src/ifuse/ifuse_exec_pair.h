@@ -28,15 +28,24 @@ Flag ifuse_exec_pair_skip_duplicate_wakeup(const Op* op, Dep_Type type);
 /**
  * Returns TRUE when a validated LOAD2 must bypass LSQ and d-cache access.
  *
- * The op still enters the ROB, issue queue, and load AGU.
+ * A validated LOAD2 is truly fused: it does not occupy a ROB slot (doesn't
+ * count against node_count), an issue-queue/RS entry, or an LSQ entry. Its
+ * result and "address generation" are both completed immediately via
+ * ifuse_exec_pair_signal_ld2() once LOAD1's data is available, so it never
+ * needs to be scheduled or executed independently. It still goes through
+ * ordinary fetch/decode/rename so its dependents can bind to LOAD1's
+ * forwarded physical register.
  */
 Flag ifuse_exec_pair_bypass_ld2_memory_pipeline(const Op* op);
 
 /**
- * Records that a validated LOAD2 finished address generation.
+ * Legacy completion hook for LOAD2 address generation.
  *
- * LOAD2 can retire only after both LOAD1 data production and LOAD2 address
- * generation have completed.
+ * Under true fusion LOAD2 never reaches the dcache stage (it never gets an
+ * issue-queue entry), so this is normally unreachable; AGU completion is
+ * instead modeled immediately in ifuse_exec_pair_signal_ld2(). Kept as a
+ * defensive no-op fallback if bypass() ever becomes true for an op that
+ * somehow still reaches this stage.
  */
 void ifuse_exec_pair_complete_ld2_agu(Op* op);
 
