@@ -47,6 +47,7 @@ extern "C" {
 
 #include "exec_ports.h"
 #include "exec_stage.h"
+#include "ifuse/ifuse_exec_pair.h"
 #include "map_rename.h"
 #include "node_stage.h"
 }
@@ -668,6 +669,13 @@ void IssueQueues::dispatch() {
   uns32 num_fill_rs = 0;
 
   for (op = node->next_op_into_rs; op; op = op->next_node) {
+    // A truly-fused LOAD2 never needs a reservation-station entry: its
+    // result is forwarded from LOAD1, so it has nothing left to schedule or
+    // execute. Skip it without consuming RS capacity or fill-width bandwidth.
+    if (ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
+      continue;
+    }
+
     ASSERT(proc_id, op->queue_id == MAX_UNS16 && op->queue_entry_id == MAX_UNS16);
     uns16 queue_id = find_emptiest_queue(op);
     if (queue_id == MAX_UNS16) {

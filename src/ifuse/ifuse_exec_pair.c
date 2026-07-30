@@ -276,6 +276,13 @@ static void ifuse_exec_pair_signal_ld2(
 
     ld2_op->wake_up_signaled[REG_DATA_DEP] = TRUE;
     ld2_op->ifuse_ld2_early_wake_signaled = TRUE;
+
+    // True fusion: LOAD2 never enters the ROB/IQ/LSQ to independently
+    // generate its own address, so there is no separate AGU event to wait
+    // for. Its "address generation" is free, modeled as completing here.
+    ld2_op->dcache_cycle = cycle_count;
+    ld2_op->ifuse_ld2_agu_completed = TRUE;
+
     ifuse_exec_pair_finalize_ld2(ld2_op);
 }
 

@@ -238,7 +238,7 @@ void flush_window() {
             op->off_path);
       ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
                                 ifuse_recovery_is_flushing());
-      if (!op->macro_fused)
+      if (!op->macro_fused && !ifuse_exec_pair_bypass_ld2_memory_pipeline(op))
         flush_ops++;
       ASSERT(node->proc_id, op->off_path || bp_recovery_info->ifuse_recovery ||
                                 ifuse_recovery_is_flushing());
@@ -257,7 +257,7 @@ void flush_window() {
         op->recovery_scheduled = FALSE;
       }
       DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
-      if (!op->macro_fused)
+      if (!op->macro_fused && !ifuse_exec_pair_bypass_ld2_memory_pipeline(op))
         keep_ops++;
       last = &op->next_node;
       node->node_tail = op;
@@ -295,7 +295,7 @@ void debug_print_node_table() {
     ASSERT(node->proc_id, temp[slot_num] == NULL);
     temp[slot_num] = op;
     printed_all++;
-    if (!op->macro_fused)
+    if (!op->macro_fused && !ifuse_exec_pair_bypass_ld2_memory_pipeline(op))
       printed_non_fused++;
     empty = FALSE;
 
@@ -422,7 +422,9 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     // Jump uop after CMP or TEST will be fused into one uop
     node_fuse_op(op);
-    if (!op->macro_fused)
+    // A truly-fused LOAD2 never gets its own ROB slot: its result comes from
+    // LOAD1 via forwarding, so it doesn't count against ROB capacity.
+    if (!op->macro_fused && !ifuse_exec_pair_bypass_ld2_memory_pipeline(op))
       node->node_count++;
 
     ASSERTM(node->proc_id, node->node_count <= NODE_TABLE_SIZE,
@@ -433,7 +435,11 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n", unsstr64(op->op_num), op->off_path);
 
-    op->state = OS_IN_ROB;
+    // A truly-fused LOAD2 may already have been finalized (OS_DONE) by the
+    // IFuse execution-side pair if LOAD1 completed before LOAD2 reached
+    // dispatch; don't regress it back to an in-flight state.
+    if (op->state != OS_DONE)
+      op->state = OS_IN_ROB;
 
     /* always stop issuing after a synchronizing op */
     if (op->inst_info->table_info.bar_type & BAR_ISSUE)
@@ -660,6 +666,8 @@ void node_retire() {
 
     Op* next_retired = op->next_node;
     Flag macro_fused_saved = op->macro_fused;
+    // Save before free: a truly-fused LOAD2 never incremented node_count.
+    Flag ifuse_true_fused_saved = ifuse_exec_pair_bypass_ld2_memory_pipeline(op);
 
     if (model->op_retired_hook)
       model->op_retired_hook(op);
@@ -668,7 +676,7 @@ void node_retire() {
       ft_free_op(op);
     }
     // the fused op does not occupy the ROB entry
-    if (!macro_fused_saved)
+    if (!macro_fused_saved && !ifuse_true_fused_saved)
       node->node_count--;
 
     ASSERT(node->proc_id, node->node_count >= 0);
@@ -725,7 +733,8 @@ Flag op_not_ready_for_retire(Op* op) {
 Flag is_node_table_empty() {
   if (node->node_count == 0) {
     if (node->node_head != NULL) {
-      ASSERT(node->proc_id, node->node_head->macro_fused);
+      ASSERT(node->proc_id, node->node_head->macro_fused ||
+                                 ifuse_exec_pair_bypass_ld2_memory_pipeline(node->node_head));
       return FALSE;
     }
 
