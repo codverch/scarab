@@ -1,0 +1,58 @@
+Scarab gitrev: 1585163f1
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Tue Jul 28 05:43:32 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000000 } -- 0.00 KIPS (66.67 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 71.43 KIPS (68.97 KIPS)
+** Heartbeat:  10% -- { 3000006 } -- 66.67 KIPS (68.18 KIPS)
+** Heartbeat:  13% -- { 4000006 } -- 71.43 KIPS (68.97 KIPS)
+** Heartbeat:  16% -- { 5000008 } -- 66.67 KIPS (68.49 KIPS)
+** Heartbeat:  20% -- { 6000011 } -- 66.67 KIPS (68.18 KIPS)
+** Heartbeat:  23% -- { 7000017 } -- 71.43 KIPS (68.63 KIPS)
+** Heartbeat:  26% -- { 8000024 } -- 71.43 KIPS (68.97 KIPS)
+** Heartbeat:  30% -- { 9000026 } -- 66.67 KIPS (68.70 KIPS)
+** Heartbeat:  33% -- { 10000028 } -- 71.43 KIPS (68.97 KIPS)
+** Heartbeat:  36% -- { 11000028 } -- 71.43 KIPS (69.18 KIPS)
+** Heartbeat:  40% -- { 12000032 } -- 76.92 KIPS (69.77 KIPS)
+** Heartbeat:  43% -- { 13000035 } -- 83.33 KIPS (70.65 KIPS)
+** Heartbeat:  46% -- { 14000039 } -- 111.11 KIPS (72.54 KIPS)
+** Heartbeat:  50% -- { 15000044 } -- 111.11 KIPS (74.26 KIPS)
+** Heartbeat:  53% -- { 16000049 } -- 125.00 KIPS (76.19 KIPS)
+** Heartbeat:  56% -- { 17000052 } -- 111.11 KIPS (77.63 KIPS)
+** Heartbeat:  60% -- { 18000059 } -- 111.11 KIPS (78.95 KIPS)
+** Heartbeat:  63% -- { 19000059 } -- 125.00 KIPS (80.51 KIPS)
+** Heartbeat:  66% -- { 20000060 } -- 111.11 KIPS (81.63 KIPS)
+** Heartbeat:  70% -- { 21000063 } -- 111.11 KIPS (82.68 KIPS)
+** Heartbeat:  73% -- { 22000063 } -- 100.00 KIPS (83.33 KIPS)
+** Heartbeat:  76% -- { 23000064 } -- 83.33 KIPS (83.33 KIPS)
+** Heartbeat:  80% -- { 24000067 } -- 83.33 KIPS (83.33 KIPS)
+** Heartbeat:  83% -- { 25000071 } -- 90.91 KIPS (83.61 KIPS)
+** Heartbeat:  86% -- { 26000071 } -- 125.00 KIPS (84.69 KIPS)
+** Heartbeat:  90% -- { 27000075 } -- 142.86 KIPS (85.99 KIPS)
+** Heartbeat:  93% -- { 28000080 } -- 125.00 KIPS (86.96 KIPS)
+** Heartbeat:  96% -- { 29000081 } -- 142.86 KIPS (88.15 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x45f313
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:9395292     time:2936028750000       -- 3.19 IPC (3.19 IPC) --  N/A  KIPS (89.02 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT_RESOLVED_VIA_MCPAT_BACKFILL (P=0  O=37686802  I=30010013  C=9395292):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT_RESOLVED_VIA_MCPAT_BACKFILL (P=0  O=37686802  I=30010013  C=9395292):  Command "python3 /home/deepmish/scarab_stage/ifuse/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x273d56) [0x5555557c7d56]
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x3173ae) [0x55555586b3ae]
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x1e6163) [0x55555573a163]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse/scarab/src/scarab_current(+0x1ea95e) [0x55555573e95e]
