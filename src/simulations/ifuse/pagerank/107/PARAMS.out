@@ -7,7 +7,6 @@
 --memtrace_roi_end 30000000
 --full_warmup 20000000
 --use_fetched_count 1
---bindir /home/deepmish/scarab_stage/ifuse/scarab/bin
 --dump_params 1
 --dump_stats 1
 --dump_trace 0
@@ -31,7 +30,7 @@
 --uop_cache_assoc 8
 --iprf_on_uop_cache_hit 1
 --dcache_size 49152
---dcache_assoc 8
+--dcache_assoc 12
 --dcache_line_size 64
 --dcache_cycles 5
 --dcache_read_ports 1
@@ -134,7 +133,6 @@
 --ibtb_off_path_writes 1                         # Allow off path ops to update the ibtb.
 --tc_entries 4096
 --tc_assoc 4
---power_intf_on 1
 --pref_stream_on 1
 --stream_prefetch_n 4
 --stream_start_dis 1
@@ -157,7 +155,13 @@
 --ifuse_apt_match_policy 0
 --ifuse_runtime_training_enabled 1
 --ifuse_training_insert_threshold 1000
---ifuse_fct_hash_bits 9
+--ifuse_training_table_sets 128
+--ifuse_training_table_ways 4
+--ifuse_fct_hash_bits 8
+--ifuse_apt_sets 32
+--ifuse_apt_ways 4
+--ifuse_aci_sets 32
+--ifuse_aci_ways 4
 1 1 1 1 1 1 1 
 
 --- Cut out everything below to use this file as PARAMS.in ---
@@ -185,7 +189,7 @@ PERIODIC_DUMP                            FALSE
 FILE_TAG                                 ""                              
 OUTPUT_DIR                               "."                             
 STATUS_FILE                              NULL                            
-BINDIR                                   NULL                            /home/deepmish/scarab_stage/ifuse/scarab/bin
+BINDIR                                   NULL                            
 DUMP_PARAMS                              TRUE                            1
 DUMP_STATS                               TRUE                            1
 DUMP_TRACE                               FALSE                           0
@@ -280,7 +284,7 @@ FDIP_UC_INSERT_REPLPOL                   0
 MAP_STAGE_CONSUME_FROM_ICACHE_AND_UOC_SAME_CYCLE TRUE                            
 UOP_QUEUE_LENGTH                         7                               
 DCACHE_SIZE                              (64 * 1024)                     49152
-DCACHE_ASSOC                             1                               8
+DCACHE_ASSOC                             1                               12
 DCACHE_LINE_SIZE                         64                              64
 DCACHE_CYCLES                            2                               5
 PERFECT_DCACHE                           FALSE                           
@@ -879,7 +883,7 @@ H2P_TRACK_CALL                           FALSE
 H2P_TRACK_IBR                            FALSE                           
 H2P_TRACK_ICALL                          FALSE                           
 H2P_TRACK_RET                            FALSE                           
-POWER_INTF_ON                            FALSE                           1
+POWER_INTF_ON                            FALSE                           
 POWER_INTF_ENABLE_SCALING                FALSE                           
 POWER_INTF_EXEC                          "power/power_intf.py"            
 POWER_INTF_REF_CHIP_TECH_NM              22                              
@@ -1107,23 +1111,21 @@ PREF_MARKOV_UPDATE_ON_PREF_HIT           TRUE
 PREF_MARKOV_TABLE_UPDATE_POLICY          0                               
 PREF_MARKOV_SEND_THRESHOLD               0                               
 IFUSE_FUSION_DISTANCE                    512                             512
-IFUSE_RLB_CAPACITY                       128                             
-IFUSE_APT_MATCH_POLICY                   1                               0
+IFUSE_APT_MATCH_POLICY                   0                               0
 IFUSE_RUNTIME_TRAINING_ENABLED           TRUE                            1
 IFUSE_TRAINING_INSERT_THRESHOLD          1000                            1000
-IFUSE_TRAINING_TABLE_SETS                32                              
-IFUSE_TRAINING_TABLE_WAYS                4                               
-IFUSE_TRAINING_TABLE_PC_TAG_BITS         32                              
+IFUSE_TRAINING_TABLE_SETS                32                              128
+IFUSE_TRAINING_TABLE_WAYS                4                               4
+IFUSE_TRAINING_TABLE_PC_TAG_BITS         48                              
 IFUSE_FCT_CONF_THRESHOLD                 499                             
 IFUSE_FCT_MISPRED_CONF_PENALTY           50                              
 IFUSE_FCT_PRELOAD_FILE                   NULL                            
 IFUSE_FCT_PRELOAD_CONF                   500                             
 IFUSE_FCT_RUNTIME_INSERT_CONF            500                             
-IFUSE_FCT_PC_TAG_BITS                    32                              
-IFUSE_FCT_HASH_BITS                      9                               9
-IFUSE_APT_SETS                           32                              
-IFUSE_APT_WAYS                           8                               
-IFUSE_ACI_SETS                           64                              
-IFUSE_ACI_WAYS                           4                               
+IFUSE_FCT_HASH_BITS                      9                               8
+IFUSE_APT_SETS                           64                              32
+IFUSE_APT_WAYS                           4                               4
+IFUSE_ACI_SETS                           64                              32
+IFUSE_ACI_WAYS                           4                               4
 IFUSE_EXEC_PAIR_MAX_NODES                524288                          
 IFUSE_EXEC_PAIR_NUM_BUCKETS              4096                            
