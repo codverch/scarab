@@ -1,0 +1,57 @@
+Scarab gitrev: a8bfbbebb
+Scarab started at Fri Jul 31 22:15:22 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000004 } -- 0.00 KIPS (52.63 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 47.62 KIPS (50.00 KIPS)
+** Heartbeat:  10% -- { 3000011 } -- 47.62 KIPS (49.18 KIPS)
+** Heartbeat:  13% -- { 4000011 } -- 50.00 KIPS (49.38 KIPS)
+** Heartbeat:  16% -- { 5000012 } -- 50.00 KIPS (49.51 KIPS)
+** Heartbeat:  20% -- { 6000015 } -- 47.62 KIPS (49.18 KIPS)
+** Heartbeat:  23% -- { 7000018 } -- 55.56 KIPS (50.00 KIPS)
+** Heartbeat:  26% -- { 8000020 } -- 58.82 KIPS (50.96 KIPS)
+** Heartbeat:  30% -- { 9000023 } -- 58.82 KIPS (51.72 KIPS)
+** Heartbeat:  33% -- { 10000029 } -- 58.82 KIPS (52.36 KIPS)
+** Heartbeat:  36% -- { 11000034 } -- 55.56 KIPS (52.63 KIPS)
+** Heartbeat:  40% -- { 12000041 } -- 58.82 KIPS (53.10 KIPS)
+** Heartbeat:  43% -- { 13000042 } -- 58.82 KIPS (53.50 KIPS)
+** Heartbeat:  46% -- { 14000042 } -- 58.82 KIPS (53.85 KIPS)
+** Heartbeat:  50% -- { 15000045 } -- 58.82 KIPS (54.15 KIPS)
+** Heartbeat:  53% -- { 16000051 } -- 58.82 KIPS (54.42 KIPS)
+** Heartbeat:  56% -- { 17000053 } -- 58.82 KIPS (54.66 KIPS)
+** Heartbeat:  60% -- { 18000055 } -- 58.82 KIPS (54.88 KIPS)
+** Heartbeat:  63% -- { 19000059 } -- 58.82 KIPS (55.07 KIPS)
+** Heartbeat:  66% -- { 20000063 } -- 58.82 KIPS (55.25 KIPS)
+** Heartbeat:  70% -- { 21000064 } -- 55.56 KIPS (55.26 KIPS)
+** Heartbeat:  73% -- { 22000065 } -- 58.82 KIPS (55.42 KIPS)
+** Heartbeat:  76% -- { 23000068 } -- 58.82 KIPS (55.56 KIPS)
+** Heartbeat:  80% -- { 24000068 } -- 58.82 KIPS (55.68 KIPS)
+** Heartbeat:  83% -- { 25000071 } -- 58.82 KIPS (55.80 KIPS)
+** Heartbeat:  86% -- { 26000072 } -- 58.82 KIPS (55.91 KIPS)
+** Heartbeat:  90% -- { 27000073 } -- 71.43 KIPS (56.37 KIPS)
+** Heartbeat:  93% -- { 28000075 } -- 83.33 KIPS (57.03 KIPS)
+** Heartbeat:  96% -- { 29000075 } -- 90.91 KIPS (57.77 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7fa542c7db34
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/bin/power/power_intf.pl', '/home/deepmish/toolchain/mcpat', '/home/deepmish/toolchain/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:14721991    time:4600622187500       -- 2.04 IPC (2.04 IPC) --  N/A  KIPS (58.37 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34267271  I=30000000  C=14721991):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34267271  I=30000000  C=14721991):  Command "python3 /home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/src/scarab_a8bfbbebb_0(+0x273a96) [0x5555557c7a96]
+/home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/src/scarab_a8bfbbebb_0(+0x31773e) [0x55555586b73e]
+/home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/src/scarab_a8bfbbebb_0(+0x1e5e83) [0x555555739e83]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7800083]
+/home/deepmish/scarab_stage/ifuse-pre-true-fusion/scarab/src/scarab_a8bfbbebb_0(+0x1ea67e) [0x55555573e67e]
