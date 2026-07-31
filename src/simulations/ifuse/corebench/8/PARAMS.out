@@ -31,7 +31,7 @@
 --uop_cache_assoc 8
 --iprf_on_uop_cache_hit 1
 --dcache_size 49152
---dcache_assoc 8
+--dcache_assoc 12
 --dcache_line_size 64
 --dcache_cycles 5
 --dcache_read_ports 1
@@ -156,8 +156,8 @@
 --ifuse_fusion_distance 512
 --ifuse_apt_match_policy 0
 --ifuse_runtime_training_enabled 1
---ifuse_training_insert_threshold 1000
---ifuse_fct_hash_bits 9
+--ifuse_training_insert_threshold 100
+--ifuse_fct_hash_bits 10
 1 1 1 1 1 1 1 
 
 --- Cut out everything below to use this file as PARAMS.in ---
@@ -280,7 +280,7 @@ FDIP_UC_INSERT_REPLPOL                   0
 MAP_STAGE_CONSUME_FROM_ICACHE_AND_UOC_SAME_CYCLE TRUE                            
 UOP_QUEUE_LENGTH                         7                               
 DCACHE_SIZE                              (64 * 1024)                     49152
-DCACHE_ASSOC                             1                               8
+DCACHE_ASSOC                             1                               12
 DCACHE_LINE_SIZE                         64                              64
 DCACHE_CYCLES                            2                               5
 PERFECT_DCACHE                           FALSE                           
@@ -1110,7 +1110,7 @@ IFUSE_FUSION_DISTANCE                    512                             512
 IFUSE_RLB_CAPACITY                       128                             
 IFUSE_APT_MATCH_POLICY                   1                               0
 IFUSE_RUNTIME_TRAINING_ENABLED           TRUE                            1
-IFUSE_TRAINING_INSERT_THRESHOLD          1000                            1000
+IFUSE_TRAINING_INSERT_THRESHOLD          1000                            100
 IFUSE_TRAINING_TABLE_SETS                32                              
 IFUSE_TRAINING_TABLE_WAYS                4                               
 IFUSE_TRAINING_TABLE_PC_TAG_BITS         32                              
@@ -1120,7 +1120,7 @@ IFUSE_FCT_PRELOAD_FILE                   NULL
 IFUSE_FCT_PRELOAD_CONF                   500                             
 IFUSE_FCT_RUNTIME_INSERT_CONF            500                             
 IFUSE_FCT_PC_TAG_BITS                    32                              
-IFUSE_FCT_HASH_BITS                      9                               9
+IFUSE_FCT_HASH_BITS                      9                               10
 IFUSE_APT_SETS                           32                              
 IFUSE_APT_WAYS                           8                               
 IFUSE_ACI_SETS                           64                              
