@@ -175,6 +175,11 @@ DEF_STAT(  LD_EXEC_CYCLES_2,   COUNT, NO_RATIO  )
 DEF_STAT(  LD_EXEC_CYCLES_3,   COUNT, NO_RATIO  )
 DEF_STAT(  LD_EXEC_CYCLES_4,   DIST , NO_RATIO  )
 
+// Total load latency consumed by on-path loads, accumulated over every retired
+// (on-path) load. Count column holds the summed cycles.
+DEF_STAT(  LD_EXEC_MINUS_FETCH_LATENCY,   COUNT,  NO_RATIO  )
+DEF_STAT(  LD_RETIRE_MINUS_FETCH_LATENCY, COUNT,  NO_RATIO  )
+
 DEF_STAT(  ICACHE_STAGE_STARVED, DIST, NO_RATIO   )
 DEF_STAT(  ICACHE_STAGE_NOT_STARVED,  DIST, NO_RATIO   )
 
