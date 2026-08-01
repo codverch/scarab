@@ -11,11 +11,11 @@
 --dump_params 1
 --dump_stats 1
 --dump_trace 0
---helios_do_fusion 0
---helios_enable_flushes 1
---helios_confidence_threshold 4800
+--helios_do_fusion 1
+--helios_enable_flushes 0
+--helios_confidence_threshold 30000
 --helios_confidence_increment 1
---helios_confidence_decrement 10
+--helios_confidence_decrement 30
 --helios_fusion_window 64
 --helios_fuse_stores 0
 --helios_fused_wait_tail_srcs 1
@@ -217,11 +217,11 @@ IGNORE_BAR_FETCH                         FALSE
 TRACE_BBV_OUTPUT                         NULL                            
 TRACE_FOOTPRINT_OUTPUT                   ""                              
 SEGMENT_INSTR_COUNT                      0                               
-HELIOS_DO_FUSION                         FALSE                           0
-HELIOS_ENABLE_FLUSHES                    TRUE                            1
-HELIOS_CONFIDENCE_THRESHOLD              150                             4800
+HELIOS_DO_FUSION                         FALSE                           1
+HELIOS_ENABLE_FLUSHES                    TRUE                            0
+HELIOS_CONFIDENCE_THRESHOLD              150                             30000
 HELIOS_CONFIDENCE_INCREMENT              10                              1
-HELIOS_CONFIDENCE_DECREMENT              10                              10
+HELIOS_CONFIDENCE_DECREMENT              10                              30
 HELIOS_FUSION_WINDOW                     64                              64
 HELIOS_FUSE_STORES                       TRUE                            0
 HELIOS_FUSED_WAIT_TAIL_SRCS              TRUE                            1
