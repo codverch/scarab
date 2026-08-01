@@ -1,0 +1,27 @@
+# I-Fuse vs Baseline: area and power overhead
+# Baseline: origin/hpca2027-baseline simulations/baseline (dcache_assoc=12)
+# I-Fuse: simulations/ifuse assoc-12 + McPAT IFuse inject (RLB=128,FCT=512,TT=32x4,APT=32x8,ACI=64x4)
+# I-Fuse storage (bit packing estimate): 112896 bits = 13.78 KiB
+# I-Fuse McPAT area (constant): 0.080079 mm^2
+
+App              BaseArea  IFuseArea  AreaOH%     BaseRT    IFuseRT  CoreRT_if   StrOH%  TotPwrΔ%
+--------------------------------------------------------------------------------------------------------------
+BFS               21.6302   0.080079   0.370%     7.0977   0.074800     7.5482   1.054%    6.347%
+DFS               21.6302   0.080079   0.370%     7.1068   0.071329     7.6822   1.004%    8.097%
+PR                21.6302   0.080079   0.370%     7.1735   0.073926     7.7067   1.031%    7.433%
+CoreBench         21.6302   0.080079   0.370%     6.1262   0.056319     6.9208   0.919%   12.971%
+AppWorld          21.6302   0.080079   0.370%     5.0138   0.031822     5.3450   0.635%    6.606%
+TerminalBench     21.6302   0.080079   0.370%     4.3852   0.052693     4.2863   1.202%   -2.255%
+ClickHouse        21.6302   0.080079   0.370%     6.2448   0.072737     6.7668   1.165%    8.359%
+DuckDB            21.6302   0.080079   0.370%     8.1057   0.093615     7.5402   1.155%   -6.977%
+LevelDB           21.6302   0.080079   0.370%     4.9266   0.055343     4.9435   1.123%    0.343%
+Memcached         21.6302   0.080079   0.370%     5.3715   0.036100     5.2191   0.672%   -2.837%
+--------------------------------------------------------------------------------------------------------------
+MEAN              21.6302   0.080079   0.370%     6.1552   0.061868     6.3959   0.996%    3.809%
+
+Notes:
+- AreaOH% = IFuse_area / baseline_core_area * 100 (storage/area overhead of I-Fuse tables).
+- StrOH% = IFuse_structure_runtime_power / baseline_core_runtime_power * 100.
+- TotPwrΔ% = (ifuse_total_core_RT - baseline_core_RT) / baseline * 100; includes IFuse tables
+  AND any core activity differences between the two simulation campaigns.
+- Storage packing estimate: RLB=14080b TT=13312b FCT=51712b APT≈23296b ACI=10496b → 13.78 KiB.
