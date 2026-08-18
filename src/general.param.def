@@ -122,3 +122,10 @@ DEF_PARAM( ideal_fusion_log             , IDEAL_FUSION_LOG          , char*  , s
 // Pass 1 chooses which earlier LOAD1 to pair with a LOAD2 when multiple candidates
 // share the same cache block: oldest-first or most-recent.
 DEF_PARAM( ideal_fusion_type            , IDEAL_FUSION_TYPE         , int    , ideal_fusion_type, 0   ,       )
+// Which memory class to fuse: "loads" (default) or "stores".
+DEF_PARAM( ideal_fusion_class           , IDEAL_FUSION_CLASS        , int    , ideal_fusion_class, 0  ,       )
+// Store pass 1 only. When TRUE, a load touching a pending STORE1 candidate's
+// cache block also kills that candidate, avoiding the store-to-load forwarding
+// hazard where the catalyst load would observe STORE2's bytes early. Set FALSE
+// to measure the aggressive upper bound.
+DEF_PARAM( ideal_fusion_store_strict    , IDEAL_FUSION_STORE_STRICT , Flag   , Flag      , TRUE     ,       )

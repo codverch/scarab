@@ -18,3 +18,30 @@ DEF_STAT(LD_RETIRE_MINUS_FETCH_LATENCY, COUNT, NO_RATIO)
 // Demand D-cache accesses issued to the L1-D (hit or miss), split by path.
 DEF_STAT(DCACHE_ACCESS_ONPATH, DIST, NO_RATIO)
 DEF_STAT(DCACHE_ACCESS_OFFPATH, DIST, NO_RATIO)
+
+/**************************************************************************************/
+/* Store-store fusion (IDEAL_FUSION_CLASS == stores).                                 */
+
+DEF_STAT(IDEAL_FUSION_STORE1_TAGGED, COUNT, NO_RATIO)
+DEF_STAT(IDEAL_FUSION_STORE2_TAGGED, COUNT, NO_RATIO)
+DEF_STAT(IDEAL_FUSION_STORE2_BYPASSED, COUNT, NO_RATIO)
+
+// Retired-store fusion accounting (on-path).
+// FUSED_STORES: number of fused STORE2 ops that retired.
+// STORES_PARTICIPATED: stores involved in fusion = FUSED_STORES x 2.
+DEF_STAT(IDEAL_FUSION_FUSED_STORES, COUNT, NO_RATIO)
+DEF_STAT(IDEAL_FUSION_STORES_PARTICIPATED, COUNT, NO_RATIO)
+
+// Total on-path memory stores that retired (includes converted STORE2 ops).
+DEF_STAT(ONPATH_MEM_STORES, COUNT, NO_RATIO)
+
+// Why a pending STORE1 candidate was discarded before it could pair. These
+// quantify what the memory-consistency rules cost us, so keep them split.
+//   BY_STORE : another store arrived -- store pairs may not fuse across a store
+//   BY_LOAD  : a load touched the candidate's block (strict mode only)
+//   BY_FENCE : a fence / serializing op intervened
+//   BY_DISTANCE : the candidate aged out of the fusion window
+DEF_STAT(IDEAL_FUSION_STORE_CAND_KILLED_BY_STORE, COUNT, NO_RATIO)
+DEF_STAT(IDEAL_FUSION_STORE_CAND_KILLED_BY_LOAD, COUNT, NO_RATIO)
+DEF_STAT(IDEAL_FUSION_STORE_CAND_KILLED_BY_FENCE, COUNT, NO_RATIO)
+DEF_STAT(IDEAL_FUSION_STORE_CAND_KILLED_BY_DISTANCE, COUNT, NO_RATIO)

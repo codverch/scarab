@@ -50,6 +50,7 @@ void get_conf_mech_param(const char*, uns*);
 void get_sim_mode_param(const char*, Generic_Enum*);
 void get_exit_cond_param(const char*, Generic_Enum*);
 void get_ideal_fusion_type_param(const char*, Generic_Enum*);
+void get_ideal_fusion_class_param(const char*, Generic_Enum*);
 void get_sim_model_param(const char*, uns*);
 void get_frontend_param(const char*, uns*);
 // void get_dram_sched_param(const char *, uns *); // Ramulator_remove

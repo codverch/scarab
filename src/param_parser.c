@@ -88,6 +88,7 @@ const char* sim_mode_names[] = {"uop", "full"
 };
 const char* exit_cond_names[] = {"last_done", "first_done"};
 const char* ideal_fusion_type_names[] = {"oldest-first", "most-recent"};
+const char* ideal_fusion_class_names[] = {"loads", "stores"};
 /* get_params() builds a heap-allocated merged argv (PARAMS.in + command line)
  * and returns a pointer into it. To avoid leaks, we track the base pointer
  * so main can free it via free_params_arg_list(). */
@@ -338,6 +339,24 @@ void get_ideal_fusion_type_param(const char* name, Generic_Enum* variable) {
 
     for (ii = 0; ii < NUM_IDEAL_FUSION_POLICIES; ii++)
       if (strncmp(optarg, ideal_fusion_type_names[ii], MAX_STR_LENGTH) == 0) {
+        *variable = ii;
+        return;
+      }
+    FATAL_ERROR(0, "Invalid value ('%s') for parameter '%s' --- Ignored.\n", optarg, name);
+  } else
+    FATAL_ERROR(0, "Parameter '%s' missing value --- Ignored.\n", name);
+}
+
+/**************************************************************************************/
+/* get_ideal_fusion_class: match input string to internal enum
+ */
+
+void get_ideal_fusion_class_param(const char* name, Generic_Enum* variable) {
+  if (optarg) {
+    uns ii;
+
+    for (ii = 0; ii < NUM_IDEAL_FUSION_CLASSES; ii++)
+      if (strncmp(optarg, ideal_fusion_class_names[ii], MAX_STR_LENGTH) == 0) {
         *variable = ii;
         return;
       }

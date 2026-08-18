@@ -77,11 +77,15 @@ typedef struct FT FT;
 DECLARE_ENUM(Op_State, OP_STATE_LIST, OS_);
 // clang-format on
 
-// Role assigned to a load by ideal fusion pass 2.
+// Role assigned to a memory op by ideal fusion pass 2.
+// LOAD1/STORE1 are head nucleii (the older op of a fused pair); LOAD2/STORE2
+// are tail nucleii (the younger op, which the fused pair absorbs).
 typedef enum Ideal_Fusion_Load_Role_enum {
   IDEAL_FUSION_NOT_CANDIDATE,
   IDEAL_FUSION_LOAD1,
   IDEAL_FUSION_LOAD2,
+  IDEAL_FUSION_STORE1,
+  IDEAL_FUSION_STORE2,
 } Ideal_Fusion_Load_Role;
 
 /**************************************************************************************/

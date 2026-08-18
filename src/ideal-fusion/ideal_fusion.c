@@ -648,8 +648,24 @@ void ideal_fusion_on_fetch_op(Op* op) {
   }
 }
 
+Flag ideal_fusion_fusing_stores(void) {
+  return IDEAL_FUSION_CLASS == IDEAL_FUSION_CLASS_STORES;
+}
+
 Flag ideal_fusion_load2_is_nop(const Op* op) {
   return op && op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2;
+}
+
+Flag ideal_fusion_store2_is_nop(const Op* op) {
+  return op && op->ideal_fusion_load_role == IDEAL_FUSION_STORE2;
+}
+
+/*
+ * A fused tail nucleus of either class. Pipeline stages use this to decide that
+ * an op holds no ROB / LSQ / issue-queue entry and performs no cache access.
+ */
+Flag ideal_fusion_tail_is_nop(const Op* op) {
+  return ideal_fusion_load2_is_nop(op) || ideal_fusion_store2_is_nop(op);
 }
 
 Load2BufferNode* ideal_fusion_find_load2_buffer(Counter load1_micro_op_num) {

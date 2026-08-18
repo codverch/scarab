@@ -13,6 +13,21 @@ typedef enum Ideal_Fusion_Policy_enum {
   NUM_IDEAL_FUSION_POLICIES
 } Ideal_Fusion_Policy;
 
+/*
+ * Which memory class a run targets. Loads and stores obey very different
+ * correctness rules -- a store pair may not be fused across another store,
+ * because that reorders globally visible writes (see FUSION_EXPLAINED.md,
+ * Part 3). A single run therefore discovers and fuses exactly one class.
+ */
+typedef enum Ideal_Fusion_Class_enum {
+  IDEAL_FUSION_CLASS_LOADS,
+  IDEAL_FUSION_CLASS_STORES,
+  NUM_IDEAL_FUSION_CLASSES
+} Ideal_Fusion_Class;
+
+/* TRUE when IDEAL_FUSION_CLASS selects store-store fusion. */
+Flag ideal_fusion_fusing_stores(void);
+
 void ideal_fusion_on_fetch_op(Op* op);
 
 /*
@@ -49,6 +64,15 @@ void ideal_fusion_remove_load2_buffer(Load2BufferNode* node);
 void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns));
 void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns));
 Flag ideal_fusion_load2_is_nop(const Op* op);
+Flag ideal_fusion_store2_is_nop(const Op* op);
+
+/*
+ * TRUE for any fused tail nucleus (LOAD2 or STORE2). A tail nucleus stays on
+ * the ROB chain but consumes no ROB slot, no LSQ entry and no issue-queue
+ * entry, and issues no cache access -- it inherits its head nucleus's timing.
+ * Pipeline stages should test this rather than the load-only predicate.
+ */
+Flag ideal_fusion_tail_is_nop(const Op* op);
 
 /* Measurement mode (IDEAL_FUSION_PASS == 3): log real completion cycles of
  * paired loads without applying fusion. */
