@@ -28,6 +28,19 @@
   "load1_pc,load1_data_addr,load1_block_offset,load1_mem_size,"                  \
   "load1_micro_op_num,load2_pc,load2_data_addr,load2_block_offset,"              \
   "load2_mem_size,load2_micro_op_num,micro_op_distance"
+#define IDEAL_FUSION_STORE_CSV_HEADER                                             \
+  "store1_pc,store1_data_addr,store1_block_offset,store1_mem_size,"              \
+  "store1_micro_op_num,store2_pc,store2_data_addr,store2_block_offset,"          \
+  "store2_mem_size,store2_micro_op_num,micro_op_distance"
+
+/*
+ * Load and store candidate logs share a field layout but not a header, so a
+ * pass-2 run can never silently consume a log produced for the other class.
+ */
+static const char* expected_csv_header(void) {
+  return ideal_fusion_fusing_stores() ? IDEAL_FUSION_STORE_CSV_HEADER
+                                      : IDEAL_FUSION_CSV_HEADER;
+}
 
 typedef struct Ideal_Fusion_Load_Candidate_struct {
   Addr pc;
@@ -303,7 +316,7 @@ static void load_pair_indexes(void) {
   }
   line_num++;
   line[strcspn(line, "\r\n")] = '\0';
-  if (strcmp(line, IDEAL_FUSION_CSV_HEADER) != 0) {
+  if (strcmp(line, expected_csv_header()) != 0) {
     fclose(pair_log);
     pair_log_error(line_num, "unexpected CSV header");
   }
@@ -447,7 +460,7 @@ static void open_candidate_log(void) {
   if (!candidate_log)
     candidate_log_error("open");
 
-  if (fprintf(candidate_log, "%s\n", IDEAL_FUSION_CSV_HEADER) < 0 ||
+  if (fprintf(candidate_log, "%s\n", expected_csv_header()) < 0 ||
       fflush(candidate_log) != 0)
     candidate_log_error("initialize");
   atexit(close_candidate_log);
@@ -612,6 +625,130 @@ static void cleanup_stale_loads(Counter current_micro_op_num) {
   }
 }
 
+/**************************************************************************************/
+/* Store-store fusion, pass 1.
+ *
+ * Helios keeps a SINGLE unfused-committed-store entry, because "stores cannot be
+ * fused across other stores to prevent memory consistency issues" (MICRO'22,
+ * Sec. IV-A1). Fusing STORE1 with STORE2 makes both writes visible as one event
+ * at STORE1's position, so any store in the catalyst is necessarily reordered
+ * with respect to them. That violates store-store ordering under TSO, and
+ * same-address sequential consistency under *every* memory model. And unlike a
+ * mis-speculated load, a store that became globally visible too early cannot be
+ * squashed and replayed -- so the only safe answer is not to fuse.
+ *
+ * Modelling the history as one candidate slot makes a catalyst store impossible
+ * by construction: every store either consumes the slot or replaces it.
+ */
+static Ideal_Fusion_Load_Candidate* pending_store1 = NULL;
+
+static void kill_pending_store1(Op* op, uns reason_stat) {
+  if (!pending_store1)
+    return;
+
+  STAT_EVENT(op->proc_id, reason_stat);
+  free(pending_store1);
+  pending_store1 = NULL;
+}
+
+/*
+ * Overlapping bytes would require the younger store's data to win the merge.
+ * A fused pair only models cleanly when the two byte ranges are disjoint, and
+ * the paper reports overlapping pairs are rare, so require disjointness.
+ */
+static Flag byte_ranges_disjoint(Addr a_addr, uns a_size, Addr b_addr,
+                                 uns b_size) {
+  return a_addr + a_size <= b_addr || b_addr + b_size <= a_addr;
+}
+
+/* A fence exists precisely to forbid the reordering fusion would perform. */
+static Flag op_is_serializing(const Op* op) {
+  return (op->inst_info->table_info.bar_type & (BAR_FETCH | BAR_ISSUE)) != 0;
+}
+
+static Flag store1_matches_store2(const Ideal_Fusion_Load_Candidate* store1,
+                                  Op* store2, Addr cache_block_addr) {
+  return store1->cache_block_addr == cache_block_addr &&
+         access_fits_in_cache_block(store1->virtual_addr, store1->mem_size) &&
+         access_fits_in_cache_block(store2->oracle_info.va,
+                                    store2->oracle_info.mem_size) &&
+         byte_ranges_disjoint(store1->virtual_addr, store1->mem_size,
+                              store2->oracle_info.va,
+                              store2->oracle_info.mem_size) &&
+         store2->ideal_fusion_micro_op_num - store1->micro_op_num <
+           IDEAL_FUSION_DISTANCE;
+}
+
+/* Replaces the single candidate slot; the caller has already retired the old. */
+static void track_store(Op* op) {
+  Ideal_Fusion_Load_Candidate* candidate;
+
+  if (op->oracle_info.va == 0 || op->oracle_info.mem_size == 0)
+    return;
+
+  candidate = (Ideal_Fusion_Load_Candidate*)malloc(sizeof(*candidate));
+  if (!candidate)
+    return;
+
+  candidate->pc = op->inst_info->addr;
+  candidate->virtual_addr = op->oracle_info.va;
+  candidate->cache_block_addr = get_cache_block_addr(op->oracle_info.va);
+  candidate->cache_block_offset =
+    op->oracle_info.va - candidate->cache_block_addr;
+  candidate->mem_size = op->oracle_info.mem_size;
+  candidate->micro_op_num = op->ideal_fusion_micro_op_num;
+  candidate->fused = FALSE;
+  candidate->next = NULL;
+
+  pending_store1 = candidate;
+}
+
+static void ideal_fusion_store_pass1(Op* op) {
+  Mem_Type mem_type = op->inst_info->table_info.mem_type;
+
+  /* The pair must be co-resident in the fusion window. */
+  if (pending_store1 &&
+      op->ideal_fusion_micro_op_num - pending_store1->micro_op_num >=
+        IDEAL_FUSION_DISTANCE)
+    kill_pending_store1(op, IDEAL_FUSION_STORE_CAND_KILLED_BY_DISTANCE);
+
+  if (op_is_serializing(op)) {
+    kill_pending_store1(op, IDEAL_FUSION_STORE_CAND_KILLED_BY_FENCE);
+    return;
+  }
+
+  if (mem_type == MEM_ST) {
+    if (pending_store1 && op->oracle_info.va != 0 &&
+        op->oracle_info.mem_size != 0 &&
+        store1_matches_store2(pending_store1, op,
+                              get_cache_block_addr(op->oracle_info.va))) {
+      log_matched_pair(pending_store1, op);
+      free(pending_store1);
+      pending_store1 = NULL;
+      /* A fused store is not "unfused history": it does not seed a new pair. */
+      return;
+    }
+
+    /* No fusion across a store -- this one becomes the only live candidate. */
+    kill_pending_store1(op, IDEAL_FUSION_STORE_CAND_KILLED_BY_STORE);
+    track_store(op);
+    return;
+  }
+
+  /*
+   * A catalyst load reading bytes STORE2 will write would be forwarded STORE2's
+   * data early, because the fused pair holds one store-queue entry spanning both
+   * byte ranges. Drop the candidate unless we are measuring the upper bound.
+   */
+  if (IDEAL_FUSION_STORE_STRICT && mem_type == MEM_LD && pending_store1 &&
+      op->oracle_info.va != 0 &&
+      get_cache_block_addr(op->oracle_info.va) ==
+        pending_store1->cache_block_addr)
+    kill_pending_store1(op, IDEAL_FUSION_STORE_CAND_KILLED_BY_LOAD);
+}
+
+/**************************************************************************************/
+
 void ideal_fusion_on_fetch_op(Op* op) {
   if (!op || op->off_path)
     return;
@@ -626,6 +763,11 @@ void ideal_fusion_on_fetch_op(Op* op) {
 
   if (IDEAL_FUSION_PASS != 1 || IDEAL_FUSION_DISTANCE == 0)
     return;
+
+  if (ideal_fusion_fusing_stores()) {
+    ideal_fusion_store_pass1(op);
+    return;
+  }
 
   if (op->ideal_fusion_micro_op_num - last_load_cleanup_micro_op_num >=
       IDEAL_FUSION_DISTANCE) {
