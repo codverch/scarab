@@ -37,7 +37,7 @@ static char* reg_names[NUM_REGS] = {
 };
 #undef REG
 
-char* disasm_reg(Reg_Id reg_id) {
+char* disasm_reg(uns reg_id) {
   assert(reg_id < NUM_REGS);
   return reg_names[reg_id];
 }

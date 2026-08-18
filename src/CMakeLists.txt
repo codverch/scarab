@@ -55,7 +55,8 @@ set(warn_c_flags ${warn_flags}
   -Wmissing-declarations
   -Wmissing-prototypes
   -Wimplicit -Wno-unused-but-set-variable -Wno-maybe-uninitialized)
-set(warn_cxx_flags ${warn_flags})
+set(warn_cxx_flags ${warn_flags}
+  -Wno-unused-but-set-variable -Wno-maybe-uninitialized)
 
 add_compile_options(
   "$<$<COMPILE_LANGUAGE:C>:${warn_c_flags}>"
@@ -84,6 +85,26 @@ endforeach()
 add_executable(scarab 
     ${srcs}
 )
+
+# frontend/pt_memtrace includes vendored DynamoRIO drcachesim headers that still
+# use std::iterator (deprecated in C++17, and libstdc++ 16 warns about it).
+# Scarab builds with -Werror, so downgrade just that diagnostic for these
+# sources rather than patching a vendored dependency.
+#
+# -Wno-error=address is also needed for a PRE-EXISTING bug in
+# frontend/pt_memtrace/trace_fe.cc:317:
+#     if (!bp_id && !off_path_mode[proc_id])
+# off_path_mode is bool[MAX_NUM_PROCS][MAX_NUM_BPS], so off_path_mode[proc_id]
+# is an array that decays to a never-NULL pointer: the condition is always
+# false and that branch is dead. Line 319 uses the 2-D index, so this was very
+# likely meant to be off_path_mode[proc_id][bp_id]. Fixing it CHANGES FRONTEND
+# BEHAVIOUR at end-of-trace, so it is deliberately left alone here -- decide and
+# fix it separately.
+if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+  file(GLOB pt_memtrace_warn_srcs CONFIGURE_DEPENDS frontend/pt_memtrace/*.cc)
+  set_source_files_properties(${pt_memtrace_warn_srcs} PROPERTIES
+    COMPILE_OPTIONS "-Wno-error=deprecated-declarations;-Wno-error=address")
+endif()
 
 target_sources(scarab PRIVATE
   $<$<CONFIG:Debug>:${CMAKE_CURRENT_BINARY_DIR}/asan_default_options.cc>

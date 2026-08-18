@@ -30,6 +30,7 @@
 
 #include <assert.h>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <ios>

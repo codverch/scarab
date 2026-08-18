@@ -29,6 +29,8 @@
 #ifndef __ISA_H__
 #define __ISA_H__
 
+#include "globals/global_types.h"
+
 #define REG(x) REG_##x,
 typedef enum Reg_Id_struct {
 #include "isa/x86_regs.def"
@@ -36,6 +38,6 @@ typedef enum Reg_Id_struct {
 } Reg_Id;
 #undef REG
 
-char* disasm_reg(Reg_Id reg_id);
+char* disasm_reg(uns reg_id);
 
 #endif
