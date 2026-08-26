@@ -871,6 +871,16 @@ void TraceReaderMemtrace::fill_in_basic_info(ctype_pin_inst* info, instr_t* drin
 
   info->size = size;
   assert(info->size);
+  /* Deliberately 0, not `iclass`. Every iclass above is reverse-engineered
+   * from a DR category -- SIMD becomes PSHUFD, anything unrecognized becomes
+   * ADD -- so it is a coarse stand-in for timing, not the real opcode. Callers
+   * of true_op_type act on exact identity: reg_file_check_move_elim_candidate()
+   * in map_rename.c eliminates moves, and map_rename.c:1531 special-cases the
+   * DIV..DIVSS range. Feeding them a guess would apply those optimizations to
+   * instructions that are not moves or divides at all, which is worse than
+   * leaving them off. Filtered traces genuinely do not carry the opcode; traces
+   * with encodings take x86_decoder's fill_in_basic_info instead and get a real
+   * XED_INS_Opcode(). Same reasoning for is_lock below. */
   info->true_op_type = 0;
   info->op_type = iclass_to_scarab(iclass).opcode;
   info->is_string = false;
