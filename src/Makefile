@@ -81,8 +81,13 @@ help-nocolor: ## Print this message
 # pin_exec is only required for the PIN exec-driven frontend. Memtrace simulations
 # (including ideal-fusion pass-1) do not use it. The ideal-fusion branch replaced
 # ifuse with ideal-fusion, so pin_exec may fail to build even when scarab is fine.
+# Bounded by default: a bare `make -j` runs unlimited jobs, which on a machine
+# with less RAM than cores livelocks the kernel rather than failing. Override
+# with e.g. `make SCARAB_JOBS=4` or `SCARAB_JOBS=$(nproc)`.
+SCARAB_JOBS ?= $(shell nproc 2>/dev/null || echo 4)
+
 $(BUILD_DIR_PREFIX)/%/scarab_phony: $(BUILD_DIR_PREFIX)/%/Makefile gitrev
-	@make -j --no-print-directory -C $(dir $@)
+	@make -j$(SCARAB_JOBS) --no-print-directory -C $(dir $@)
 	ln -sf $(dir $@)scarab scarab
 
 # Creates the build directory and configures the CMake project.

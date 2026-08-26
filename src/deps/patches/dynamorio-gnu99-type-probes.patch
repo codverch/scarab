@@ -1,0 +1,27 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 03ca1eb79..018169d8e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -788,6 +788,14 @@ if (UNIX) # unlikely to be an issue on Windows
+   # Note that for later gcc uint and ushort seem to be "soft typedefs":
+   # defined, but overridable: ?!?
+   include(CheckTypeSize)
++  # These probes decide whether DynamoRIO defines its own uint/bool/... typedefs.
++  # They MUST be compiled with the same C standard as the real sources, which use
++  # -std=gnu99 (see BASE_CONLY_FLAGS below). Without this, a C23-defaulting
++  # compiler (GCC >= 15) reports that "bool" already exists, DR skips its own
++  # typedef, and every gnu99 translation unit then fails with
++  # "unknown type name 'bool'".
++  set(_dr_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
++  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=gnu99")
+   CHECK_TYPE_SIZE(uint DR_DO_NOT_DEFINE_uint)
+   CHECK_TYPE_SIZE(ushort DR_DO_NOT_DEFINE_ushort)
+   CHECK_TYPE_SIZE(bool DR_DO_NOT_DEFINE_bool)
+@@ -805,6 +813,7 @@ if (UNIX) # unlikely to be an issue on Windows
+       message(FATAL_ERROR "incompatible pre-defined \"bool\" type is larger than 1 byte")
+     endif (NOT ${DR_DO_NOT_DEFINE_bool} EQUAL 1)
+   endif (DR_DO_NOT_DEFINE_bool)
++  set(CMAKE_REQUIRED_FLAGS "${_dr_saved_required_flags}")
+   CHECK_TYPE_SIZE(_Bool DR__Bool_EXISTS)
+   if (DR__Bool_EXISTS)
+     if (NOT ${DR__Bool_EXISTS} EQUAL 1)

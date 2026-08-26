@@ -27,7 +27,7 @@ target_include_directories(xed INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/xed/include
 target_include_directories(xed INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/xed/obj/)
 target_link_libraries(xed INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/xed/obj/libxed.a)
 
-if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+if(SCARAB_ENABLE_PT_MEMTRACE)
   add_subdirectory(dynamorio)
   add_library(pt_memtrace INTERFACE)
 

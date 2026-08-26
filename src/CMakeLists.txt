@@ -16,9 +16,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# The PT/memtrace frontend is selected by an environment variable, but that
+# value is latched into the cache here so it survives reconfiguration. CMake
+# re-runs itself for reasons the user did not ask for -- glob re-verification
+# after a file is added, for one -- and when it does, the environment variable
+# is usually gone. Reading ENV directly at every use site meant such a
+# reconfigure silently rebuilt without DynamoRIO or frontend/pt_memtrace
+# (compile_commands.json collapses from ~984 entries to ~121) and the next
+# build failed on undeclared FE_PT / FE_MEMTRACE. Set the variable once and it
+# stays set; override with -DSCARAB_ENABLE_PT_MEMTRACE=OFF and no env var.
+option(SCARAB_ENABLE_PT_MEMTRACE "Build the PT/memtrace frontend" OFF)
+if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+  set(SCARAB_ENABLE_PT_MEMTRACE ON CACHE BOOL "Build the PT/memtrace frontend" FORCE)
+endif()
+
 set(flags_enable_pt_memtrace "")
 
-if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+if(SCARAB_ENABLE_PT_MEMTRACE)
   set(flags_enable_pt_memtrace "-DENABLE_PT_MEMTRACE")
 endif()
 
@@ -68,7 +82,7 @@ add_subdirectory(pin/pin_lib)
 add_subdirectory(pin/pin_exec/testing)
 
 set(scarab_dirs bp debug bp/template_lib dvfs frontend globals ideal-fusion isa libs memory power prefetcher confidence .)
-if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+if(SCARAB_ENABLE_PT_MEMTRACE)
   set(scarab_dirs ${scarab_dirs} frontend/pt_memtrace)
 endif()
 
@@ -100,7 +114,7 @@ add_executable(scarab
 # likely meant to be off_path_mode[proc_id][bp_id]. Fixing it CHANGES FRONTEND
 # BEHAVIOUR at end-of-trace, so it is deliberately left alone here -- decide and
 # fix it separately.
-if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+if(SCARAB_ENABLE_PT_MEMTRACE)
   file(GLOB pt_memtrace_warn_srcs CONFIGURE_DEPENDS frontend/pt_memtrace/*.cc)
   set_source_files_properties(${pt_memtrace_warn_srcs} PROPERTIES
     COMPILE_OPTIONS "-Wno-error=deprecated-declarations;-Wno-error=address")
@@ -117,7 +131,7 @@ target_link_libraries(scarab
         ramulator
         pin_lib_for_scarab
 )
-if(DEFINED ENV{SCARAB_ENABLE_PT_MEMTRACE})
+if(SCARAB_ENABLE_PT_MEMTRACE)
   target_link_libraries(scarab PRIVATE dynamorio pt_memtrace)
 endif()
 
