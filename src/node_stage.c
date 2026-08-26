@@ -227,7 +227,7 @@ void flush_window() {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, op->off_path);
-      if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
+      if (!op->macro_fused && !ideal_fusion_tail_is_nop(op))
         flush_ops++;
       ASSERT(node->proc_id, op->off_path);
       ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
@@ -244,7 +244,7 @@ void flush_window() {
         op->recovery_scheduled = FALSE;
       }
       DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
-      if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
+      if (!op->macro_fused && !ideal_fusion_tail_is_nop(op))
         keep_ops++;
       last = &op->next_node;
       node->node_tail = op;
@@ -282,7 +282,7 @@ void debug_print_node_table() {
     ASSERT(node->proc_id, temp[slot_num] == NULL);
     temp[slot_num] = op;
     printed_all++;
-    if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
+    if (!op->macro_fused && !ideal_fusion_tail_is_nop(op))
       printed_non_fused++;
     empty = FALSE;
 
@@ -366,7 +366,7 @@ void node_fill_rob(Stage_Data* src_sd) {
     if (!op)
       continue;
 
-    Flag ideal_fusion_skip_lsq = ideal_fusion_load2_is_nop(op);
+    Flag ideal_fusion_skip_lsq = ideal_fusion_tail_is_nop(op);
     if (!ideal_fusion_skip_lsq &&
         (op->inst_info->table_info.mem_type == MEM_LD ||
          op->inst_info->table_info.mem_type == MEM_ST)) {
@@ -411,7 +411,7 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     // Jump uop after CMP or TEST will be fused into one uop
     node_fuse_op(op);
-    Flag ideal_fusion_skip_count = ideal_fusion_load2_is_nop(op);
+    Flag ideal_fusion_skip_count = ideal_fusion_tail_is_nop(op);
     if (!op->macro_fused && !ideal_fusion_skip_count)
       node->node_count++;
 
@@ -423,8 +423,9 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n", unsstr64(op->op_num), op->off_path);
 
-    if (ideal_fusion_load2_is_nop(op)) {
-      STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD2_BYPASSED);
+    if (ideal_fusion_tail_is_nop(op)) {
+      STAT_EVENT(op->proc_id, ideal_fusion_fusing_stores() ? IDEAL_FUSION_STORE2_BYPASSED
+                                                            : IDEAL_FUSION_LOAD2_BYPASSED);
       op->state = OS_DONE;
       op->precommitted = TRUE;
       op->precommit_cycle = cycle_count;
@@ -576,6 +577,19 @@ void node_retire() {
       INC_STAT_EVENT(op->proc_id, LD_EXEC_MINUS_FETCH_LATENCY, op->exec_cycle - op->fetch_cycle);
       INC_STAT_EVENT(op->proc_id, LD_RETIRE_MINUS_FETCH_LATENCY, cycle_count - op->fetch_cycle);
     }
+
+    // Count real stores plus converted STORE2 ops (ideal fusion), which retire
+    // as nops but still represent a store we want to account for.
+    if (op->inst_info->table_info.mem_type == MEM_ST || op->ideal_fusion_load_role == IDEAL_FUSION_STORE2) {
+      STAT_EVENT(op->proc_id, ONPATH_MEM_STORES);
+
+      // Fused-store accounting: each retired STORE2 is one fused store; count
+      // both members of the pair (STORE1 + STORE2) toward stores participating.
+      if (op->ideal_fusion_load_role == IDEAL_FUSION_STORE2) {
+        STAT_EVENT(op->proc_id, IDEAL_FUSION_FUSED_STORES);
+        INC_STAT_EVENT(op->proc_id, IDEAL_FUSION_STORES_PARTICIPATED, 2);
+      }
+    }
     STAT_EVENT(op->proc_id, RET_OP_EXEC_COUNT_0 + MIN2(32, op->exec_count));
 
     op->retire_cycle = cycle_count;
@@ -585,7 +599,7 @@ void node_retire() {
 
     node_precommit_retire(op);
 
-    if (!ideal_fusion_load2_is_nop(op) &&
+    if (!ideal_fusion_tail_is_nop(op) &&
         (op->inst_info->table_info.mem_type == MEM_LD ||
          op->inst_info->table_info.mem_type == MEM_ST)) {
       lsq_commit(op);
@@ -600,8 +614,8 @@ void node_retire() {
       printf("[ft_free_op] stage=node_stage:retire op_num=%llu op=%p\n", (unsigned long long)op->op_num, (void*)op);
       ft_free_op(op);
     }
-    // the fused op does not occupy the ROB entry; same for ideal-fusion LOAD2
-    if (!macro_fused_saved && !ideal_fusion_load2_is_nop(op))
+    // the fused op does not occupy the ROB entry; same for an ideal-fusion tail nucleus (LOAD2/STORE2)
+    if (!macro_fused_saved && !ideal_fusion_tail_is_nop(op))
       node->node_count--;
 
     ASSERT(node->proc_id, node->node_count >= 0);
@@ -662,7 +676,7 @@ Flag is_node_table_empty() {
       for (Op* o = node->node_head; o; o = o->next_node) {
         if (o->macro_fused)
           continue;
-        if (ideal_fusion_load2_is_nop(o))
+        if (ideal_fusion_tail_is_nop(o))
           continue;
         all_skippable = FALSE;
         break;
@@ -754,7 +768,7 @@ void node_precommit_update(void) {
       return;
 
     // wait until looking up the d-cache for memory operands
-    if (!ideal_fusion_load2_is_nop(op) &&
+    if (!ideal_fusion_tail_is_nop(op) &&
         (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
         op->dcache_cycle > cycle_count)
       return;

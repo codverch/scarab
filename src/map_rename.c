@@ -484,7 +484,7 @@ static inline void reg_file_flush_mispredict(Op *op, int *reg_table_types, int r
 
 // mark the previous entry with same archituctural id before the committed one as dead and remove it
 static inline void reg_file_release_prev(Op *op, int *reg_table_types, int reg_table_num) {
-  Flag skip_src_check = ideal_fusion_load2_is_nop(op);
+  Flag skip_src_check = ideal_fusion_tail_is_nop(op);
 
   if (!skip_src_check) {
   for (uns ii = 0; ii < op->inst_info->table_info.num_src_regs; ++ii) {
@@ -684,7 +684,7 @@ void reg_table_entry_read(struct reg_table_entry *entry, Op *op) {
   if (op->off_path)
     return;
 
-  if (ideal_fusion_load2_is_nop(op))
+  if (ideal_fusion_tail_is_nop(op))
     return;
 
   entry->onpath_consumers_num++;

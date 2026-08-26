@@ -230,14 +230,40 @@ void ideal_fusion_measure_on_wake(Op* op) {
 }
 
 /*
- * Pass 2 only tags the fetched load in this step. Later pipeline changes will
- * use the role and partner number to model the fused LOAD1 and LOAD2 behavior.
+ * Pass 2 only tags the fetched op in this step. Later pipeline changes use the
+ * role and partner number to model the fused head/tail nucleus behavior. A
+ * single run's candidate log holds exactly one class of pair (see
+ * expected_csv_header()), so classification branches once on that class
+ * rather than inspecting mem_type first.
  */
-static void classify_load(Op* op) {
+static void classify_op(Op* op) {
   Ideal_Fusion_Pair* pair;
 
-  if (op->inst_info->table_info.mem_type != MEM_LD ||
-      op->oracle_info.va == 0 || op->oracle_info.mem_size == 0)
+  if (op->oracle_info.va == 0 || op->oracle_info.mem_size == 0)
+    return;
+
+  if (ideal_fusion_fusing_stores()) {
+    if (op->inst_info->table_info.mem_type != MEM_ST)
+      return;
+
+    pair = lookup_load1_pair(op->ideal_fusion_micro_op_num);
+    if (pair) {
+      op->ideal_fusion_load_role = IDEAL_FUSION_STORE1;
+      op->ideal_fusion_partner_micro_op_num = pair->load2_micro_op_num;
+      STAT_EVENT(op->proc_id, IDEAL_FUSION_STORE1_TAGGED);
+      return;
+    }
+
+    pair = lookup_load2_pair(op->ideal_fusion_micro_op_num);
+    if (pair) {
+      op->ideal_fusion_load_role = IDEAL_FUSION_STORE2;
+      op->ideal_fusion_partner_micro_op_num = pair->load1_micro_op_num;
+      STAT_EVENT(op->proc_id, IDEAL_FUSION_STORE2_TAGGED);
+    }
+    return;
+  }
+
+  if (op->inst_info->table_info.mem_type != MEM_LD)
     return;
 
   pair = lookup_load1_pair(op->ideal_fusion_micro_op_num);
@@ -757,7 +783,7 @@ void ideal_fusion_on_fetch_op(Op* op) {
 
   if (IDEAL_FUSION_PASS == 2) {
     load_pair_indexes();
-    classify_load(op);
+    classify_op(op);
     return;
   }
 
