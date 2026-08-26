@@ -144,6 +144,10 @@ struct Table_Info_struct {
   Mem_Type mem_type;   // type of memory instruction
   Cf_Type cf_type;     // type of control flow instruction
   Bar_Type bar_type;   // type of barrier caused by instruction
+  Flag mem_barrier;    // instruction is a memory barrier (fence or LOCK-prefixed).
+                       // Separate from bar_type on purpose: frontend.c indexes
+                       // ST_BAR_NONE by the raw bar_type value, so widening that
+                       // enum would corrupt the ST_BAR_* stats.
   uns16 true_op_type;  // type of opcode from PIN. Should not be used for Scarab timing.
 
   uns num_dest_regs;  // number of destination registers written

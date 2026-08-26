@@ -54,6 +54,7 @@ void     fill_in_cf_info(ctype_pin_inst* info, const xed_decoded_inst_t* ins);
 void print_err_if_invalid(ctype_pin_inst* info, const xed_decoded_inst_t* ins);
 
 uint8_t is_ifetch_barrier(const xed_decoded_inst_t* ins);
+uint8_t is_mem_barrier(const xed_decoded_inst_t* ins);
 
 enum Reg_Array_Id {
   SRC_REGS,

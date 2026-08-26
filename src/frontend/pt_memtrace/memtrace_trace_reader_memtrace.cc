@@ -880,6 +880,11 @@ void TraceReaderMemtrace::fill_in_basic_info(ctype_pin_inst* info, instr_t* drin
   info->has_push = false;
   info->has_pop = false;
   info->is_lock = false;
+  /* Filtered traces carry only DR categories, which cannot distinguish a
+   * fence, so memory barriers are undetectable on this path. Traces that
+   * carry encodings go through x86_decoder's fill_in_cf_info instead and do
+   * get a real value. */
+  info->is_mem_barrier = false;
   info->is_repeat = false;
   info->is_gather_scatter = false;
 

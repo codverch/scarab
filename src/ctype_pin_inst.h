@@ -118,6 +118,9 @@ typedef struct ctype_pin_inst_struct {
   uint8_t has_push : 1;
   uint8_t has_pop : 1;
   uint8_t is_ifetch_barrier : 1;
+  /* Memory barrier, which is a different question from is_ifetch_barrier:
+   * that one means "serializes the front end" and does not cover fences. */
+  uint8_t is_mem_barrier : 1;
   uint8_t is_lock : 1;
   uint8_t is_repeat : 1;
   uint8_t is_simd : 1;

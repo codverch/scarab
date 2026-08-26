@@ -729,8 +729,22 @@ static Flag byte_ranges_disjoint(Addr a_addr, uns a_size, Addr b_addr,
 }
 
 /* A fence exists precisely to forbid the reordering fusion would perform. */
+/*
+ * A store pair may not be fused across anything that orders memory. bar_type
+ * alone is not that test: BAR_FETCH means "serializes the front end", which
+ * x86_decoder's is_ifetch_barrier() limits to IO, INTERRUPT, VTX, SYSTEM,
+ * SYSCALL, SYSRET and PAUSE. No fence is in that list -- MFENCE, SFENCE and
+ * LFENCE all map to OP_NOP -- and BAR_ISSUE is never assigned anywhere in the
+ * tree. Testing bar_type by itself therefore fused every pair separated only
+ * by an MFENCE, which is why mem_barrier is checked here as well.
+ *
+ * Caveat that survives this fix: filtered traces carry only DR categories, so
+ * mem_barrier is always FALSE on that path and KILLED_BY_FENCE still cannot
+ * count anything. Traces that carry instruction encodings are fine.
+ */
 static Flag op_is_serializing(const Op* op) {
-  return (op->inst_info->table_info.bar_type & (BAR_FETCH | BAR_ISSUE)) != 0;
+  return op->inst_info->table_info.mem_barrier ||
+         (op->inst_info->table_info.bar_type & (BAR_FETCH | BAR_ISSUE)) != 0;
 }
 
 static Flag store1_matches_store2(const Ideal_Fusion_Load_Candidate* store1,

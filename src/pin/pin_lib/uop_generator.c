@@ -877,6 +877,9 @@ void convert_pinuop_to_t_uop(uns8 proc_id, ctype_pin_inst* pi, Trace_Uop** trace
         trace_uop[ii]->info = info;
 
         info->table_info.true_op_type = pi->true_op_type;
+        /* Every uop of the instruction, not just the last: a consumer scanning
+         * uops in order must see the barrier before the ops it protects. */
+        info->table_info.mem_barrier = pi->is_mem_barrier;
         trace_uop[ii]->info->table_info.is_simd = pi->is_simd;
         trace_uop[ii]->info->uop_seq_num = ii;
         strcpy(trace_uop[ii]->info->table_info.name, pi->pin_iclass);

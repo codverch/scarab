@@ -179,6 +179,7 @@ void assert_ctype_pin_inst_same(uns proc_id, ctype_pin_inst inst_a, ctype_pin_in
   ASSERT(proc_id, inst_a.has_push == inst_b.has_push);
   ASSERT(proc_id, inst_a.has_pop == inst_b.has_pop);
   ASSERT(proc_id, inst_a.is_ifetch_barrier == inst_b.is_ifetch_barrier);
+  ASSERT(proc_id, inst_a.is_mem_barrier == inst_b.is_mem_barrier);
   ASSERT(proc_id, inst_a.is_lock == inst_b.is_lock);
 
   ASSERT(proc_id, inst_a.is_repeat == inst_b.is_repeat);

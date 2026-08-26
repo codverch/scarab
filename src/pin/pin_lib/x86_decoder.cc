@@ -325,6 +325,7 @@ void fill_in_cf_info(ctype_pin_inst* info, const xed_decoded_inst_t* ins) {
     info->branch_target = XED_INS_DirectBranchOrCallTargetAddress(info->instruction_addr, ins);
   }
   info->is_ifetch_barrier = is_ifetch_barrier(ins);
+  info->is_mem_barrier    = is_mem_barrier(ins);
 }
 
 void print_err_if_invalid(ctype_pin_inst* info, const xed_decoded_inst_t* ins) {
@@ -373,6 +374,20 @@ void print_err_if_invalid(ctype_pin_inst* info, const xed_decoded_inst_t* ins) {
       << ". Look at README in pin/pin_lib on how to map new instructions" << std::endl;;
     //dec_err_ostream->flush();
   }
+}
+
+/*
+ * Memory ordering barriers. is_ifetch_barrier() answers a different question --
+ * "does this serialize the front end" -- and none of the fences appear in its
+ * category list, so anything reasoning about memory order has to ask this
+ * instead. LOCK-prefixed read-modify-writes are full barriers on x86 and are
+ * included; they also happen to be stores, but a caller should not have to rely
+ * on that to stay correct.
+ */
+uint8_t is_mem_barrier(const xed_decoded_inst_t* ins) {
+  int opcode = XED_INS_Opcode(ins);
+  return (opcode == XED_ICLASS_MFENCE) || (opcode == XED_ICLASS_SFENCE) ||
+         (opcode == XED_ICLASS_LFENCE) || (XED_INS_LockPrefix(ins) != 0);
 }
 
 uint8_t is_ifetch_barrier(const xed_decoded_inst_t* ins) {
