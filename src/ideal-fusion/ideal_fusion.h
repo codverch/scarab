@@ -2,6 +2,7 @@
 #define __IDEAL_FUSION_H__
 
 #include "globals/global_types.h"
+#include "op_info.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,37 +33,56 @@ void ideal_fusion_on_fetch_op(Op* op);
 
 /*
  * Pass-2 actuation:
- *   - LOAD2 stays on the ROB chain but does not consume node_count / LSQ / RS
- *   - LOAD2 renames normally (own physical dest); src consumer registration skipped
- *   - Load2 buffer coordinates LOAD1 completion with LOAD2 dependent wakeup
+ *   - A fused tail nucleus (LOAD2/STORE2) stays on the ROB chain but does not
+ *     consume node_count / LSQ / RS
+ *   - It renames normally (own physical dest, if any); src consumer
+ *     registration is skipped
+ *   - The rendezvous table below coordinates head completion with tail
+ *     dependent wakeup: LOAD2 forwards LOAD1's REG_DATA_DEP wake; STORE2
+ *     forwards STORE1's MEM_ADDR_DEP and MEM_DATA_DEP wakes (a store never
+ *     fires REG_DATA_DEP). Without this forwarding a tail nucleus -- which
+ *     never itself executes -- would never wake ops waiting on it, so any
+ *     dependent load or store would deadlock.
  */
-#define LOAD2_BUFFER_HT_SIZE 1000003
+#define IDEAL_FUSION_RENDEZVOUS_HT_SIZE 1000003
 
-typedef struct Load2BufferEntry {
-  Op* load2;
-  Counter load2_unique_num;
-  Flag load2_waiting;
-  Flag load1_completed;
-  Flag pair_completed;
-  Counter load1_wake_cycle;
-  Counter load1_done_cycle;
-  Counter load1_micro_op_num;
-  Counter load2_micro_op_num;
-} Load2BufferEntry;
+typedef struct Ideal_Fusion_Rendezvous_Entry_struct {
+  Op* tail;
+  Counter tail_unique_num;
+  Counter head_wake_cycle;
+  Counter head_done_cycle;
+  Counter head_micro_op_num;
+  Counter tail_micro_op_num;
+  /* Per Dep_Type (REG_DATA_DEP / MEM_ADDR_DEP / MEM_DATA_DEP): has the head
+   * fired this wake yet, and has it already been forwarded to the tail? A
+   * store's head fires two independent types in the same cycle; both must be
+   * forwarded before the entry is retired. */
+  Flag head_fired[NUM_DEP_TYPES];
+  Flag tail_wake_sent[NUM_DEP_TYPES];
+  uns tail_wakes_sent;
+} Ideal_Fusion_Rendezvous_Entry;
 
-typedef struct Load2BufferNode {
-  Load2BufferEntry entry;
-  struct Load2BufferNode* next;
-} Load2BufferNode;
+typedef struct Ideal_Fusion_Rendezvous_Node_struct {
+  Ideal_Fusion_Rendezvous_Entry entry;
+  struct Ideal_Fusion_Rendezvous_Node_struct* next;
+} Ideal_Fusion_Rendezvous_Node;
 
-extern Load2BufferNode* load2_buffer_ht[LOAD2_BUFFER_HT_SIZE];
+extern Ideal_Fusion_Rendezvous_Node*
+  fusion_rendezvous_ht[IDEAL_FUSION_RENDEZVOUS_HT_SIZE];
 
-Load2BufferNode* ideal_fusion_find_load2_buffer(Counter load1_micro_op_num);
-Load2BufferNode* ideal_fusion_create_load2_buffer(Counter load1_micro_op_num);
-void ideal_fusion_remove_load2_buffer(Load2BufferNode* node);
+Ideal_Fusion_Rendezvous_Node* ideal_fusion_find_rendezvous(
+  Counter head_micro_op_num);
+Ideal_Fusion_Rendezvous_Node* ideal_fusion_create_rendezvous(
+  Counter head_micro_op_num);
+void ideal_fusion_remove_rendezvous(Ideal_Fusion_Rendezvous_Node* node);
 
 void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns));
-void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns));
+
+/* Called from wake_up_ops() whenever a LOAD1 or STORE1 fires `type`; forwards
+ * that same wake to the paired tail nucleus (see comment above). A no-op for
+ * any op that is not a fusion head. */
+void ideal_fusion_on_head_wake(Op* head, Dep_Type type,
+                               void (*wake_action)(Op*, Op*, uns));
 Flag ideal_fusion_load2_is_nop(const Op* op);
 Flag ideal_fusion_store2_is_nop(const Op* op);
 

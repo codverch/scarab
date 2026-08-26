@@ -67,7 +67,8 @@ typedef struct Ideal_Fusion_Pair_struct {
   struct Ideal_Fusion_Pair_struct* next;
 } Ideal_Fusion_Pair;
 
-Load2BufferNode* load2_buffer_ht[LOAD2_BUFFER_HT_SIZE] = {NULL};
+Ideal_Fusion_Rendezvous_Node*
+  fusion_rendezvous_ht[IDEAL_FUSION_RENDEZVOUS_HT_SIZE] = {NULL};
 
 /*
  * Candidate files identify dynamic ops using the order in which on-path ops
@@ -836,42 +837,45 @@ Flag ideal_fusion_tail_is_nop(const Op* op) {
   return ideal_fusion_load2_is_nop(op) || ideal_fusion_store2_is_nop(op);
 }
 
-Load2BufferNode* ideal_fusion_find_load2_buffer(Counter load1_micro_op_num) {
-  uns bucket = get_pair_index_bucket(load1_micro_op_num);
-  Load2BufferNode* node;
+Ideal_Fusion_Rendezvous_Node* ideal_fusion_find_rendezvous(
+  Counter head_micro_op_num) {
+  uns bucket = get_pair_index_bucket(head_micro_op_num);
+  Ideal_Fusion_Rendezvous_Node* node;
 
-  for (node = load2_buffer_ht[bucket]; node; node = node->next) {
-    if (node->entry.load1_micro_op_num == load1_micro_op_num)
+  for (node = fusion_rendezvous_ht[bucket]; node; node = node->next) {
+    if (node->entry.head_micro_op_num == head_micro_op_num)
       return node;
   }
   return NULL;
 }
 
-Load2BufferNode* ideal_fusion_create_load2_buffer(Counter load1_micro_op_num) {
-  Load2BufferNode* node = (Load2BufferNode*)calloc(1, sizeof(*node));
+Ideal_Fusion_Rendezvous_Node* ideal_fusion_create_rendezvous(
+  Counter head_micro_op_num) {
+  Ideal_Fusion_Rendezvous_Node* node =
+    (Ideal_Fusion_Rendezvous_Node*)calloc(1, sizeof(*node));
   uns bucket;
 
   if (!node) {
-    fprintf(stderr, "Ideal fusion: could not allocate Load2 buffer entry.\n");
+    fprintf(stderr, "Ideal fusion: could not allocate rendezvous entry.\n");
     exit(EXIT_FAILURE);
   }
 
-  node->entry.load1_micro_op_num = load1_micro_op_num;
-  bucket = get_pair_index_bucket(load1_micro_op_num);
-  node->next = load2_buffer_ht[bucket];
-  load2_buffer_ht[bucket] = node;
+  node->entry.head_micro_op_num = head_micro_op_num;
+  bucket = get_pair_index_bucket(head_micro_op_num);
+  node->next = fusion_rendezvous_ht[bucket];
+  fusion_rendezvous_ht[bucket] = node;
   return node;
 }
 
-void ideal_fusion_remove_load2_buffer(Load2BufferNode* node) {
-  Load2BufferNode** slot;
+void ideal_fusion_remove_rendezvous(Ideal_Fusion_Rendezvous_Node* node) {
+  Ideal_Fusion_Rendezvous_Node** slot;
   uns bucket;
 
   if (!node)
     return;
 
-  bucket = get_pair_index_bucket(node->entry.load1_micro_op_num);
-  for (slot = &load2_buffer_ht[bucket]; *slot; slot = &(*slot)->next) {
+  bucket = get_pair_index_bucket(node->entry.head_micro_op_num);
+  for (slot = &fusion_rendezvous_ht[bucket]; *slot; slot = &(*slot)->next) {
     if (*slot == node) {
       *slot = node->next;
       free(node);
@@ -880,79 +884,97 @@ void ideal_fusion_remove_load2_buffer(Load2BufferNode* node) {
   }
 }
 
-static void ideal_fusion_complete_load2(Op* load2, Counter load1_wake_cycle,
-                                        Counter load1_done_cycle,
-                                        void (*wake_action)(Op*, Op*, uns)) {
-  load2->wake_cycle = load1_wake_cycle;
-  load2->done_cycle = load1_done_cycle;
-  wake_up_ops(load2, REG_DATA_DEP, wake_action);
+/* How many independent Dep_Type wakes a fused pair's head fires: one
+ * (REG_DATA_DEP) for a load, two (MEM_ADDR_DEP, MEM_DATA_DEP) for a store. */
+static uns ideal_fusion_expected_tail_wakes(void) {
+  return ideal_fusion_fusing_stores() ? 2 : 1;
+}
+
+/*
+ * Forwards one already-fired head wake of `type` onto its tail, using the
+ * head's timing so anything waiting on the tail wakes at the cycle it would
+ * have woken had the tail actually executed. Retires (frees) the rendezvous
+ * entry once every expected wake has been forwarded. Returns TRUE if `node`
+ * was freed by this call -- callers must not touch it afterward.
+ */
+static Flag forward_tail_wake(Ideal_Fusion_Rendezvous_Node* node, Dep_Type type,
+                              void (*wake_action)(Op*, Op*, uns)) {
+  Op* tail = node->entry.tail;
+
+  if (!tail || node->entry.tail_wake_sent[type])
+    return FALSE;
+
+  if (!tail->op_pool_valid || tail->unique_num != node->entry.tail_unique_num ||
+      !ideal_fusion_tail_is_nop(tail)) {
+    ideal_fusion_remove_rendezvous(node);
+    return TRUE;
+  }
+
+  tail->wake_cycle = node->entry.head_wake_cycle;
+  tail->done_cycle = node->entry.head_done_cycle;
+  wake_up_ops(tail, type, wake_action);
+  node->entry.tail_wake_sent[type] = TRUE;
+  node->entry.tail_wakes_sent++;
+
+  if (node->entry.tail_wakes_sent >= ideal_fusion_expected_tail_wakes()) {
+    ideal_fusion_remove_rendezvous(node);
+    return TRUE;
+  }
+  return FALSE;
 }
 
 void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns)) {
-  Load2BufferNode* node;
+  Ideal_Fusion_Rendezvous_Node* node;
+  Dep_Type type;
 
   if (!op || op->off_path || IDEAL_FUSION_PASS != 2)
     return;
 
-  if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD1) {
-    node = ideal_fusion_find_load2_buffer(op->ideal_fusion_micro_op_num);
+  if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD1 ||
+      op->ideal_fusion_load_role == IDEAL_FUSION_STORE1) {
+    node = ideal_fusion_find_rendezvous(op->ideal_fusion_micro_op_num);
     if (!node)
-      node = ideal_fusion_create_load2_buffer(op->ideal_fusion_micro_op_num);
+      ideal_fusion_create_rendezvous(op->ideal_fusion_micro_op_num);
     return;
   }
 
-  if (!ideal_fusion_load2_is_nop(op))
+  if (!ideal_fusion_tail_is_nop(op))
     return;
 
-  node = ideal_fusion_find_load2_buffer(op->ideal_fusion_partner_micro_op_num);
+  node = ideal_fusion_find_rendezvous(op->ideal_fusion_partner_micro_op_num);
   if (!node)
-    node = ideal_fusion_create_load2_buffer(op->ideal_fusion_partner_micro_op_num);
+    node = ideal_fusion_create_rendezvous(op->ideal_fusion_partner_micro_op_num);
 
-  node->entry.load2 = op;
-  node->entry.load2_unique_num = op->unique_num;
-  node->entry.load2_micro_op_num = op->ideal_fusion_micro_op_num;
+  node->entry.tail = op;
+  node->entry.tail_unique_num = op->unique_num;
+  node->entry.tail_micro_op_num = op->ideal_fusion_micro_op_num;
 
-  if (node->entry.load1_completed && !node->entry.pair_completed) {
-    ideal_fusion_complete_load2(op, node->entry.load1_wake_cycle,
-                                node->entry.load1_done_cycle, wake_action);
-    node->entry.pair_completed = TRUE;
-    ideal_fusion_remove_load2_buffer(node);
-  } else {
-    node->entry.load2_waiting = TRUE;
-    node->entry.pair_completed = FALSE;
+  /* The head may have already fired before this tail was renamed (e.g. a
+   * replay); forward every wake it is still owed. */
+  for (type = 0; type < NUM_DEP_TYPES; type++) {
+    if (!node->entry.head_fired[type] || node->entry.tail_wake_sent[type])
+      continue;
+    if (forward_tail_wake(node, type, wake_action))
+      return; /* node has been freed */
   }
 }
 
-void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns)) {
-  Load2BufferNode* node;
-  Op* load2;
+void ideal_fusion_on_head_wake(Op* head, Dep_Type type,
+                               void (*wake_action)(Op*, Op*, uns)) {
+  Ideal_Fusion_Rendezvous_Node* node;
 
-  if (!load1 || load1->off_path || IDEAL_FUSION_PASS != 2 ||
-      load1->ideal_fusion_load_role != IDEAL_FUSION_LOAD1)
+  if (!head || head->off_path || IDEAL_FUSION_PASS != 2 ||
+      (head->ideal_fusion_load_role != IDEAL_FUSION_LOAD1 &&
+       head->ideal_fusion_load_role != IDEAL_FUSION_STORE1))
     return;
 
-  node = ideal_fusion_find_load2_buffer(load1->ideal_fusion_micro_op_num);
+  node = ideal_fusion_find_rendezvous(head->ideal_fusion_micro_op_num);
   if (!node)
-    node = ideal_fusion_create_load2_buffer(load1->ideal_fusion_micro_op_num);
+    node = ideal_fusion_create_rendezvous(head->ideal_fusion_micro_op_num);
 
-  node->entry.load1_completed = TRUE;
-  node->entry.load1_wake_cycle = load1->wake_cycle;
-  node->entry.load1_done_cycle = load1->done_cycle;
+  node->entry.head_fired[type] = TRUE;
+  node->entry.head_wake_cycle = head->wake_cycle;
+  node->entry.head_done_cycle = head->done_cycle;
 
-  if (!node->entry.load2 || !node->entry.load2_waiting ||
-      node->entry.pair_completed)
-    return;
-
-  load2 = node->entry.load2;
-  if (!load2->op_pool_valid ||
-      load2->unique_num != node->entry.load2_unique_num ||
-      !ideal_fusion_load2_is_nop(load2)) {
-    ideal_fusion_remove_load2_buffer(node);
-    return;
-  }
-
-  ideal_fusion_complete_load2(load2, node->entry.load1_wake_cycle,
-                              node->entry.load1_done_cycle, wake_action);
-  node->entry.pair_completed = TRUE;
-  ideal_fusion_remove_load2_buffer(node);
+  forward_tail_wake(node, type, wake_action);
 }

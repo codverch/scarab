@@ -556,8 +556,12 @@ void wake_up_ops(Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
   // write back the register value for the dependent ops
   reg_file_produce(op);
 
+  // forward the wake to a fused tail nucleus, which never itself executes:
+  // LOAD2 rides LOAD1's REG_DATA_DEP; STORE2 rides STORE1's MEM_ADDR_DEP and
+  // MEM_DATA_DEP (a store never fires REG_DATA_DEP).
+  ideal_fusion_on_head_wake(op, type, wake_action);
+
   if (type == REG_DATA_DEP) {
-    ideal_fusion_on_load1_wake(op, wake_action);
     ideal_fusion_measure_on_wake(op);
   }
 
