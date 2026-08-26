@@ -561,9 +561,10 @@ void wake_up_ops(Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
   // MEM_DATA_DEP (a store never fires REG_DATA_DEP).
   ideal_fusion_on_head_wake(op, type, wake_action);
 
-  if (type == REG_DATA_DEP) {
-    ideal_fusion_measure_on_wake(op);
-  }
+  // pass-3 measurement: called for every wake type because a store never fires
+  // REG_DATA_DEP; the callee keeps the one wake that fires once per op for the
+  // class being measured.
+  ideal_fusion_measure_on_wake(op, type);
 
   ASSERT(op->proc_id, wake_action);
   for (temp = op->wake_up_head; temp; temp = temp->next) {

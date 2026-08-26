@@ -170,14 +170,25 @@ static Ideal_Fusion_Pair* lookup_load2_pair(Counter micro_op_num) {
 
 /*
  * MEASUREMENT MODE (IDEAL_FUSION_PASS == 3): do not fuse anything. Load the
- * same pair set pass 2 would fuse, let both loads execute normally, and log the
- * real completion (wake/done) cycle of each LOAD1 and LOAD2 as it writes back.
- * Joining these rows by (load1,load2) offline shows whether the program-order
- * older LOAD1 actually finishes before the younger LOAD2 -- the assumption the
- * pass-2 forwarding relies on.
+ * same pair set pass 2 would fuse, let both members execute normally, and log
+ * the real completion (wake/done) cycle of each head and tail as it writes
+ * back. Joining these rows by (head,tail) offline shows whether the
+ * program-order older head actually finishes before the younger tail -- the
+ * assumption the pass-2 forwarding relies on.
  */
 static void load_pair_indexes(void);
 static FILE* measure_log = NULL;
+
+/*
+ * Which wake fires once per op for the class under measurement. A load
+ * distributes its result on REG_DATA_DEP. A store never fires REG_DATA_DEP at
+ * all -- exec_stage_dep_wakeup() fires MEM_ADDR_DEP and MEM_DATA_DEP back to
+ * back in the same cycle -- so pick the second of the two and get exactly one
+ * row per store instead of none or a duplicate pair.
+ */
+static Dep_Type measure_wake_type(void) {
+  return ideal_fusion_fusing_stores() ? MEM_DATA_DEP : REG_DATA_DEP;
+}
 
 static void open_measure_log(void) {
   const char* path;
@@ -195,39 +206,68 @@ static void open_measure_log(void) {
             strerror(errno));
     exit(EXIT_FAILURE);
   }
+  /* Mirror expected_csv_header()'s rule: name the columns after the class so a
+   * store measurement can never be mistaken for a load one downstream.
+   *
+   * The store schema is one column shorter on purpose. A load has come back
+   * from the cache by the time it wakes dependents, so done_cycle is real. A
+   * store wakes from exec_stage_dep_wakeup() the moment its address and data
+   * are ready, which is before exec_stage assigns op->exec_cycle and long
+   * before op->done_cycle is set at retire -- both read MAX_CTR on every store
+   * row. wake_cycle is the only completion signal that exists here, and it is
+   * also the exact value STORE2 inherits when pass 2 fuses the pair, so it is
+   * the one the analysis wants. Emitting a MAX_CTR column instead would just
+   * invite someone to average it. */
   fprintf(measure_log,
-          "role,this_micro_op_num,load1_micro_op_num,load2_micro_op_num,"
-          "done_cycle,wake_cycle,cur_cycle\n");
+          ideal_fusion_fusing_stores()
+            ? "role,this_micro_op_num,store1_micro_op_num,"
+              "store2_micro_op_num,wake_cycle,cur_cycle\n"
+            : "role,this_micro_op_num,load1_micro_op_num,"
+              "load2_micro_op_num,done_cycle,wake_cycle,cur_cycle\n");
 }
 
-void ideal_fusion_measure_on_wake(Op* op) {
+void ideal_fusion_measure_on_wake(Op* op, Dep_Type type) {
   Ideal_Fusion_Pair* pair;
   const char* role = NULL;
+  Flag stores;
 
+  /* wake_up_ops() calls this for every Dep_Type now, so reject on the cheapest
+   * test first and touch no parameters until we know the pass is right. */
   if (!op || op->off_path || IDEAL_FUSION_PASS != 3)
     return;
-  if (op->ideal_fusion_micro_op_num == 0 ||
-      op->inst_info->table_info.mem_type != MEM_LD)
+  if (type != measure_wake_type())
+    return;
+  if (op->ideal_fusion_micro_op_num == 0)
+    return;
+
+  stores = ideal_fusion_fusing_stores();
+  if (op->inst_info->table_info.mem_type != (stores ? MEM_ST : MEM_LD))
     return;
 
   load_pair_indexes();
 
   pair = lookup_load1_pair(op->ideal_fusion_micro_op_num);
   if (pair) {
-    role = "LOAD1";
+    role = stores ? "STORE1" : "LOAD1";
   } else {
     pair = lookup_load2_pair(op->ideal_fusion_micro_op_num);
     if (pair)
-      role = "LOAD2";
+      role = stores ? "STORE2" : "LOAD2";
   }
   if (!role)
     return;
 
   open_measure_log();
-  fprintf(measure_log, "%s,%llu,%llu,%llu,%llu,%llu,%llu\n", role,
-          op->ideal_fusion_micro_op_num, pair->load1_micro_op_num,
-          pair->load2_micro_op_num, op->done_cycle, op->wake_cycle,
-          cycle_count);
+  if (stores) {
+    fprintf(measure_log, "%s,%llu,%llu,%llu,%llu,%llu\n", role,
+            op->ideal_fusion_micro_op_num, pair->load1_micro_op_num,
+            pair->load2_micro_op_num, op->wake_cycle, cycle_count);
+  } else {
+    fprintf(measure_log, "%s,%llu,%llu,%llu,%llu,%llu,%llu\n", role,
+            op->ideal_fusion_micro_op_num, pair->load1_micro_op_num,
+            pair->load2_micro_op_num, op->done_cycle, op->wake_cycle,
+            cycle_count);
+  }
 }
 
 /*

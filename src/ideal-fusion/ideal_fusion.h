@@ -95,8 +95,10 @@ Flag ideal_fusion_store2_is_nop(const Op* op);
 Flag ideal_fusion_tail_is_nop(const Op* op);
 
 /* Measurement mode (IDEAL_FUSION_PASS == 3): log real completion cycles of
- * paired loads without applying fusion. */
-void ideal_fusion_measure_on_wake(Op* op);
+ * paired loads or stores without applying fusion. Called for every wake type;
+ * it keeps only the one wake that fires once per op for the class under
+ * measurement (REG_DATA_DEP for loads, MEM_DATA_DEP for stores). */
+void ideal_fusion_measure_on_wake(Op* op, Dep_Type type);
 
 #ifdef __cplusplus
 }
