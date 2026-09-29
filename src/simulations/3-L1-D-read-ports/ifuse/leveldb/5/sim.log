@@ -1,0 +1,57 @@
+Scarab gitrev: 8ed70ede5
+Scarab started at Tue Sep 29 04:28:28 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000004 } -- 0.00 KIPS (76.92 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 62.50 KIPS (68.97 KIPS)
+** Heartbeat:  10% -- { 3000011 } -- 90.91 KIPS (75.00 KIPS)
+** Heartbeat:  13% -- { 4000011 } -- 71.43 KIPS (74.07 KIPS)
+** Heartbeat:  16% -- { 5000012 } -- 66.67 KIPS (72.46 KIPS)
+** Heartbeat:  20% -- { 6000015 } -- 66.67 KIPS (71.43 KIPS)
+** Heartbeat:  23% -- { 7000018 } -- 62.50 KIPS (70.00 KIPS)
+** Heartbeat:  26% -- { 8000020 } -- 66.67 KIPS (69.57 KIPS)
+** Heartbeat:  30% -- { 9000023 } -- 66.67 KIPS (69.23 KIPS)
+** Heartbeat:  33% -- { 10000029 } -- 66.67 KIPS (68.97 KIPS)
+** Heartbeat:  36% -- { 11000034 } -- 62.50 KIPS (68.32 KIPS)
+** Heartbeat:  40% -- { 12000041 } -- 62.50 KIPS (67.80 KIPS)
+** Heartbeat:  43% -- { 13000042 } -- 66.67 KIPS (67.71 KIPS)
+** Heartbeat:  46% -- { 14000042 } -- 62.50 KIPS (67.31 KIPS)
+** Heartbeat:  50% -- { 15000045 } -- 66.67 KIPS (67.26 KIPS)
+** Heartbeat:  53% -- { 16000051 } -- 66.67 KIPS (67.23 KIPS)
+** Heartbeat:  56% -- { 17000053 } -- 66.67 KIPS (67.19 KIPS)
+** Heartbeat:  60% -- { 18000055 } -- 66.67 KIPS (67.16 KIPS)
+** Heartbeat:  63% -- { 19000059 } -- 62.50 KIPS (66.90 KIPS)
+** Heartbeat:  66% -- { 20000062 } -- 62.50 KIPS (66.67 KIPS)
+** Heartbeat:  70% -- { 21000064 } -- 66.67 KIPS (66.67 KIPS)
+** Heartbeat:  73% -- { 22000065 } -- 66.67 KIPS (66.67 KIPS)
+** Heartbeat:  76% -- { 23000068 } -- 66.67 KIPS (66.67 KIPS)
+** Heartbeat:  80% -- { 24000071 } -- 76.92 KIPS (67.04 KIPS)
+** Heartbeat:  83% -- { 25000071 } -- 90.91 KIPS (67.75 KIPS)
+** Heartbeat:  86% -- { 26000075 } -- 111.11 KIPS (68.78 KIPS)
+** Heartbeat:  90% -- { 27000081 } -- 111.11 KIPS (69.77 KIPS)
+** Heartbeat:  93% -- { 28000082 } -- 125.00 KIPS (70.89 KIPS)
+** Heartbeat:  96% -- { 29000083 } -- 111.11 KIPS (71.78 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7fa542c7db34
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-2-L1-D-read-ports/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-2-L1-D-read-ports/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:14623150    time:4569734375000       -- 2.05 IPC (2.05 IPC) --  N/A  KIPS (72.46 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34267324  I=30000000  C=14623150):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34267324  I=30000000  C=14623150):  Command "python3 /home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/src/scarab_8ed70ede5_0(+0x274296) [0x5555557c8296]
+/home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/src/scarab_8ed70ede5_0(+0x3177be) [0x55555586b7be]
+/home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/src/scarab_8ed70ede5_0(+0x1e5fc3) [0x555555739fc3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-3-L1-D-read-ports/scarab/src/scarab_8ed70ede5_0(+0x1ea7be) [0x55555573e7be]
