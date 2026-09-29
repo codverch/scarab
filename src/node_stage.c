@@ -641,6 +641,12 @@ void node_retire() {
       STAT_EVENT(op->proc_id, IFUSE_FUSED_LOADS);
     }
 
+    // A truly-fused LOAD2 skips the issue queue, so its sources were counted
+    // as consumers at rename but never consumed at execute; consume them here
+    // so the previous mappings can be released by reg_file_commit.
+    if (ifuse_exec_pair_bypass_ld2_memory_pipeline(op) && op->exec_count == 0)
+      reg_file_consume(op);
+
     // free the previous register entries with same architectural destination
     reg_file_commit(op);
     ifuse_retire_op(op);
