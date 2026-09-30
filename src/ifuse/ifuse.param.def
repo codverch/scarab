@@ -1,14 +1,15 @@
 DEF_PARAM(ifuse_fusion_distance, IFUSE_FUSION_DISTANCE, uns, uns, 512, )
 /* RLB entries. This is separate from ifuse_fusion_distance because the RLB
- * only holds loads, not every micro-op in the window. 128 entries * 77 bits
- * = 1.20 KiB. */
-DEF_PARAM(ifuse_rlb_capacity, IFUSE_RLB_CAPACITY, uns, uns, 128, )
-/* Ways per RLB set. The set is picked by hashing the load's cache block
- * address. 128 entries / 8 ways = 16 sets. capacity / ways must be a power of
- * two. Set ways equal to capacity for a fully associative RLB. */
+ * only holds loads, not every micro-op in the window. 64 entries matched 128
+ * exactly on clickhouse, corebench, duckdb, and terminal_bench.
+ * 64 entries * 77 bits = 0.60 KiB. */
+DEF_PARAM(ifuse_rlb_capacity, IFUSE_RLB_CAPACITY, uns, uns, 64, )
+/* Ways per RLB set. The set is picked by the low line-address bits.
+ * 64 entries / 8 ways = 8 sets. capacity / ways must be a power of two. Set
+ * ways equal to capacity for a fully associative RLB. */
 DEF_PARAM(ifuse_rlb_ways, IFUSE_RLB_WAYS, uns, uns, 8, )
-/* Low line-address bits the RLB compares, index bits included: the 4 index
- * bits come free from the set, the other 28 are stored as the tag. 32 matches
+/* Low line-address bits the RLB compares, index bits included: the 3 index
+ * bits come free from the set, the other 29 are stored as the tag. 32 matches
  * the partial line tag in Helios (MICRO 2022). */
 DEF_PARAM(ifuse_rlb_line_tag_bits, IFUSE_RLB_LINE_TAG_BITS, uns, uns, 32, )
 DEF_PARAM(ifuse_apt_match_policy, IFUSE_APT_MATCH_POLICY, uns, uns, 1, )
@@ -51,17 +52,13 @@ DEF_PARAM(ifuse_fct_ways, IFUSE_FCT_WAYS, uns, uns, 4, )
 /* Cycles after LD1's wake cycle before a fused LD2's dependents may wake
  * (see ifuse_exec_pair_signal_ld2). 0 = same cycle as LD1. */
 DEF_PARAM(ifuse_ld2_wake_delay, IFUSE_LD2_WAKE_DELAY, uns, uns, 1, )
-/* 32 sets x 8 ways (was 64x4, same 256-entry total): APT eviction rate was
- * uncorrelated with occupancy (peak never exceeded 61 of 256 across 55
- * benchmark runs; correlation with eviction rate was 0.006) -- thrashing
- * comes from a handful of hot static LD1/LD2 PCs producing many concurrent
- * dynamic instances that all hash to the same set, not from cross-PC set
- * collisions. More ways per set directly targets that; more sets would not,
- * since a given static PC always lands in the same set regardless of set
- * count. */
-DEF_PARAM(ifuse_apt_sets, IFUSE_APT_SETS, uns, uns, 32, )
+/* APT: 8 sets x 8 ways = 64 entries. 64 matched 256 within noise on
+ * clickhouse, corebench, duckdb, and terminal_bench; 32 lost up to 2%.
+ * Ways matter more than sets: a hot LD2 PC always lands in one set. */
+DEF_PARAM(ifuse_apt_sets, IFUSE_APT_SETS, uns, uns, 8, )
 DEF_PARAM(ifuse_apt_ways, IFUSE_APT_WAYS, uns, uns, 8, )
-DEF_PARAM(ifuse_aci_sets, IFUSE_ACI_SETS, uns, uns, 64, )
+/* ACI: 16 sets x 4 ways = 64 entries, sized with the APT. 32 lost up to 1%. */
+DEF_PARAM(ifuse_aci_sets, IFUSE_ACI_SETS, uns, uns, 16, )
 DEF_PARAM(ifuse_aci_ways, IFUSE_ACI_WAYS, uns, uns, 4, )
 DEF_PARAM(ifuse_exec_pair_max_nodes, IFUSE_EXEC_PAIR_MAX_NODES, uns, uns, 524288, )
 DEF_PARAM(ifuse_exec_pair_num_buckets, IFUSE_EXEC_PAIR_NUM_BUCKETS, uns, uns, 4096, )

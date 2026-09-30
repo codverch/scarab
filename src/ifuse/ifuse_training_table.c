@@ -17,13 +17,13 @@
  * observation counts, never corrupts a promoted PC; see the note on
  * find_or_allocate() below for why) plus a full 48-bit LD2 PC (kept
  * untruncated: it doubles as the value forwarded to FCT_Row.ld2_pc_addr,
- * which must be full precision -- see pc_tag()'s comment below), an 11-bit
- * observation counter (supports insert thresholds up to 2047, i.e. 2x
- * headroom over the highest threshold actually swept, 1000), a 6-bit
- * cache-line offset delta, a 3-bit log2(LD2 access size), direction, valid,
- * and a 2-bit RRPV replacement-priority field, totaling 104 bits. There are
- * 32 sets * 4 ways = 128 entries by default, so the packed training table
- * costs 128 * 104 = 13,312 bits = 1.625 KiB.
+ * which must be full precision -- see pc_tag()'s comment below), an
+ * observation counter just wide enough for the insert threshold (10 bits at
+ * the default 1000, 7 bits at the swept 100), a 6-bit cache-line offset
+ * delta, a 3-bit log2(LD2 access size), direction, valid, and a 2-bit RRPV
+ * replacement-priority field, totaling 103 bits at the default threshold.
+ * There are 32 sets * 4 ways = 128 entries by default, so the packed
+ * training table costs 128 * 103 = 13,184 bits = 1.61 KiB.
  *
  * Replacement is RRIP-style (SRRIP): a newly inserted candidate starts at
  * RRPV = IFUSE_TT_RRPV_INSERT (one below max), not at max and not at zero,

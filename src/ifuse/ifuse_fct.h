@@ -28,10 +28,16 @@
  * apt_lookup(), not a disambiguation tag, so truncating it would raise the
  * false-fusion-match rate directly instead of just aliasing a hash bucket),
  * a 6-bit offset magnitude, a 1-bit direction, a 3-bit log2(LD2 access
- * size), a 10-bit confidence score (IFUSE_FCT_CONFIDENCE_MAX), and 1 valid
- * bit: 101 bits/row. A 512-row FCT (ifuse_fct_hash_bits = 9) costs
- * 512 * 101 = 51,712 bits = 6.3125 KiB, plus tree-PLRU state: 3 bits per
- * 4-way set, 128 * 3 = 384 bits.
+ * size), a 1-bit trusted flag, and 1 valid bit: 92 bits/row. A 512-row FCT
+ * (ifuse_fct_hash_bits = 9) costs 512 * 92 = 47,104 bits = 5.75 KiB, plus
+ * tree-PLRU state: 3 bits per 4-way set, 128 * 3 = 384 bits.
+ *
+ * Why confidence_score is one bit in hardware: with the default knobs
+ * (insert at 500, predict above 499, cap at 500, -50 per misprediction) a
+ * row is either at 500 and predicting, or at 450 or below and not. A row
+ * that stops predicting is never updated again until training re-promotes
+ * it back to 500. So the score only ever answers "trusted or not". The
+ * simulator keeps the wider field so other knob settings still work.
  *
  * ld1_effective_addr, ld2_effective_addr, ld1_micro_op_num, and
  * ld2_micro_op_num are simulator-side bookkeeping, not part of the modeled
