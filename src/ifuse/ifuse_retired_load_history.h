@@ -5,8 +5,7 @@
 
 #include "globals/global_types.h"
 
-/* What a match hands back about the older load (LD1). pc holds only the low
- * bits the RLB stores; see ifuse_retired_load_history.c. */
+/* What a match hands back about the older load (LD1). */
 typedef struct RetiredLoadHistoryEntry {
     Addr    pc;
     Addr    effective_addr;

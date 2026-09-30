@@ -114,12 +114,12 @@ static void test_clock_going_backwards_clears(void) {
 static void test_narrow_fields(void) {
     RetiredLoadHistoryEntry match;
 
-    /* Only the low 32 PC bits are kept, and the older load's address comes
+    /* The full PC is kept, and the older load's address comes
      * back as the matching load's line plus the stored offset. */
     retired_load_history_init();
     retired_load_history_insert(0x7f12345678ABULL, 0x7000 + 0x18, 10);
     assert(retired_load_history_take_match(0x7000 + 0x30, 20, &match));
-    assert(match.pc == 0x345678ABULL);
+    assert(match.pc == 0x7f12345678ABULL);
     assert(match.effective_addr == 0x7018);
     assert(match.micro_op_num == 10);
 }

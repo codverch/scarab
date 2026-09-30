@@ -21,17 +21,17 @@
  * IFUSE_FUSION_DISTANCE micro-ops accessed the same cache block. If so, the
  * two loads form a fusion candidate, which is passed to the training table.
  *
- * Each RLB entry is 77 bits:
+ * Each RLB entry is 93 bits:
  *
- * - 32-bit load PC
+ * - 48-bit load PC
  * - 28-bit line tag
  * - 6-bit line offset
  * - 10-bit retirement timestamp
  * - 1-bit valid bit
  *
- * The fields are sized to match their consumers. The PC stores the larger of
- * the widths used by the training table and FCT, since neither retains more
- * than the low 32 bits of the LD1 PC. For the address, the RLB only needs to
+ * The fields are sized to match their consumers. The PC is kept at full width
+ * because the FCT picks its set from the full LD1 PC; a narrower PC would
+ * send runtime-trained rows to different sets. For the address, the RLB only needs to
  * identify the cache block and recover LD1's offset. LD2's access size need
  * not be stored because it is available when LD2 retires.
  *
@@ -100,7 +100,7 @@
 /* One entry, holding exactly the hardware fields above. Only micro_op_num is
  * wider than hardware (see clock_check()). */
 typedef struct HistoryRow {
-    uint64_t pc;            // low history_pc_bits of the PC
+    uint64_t pc;
     uint64_t tag;           // line address bits just above the index
     uint8_t  offset;        // byte offset within the line
     Counter  micro_op_num;
@@ -113,7 +113,6 @@ static unsigned int history_num_sets;
 static unsigned int history_num_ways;
 static unsigned int history_index_bits;  // log2(history_num_sets)
 static uint64_t history_tag_mask;
-static uint64_t history_pc_mask;
 static Counter last_micro_op_num;  // newest op count seen, for clock_check()
 static bool initialized;
 
@@ -177,10 +176,6 @@ void retired_load_history_init(void) {
     history_num_ways = IFUSE_RLB_WAYS;
     history_index_bits = index_bits;
     history_tag_mask = low_bits_mask(IFUSE_RLB_LINE_TAG_BITS - index_bits);
-    /* Keep as many PC bits as the widest consumer compares; see the header. */
-    history_pc_mask = low_bits_mask(
-        IFUSE_TRAINING_TABLE_PC_TAG_BITS > IFUSE_FCT_PC_TAG_BITS ?
-            IFUSE_TRAINING_TABLE_PC_TAG_BITS : IFUSE_FCT_PC_TAG_BITS);
     rows = (HistoryRow*)calloc(IFUSE_RLB_CAPACITY, sizeof(*rows));
     if (!rows) {
         fprintf(stderr,
@@ -260,7 +255,7 @@ void retired_load_history_insert(Addr pc, Addr effective_addr,
         row = oldest;
     }
 
-    row->pc = (uint64_t)pc & history_pc_mask;
+    row->pc = (uint64_t)pc;
     row->tag = tag;
     row->offset = (uint8_t)(effective_addr & (HISTORY_LINE_SIZE - 1U));
     row->micro_op_num = micro_op_num;
