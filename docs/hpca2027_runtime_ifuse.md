@@ -73,7 +73,9 @@ disambiguation tag, so truncating it would raise the false-fusion-match rate
 directly), a 6-bit offset magnitude, 1 direction bit, a 3-bit log2(access
 size), a 10-bit confidence score (2x headroom over the current default
 ceiling of 500), and 1 valid bit: 101 bits per row. A 512-row FCT
-(`ifuse_fct_hash_bits = 9`) is 51,712 bits (6,464 bytes). `ld1_effective_addr`,
+(`ifuse_fct_hash_bits = 9`) is 51,712 bits (6,464 bytes). It is organized
+like a cache: 128 sets x 4 ways (`ifuse_fct_ways = 4`), indexed by a hash of
+the LD1 PC, with tree-PLRU replacement (3 bits per set, 384 bits total). `ld1_effective_addr`,
 `ld2_effective_addr`, `ld1_micro_op_num`, and `ld2_micro_op_num` are kept on
 `FCT_Row` for simulator-side address bookkeeping but are not part of the
 modeled hardware row: the prediction path (`ft.cc`) computes the predicted

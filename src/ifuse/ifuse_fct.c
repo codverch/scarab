@@ -12,6 +12,7 @@
 #include "../statistics.h"
 #include "ifuse_ideal_limits.h"
 #include "ifuse.param.h"
+#include "ifuse_plru.h"
 
 /**
  * Fusion Candidate Table (FCT) runtime policy.
@@ -21,13 +22,22 @@
  * promoted by the retire-stage runtime training table. Correct predictions
  * reinforce a row and mispredictions penalize it.
  *
- * Simulator state is maintained in a large open-addressed hash table with
- * 2^IFUSE_FCT_HASH_BITS entries.
+ * The table is organized like a cache, not a CAM: 2^IFUSE_FCT_HASH_BITS rows
+ * split into IFUSE_FCT_WAYS ways, so 512 rows at the default 4 ways is 128
+ * sets of 4. A hash of the LD1 PC picks one set, and only that set's tags are
+ * compared. When a new LD1 needs a row and its set is full, tree-PLRU picks
+ * the way to evict, the same replacement the APT and ACI use.
+ *
+ * This replaced a fully associative table that exited the simulator once all
+ * rows were taken. corebench trains more than 512 distinct LD1 PCs, so it
+ * could not finish; a real table evicts instead.
  */
 
-static FCT_Row* fct_rows = NULL; // Software backing rows for the ideal FCT
-static size_t   fct_num_hash_table_rows = 0;
-static bool     fct_is_initialized = false;
+static FCT_Row*     fct_rows = NULL;  // fct_num_sets * fct_num_ways rows, set-major
+static uint8_t*     fct_plru = NULL;  // one tree-PLRU state byte per set
+static unsigned int fct_num_sets = 0;
+static unsigned int fct_num_ways = 0;
+static bool         fct_is_initialized = false;
 
 /* Modeled hardware width of confidence_score -- see the FCT_Row storage-model
  * comment in ifuse_fct.h. 10 bits gives 2x headroom over the current default
@@ -40,9 +50,8 @@ static void fct_preload_from_file(void);
 /*
  * Truncates ld1_pc_addr to IFUSE_FCT_PC_TAG_BITS for storage/comparison, the
  * same way ifuse_training_table.c's pc_tag() truncates TT tags. Only the
- * stored/compared LD1 tag shrinks; fct_get_probe_start_idx() below still
- * hashes the full PC for slot selection (simulator lookup speed only, not a
- * modeled hardware index), and ld2_pc_addr is never truncated -- see the
+ * stored/compared LD1 tag shrinks; fct_set_index() below still hashes the
+ * full PC to pick the set, and ld2_pc_addr is never truncated -- see the
  * FCT_Row storage-model comment in ifuse_fct.h for why.
  */
 static uint64_t fct_pc_tag(Addr pc) {
@@ -79,11 +88,20 @@ void fct_init(void) {
         exit(1);
     }
 
-    fct_num_hash_table_rows = 1U << IFUSE_FCT_HASH_BITS;
-    fct_rows = (FCT_Row*)calloc(fct_num_hash_table_rows, sizeof(FCT_Row));
-    if (!fct_rows) {
-        fprintf(stderr, "FCT: calloc failed for %zu ideal rows\n",
-                fct_num_hash_table_rows);
+    const unsigned int num_rows = 1U << IFUSE_FCT_HASH_BITS;
+    if ((IFUSE_FCT_WAYS != 4U && IFUSE_FCT_WAYS != 8U) ||
+        num_rows < IFUSE_FCT_WAYS) {
+        fprintf(stderr,
+                "FCT: ifuse_fct_ways must be 4 or 8 (tree-PLRU) and no larger "
+                "than 2^ifuse_fct_hash_bits\n");
+        exit(1);
+    }
+    fct_num_ways = IFUSE_FCT_WAYS;
+    fct_num_sets = num_rows / fct_num_ways;
+    fct_rows = (FCT_Row*)calloc(num_rows, sizeof(FCT_Row));
+    fct_plru = (uint8_t*)calloc(fct_num_sets, sizeof(*fct_plru));
+    if (!fct_rows || !fct_plru) {
+        fprintf(stderr, "FCT: calloc failed for %u rows\n", num_rows);
         exit(1);
     }
     fct_is_initialized = true;
@@ -92,17 +110,22 @@ void fct_init(void) {
 }
 
 /**
- * Returns the first software hash-table slot to probe for ld1_pc_addr.
- *
- * The ideal FCT is keyed by the full LD1 PC. This hash is only for simulator
- * lookup speed; it is not a modeled hardware index.
+ * Returns the set that ld1_pc_addr maps to. Same PC hash as apt_set_index().
  */
-static size_t fct_get_probe_start_idx(Addr ld1_pc_addr, size_t row_index_mask) {
+static unsigned int fct_set_index(Addr ld1_pc_addr) {
     uint64_t h = (uint64_t)ld1_pc_addr;
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccdULL;
     h ^= h >> 33;
-    return (size_t)(h & row_index_mask);
+    return (unsigned int)(h & (fct_num_sets - 1U));
+}
+
+static FCT_Row* fct_row_at(unsigned int set, unsigned int way) {
+    return &fct_rows[set * fct_num_ways + way];
+}
+
+static unsigned int fct_row_way(const FCT_Row* row) {
+    return (unsigned int)(row - fct_rows) % fct_num_ways;
 }
 
 /**
@@ -161,55 +184,36 @@ static void fct_write_row(FCT_Row* row, Addr ld1_pc_addr, Addr ld2_pc_addr,
 }
 
 /**
- * Returns the row for ld1_pc_addr.
+ * Returns the row for ld1_pc_addr, or NULL. Only ld1_pc_addr's set is
+ * searched, the way a cache compares tags within one set.
  */
 static FCT_Row* fct_lookup_row(Addr ld1_pc_addr) {
-    if (!fct_rows || fct_num_hash_table_rows == 0U) {
+    if (!fct_rows) {
         return NULL;
     }
 
     uint64_t ld1_tag = fct_pc_tag(ld1_pc_addr);
-    size_t row_index_mask = fct_num_hash_table_rows - 1U;
-    size_t row_idx = fct_get_probe_start_idx(ld1_pc_addr, row_index_mask);
-
-    for (size_t num_probes = 0; num_probes < fct_num_hash_table_rows; num_probes++) {
-        FCT_Row* row = &fct_rows[row_idx];
-        if (!row->valid) {
-            return NULL;
-        }
-        if (row->ld1_pc_addr == ld1_tag) {
+    unsigned int set = fct_set_index(ld1_pc_addr);
+    for (unsigned int way = 0; way < fct_num_ways; way++) {
+        FCT_Row* row = fct_row_at(set, way);
+        if (row->valid && row->ld1_pc_addr == ld1_tag) {
             return row;
         }
-        row_idx = (row_idx + 1U) & row_index_mask;
     }
-
     return NULL;
 }
 
 /**
- * Returns the first empty backing row on ld1_pc_addr's probe chain.
+ * Marks row as the most recently used way of ld1_pc_addr's set.
  */
-static FCT_Row* fct_find_empty_row(Addr ld1_pc_addr) {
-    if (!fct_rows || fct_num_hash_table_rows == 0U) {
-        return NULL;
-    }
-
-    size_t row_index_mask = fct_num_hash_table_rows - 1U;
-    size_t row_idx = fct_get_probe_start_idx(ld1_pc_addr, row_index_mask);
-
-    for (size_t num_probes = 0; num_probes < fct_num_hash_table_rows; num_probes++) {
-        FCT_Row* row = &fct_rows[row_idx];
-        if (!row->valid) {
-            return row;
-        }
-        row_idx = (row_idx + 1U) & row_index_mask;
-    }
-
-    return NULL;
+static void fct_touch_row(Addr ld1_pc_addr, const FCT_Row* row) {
+    ifuse_plru_touch(fct_plru, fct_set_index(ld1_pc_addr), fct_row_way(row),
+                     fct_num_ways);
 }
 
 /**
- * Returns the FCT row for ld1_pc_addr, allocating a new ideal row if needed.
+ * Returns the FCT row for ld1_pc_addr, allocating one if needed: an invalid
+ * way if the set has one, otherwise the tree-PLRU victim, which is evicted.
  */
 static FCT_Row* fct_allocate_row_for_load1_pc(Addr ld1_pc_addr) {
     FCT_Row* row = fct_lookup_row(ld1_pc_addr);
@@ -217,13 +221,16 @@ static FCT_Row* fct_allocate_row_for_load1_pc(Addr ld1_pc_addr) {
         return row;
     }
 
-    row = fct_find_empty_row(ld1_pc_addr);
-    if (!row) {
-        fprintf(stderr,
-                "FCT: ideal backing hash table exhausted; increase "
-                "ifuse_fct_hash_bits\n");
-        exit(1);
+    unsigned int set = fct_set_index(ld1_pc_addr);
+    for (unsigned int way = 0; way < fct_num_ways; way++) {
+        if (!fct_row_at(set, way)->valid) {
+            return fct_row_at(set, way);
+        }
     }
+
+    STAT_EVENT(0, FCT_EVICTIONS);
+    row = fct_row_at(set, ifuse_plru_victim(fct_plru, set, fct_num_ways));
+    memset(row, 0, sizeof(*row));
     return row;
 }
 
@@ -383,6 +390,7 @@ static void fct_preload_from_file(void) {
                       /*ld2_effective_addr=*/0, offset_delta, direction,
                       ld2_mem_size, /*ld1_micro_op_num=*/0,
                       /*ld2_micro_op_num=*/0, IFUSE_FCT_PRELOAD_CONF);
+        fct_touch_row(ld1_pc_addr, row);
         loaded_count++;
         STAT_EVENT(0, FCT_PRELOAD_INSERTS);
     }
@@ -405,7 +413,11 @@ FCT_Row* fct_lookup(Addr ld1_pc_addr) {
     if (!fct_is_initialized || ld1_pc_addr == 0) {
         return NULL;
     }
-    return fct_lookup_row(ld1_pc_addr);
+    FCT_Row* row = fct_lookup_row(ld1_pc_addr);
+    if (row) {
+        fct_touch_row(ld1_pc_addr, row);
+    }
+    return row;
 }
 
 void fct_update_confidence(Addr ld1_pc_addr, bool prediction_correct) {
@@ -479,5 +491,6 @@ Flag fct_install_runtime_candidate(Addr ld1_pc_addr, Addr ld2_pc_addr,
                   ld2_effective_addr, offset_delta, direction, ld2_mem_size,
                   ld1_micro_op_num, ld2_micro_op_num,
                   IFUSE_FCT_RUNTIME_INSERT_CONF);
+    fct_touch_row(ld1_pc_addr, row);
     return TRUE;
 }

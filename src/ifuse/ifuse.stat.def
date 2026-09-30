@@ -8,6 +8,8 @@ DEF_STAT(FCT_RUNTIME_INSERTS, COUNT, NO_RATIO)
 DEF_STAT(FCT_RUNTIME_REPLACEMENTS, COUNT, NO_RATIO)
 DEF_STAT(FCT_RUNTIME_REINFORCEMENTS, COUNT, NO_RATIO)
 DEF_STAT(FCT_RUNTIME_CONFLICTS, COUNT, NO_RATIO)
+/* A new LD1 needed a row in a full set and evicted the tree-PLRU victim. */
+DEF_STAT(FCT_EVICTIONS, COUNT, NO_RATIO)
 
 /* RLB (retired load history) capacity pressure: entries removed because they
  * aged past IFUSE_FUSION_DISTANCE vs. entries forced out early because the

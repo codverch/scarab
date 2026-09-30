@@ -32,6 +32,12 @@ DEF_PARAM(ifuse_fct_pc_tag_bits, IFUSE_FCT_PC_TAG_BITS, uns, uns, 32, )
 /* Tunable table capacities. 2^9 = 512 FCT rows.
  * APT/ACI: set-associative tables with tree-PLRU replacement. */
 DEF_PARAM(ifuse_fct_hash_bits, IFUSE_FCT_HASH_BITS, uns, uns, 9, )
+/* FCT associativity: 2^ifuse_fct_hash_bits rows in sets of this many ways
+ * (4 or 8, tree-PLRU replacement). Default 512 rows = 128 sets x 4 ways. */
+DEF_PARAM(ifuse_fct_ways, IFUSE_FCT_WAYS, uns, uns, 4, )
+/* Cycles after LD1's wake cycle before a fused LD2's dependents may wake
+ * (see ifuse_exec_pair_signal_ld2). 0 = same cycle as LD1. */
+DEF_PARAM(ifuse_ld2_wake_delay, IFUSE_LD2_WAKE_DELAY, uns, uns, 1, )
 /* 32 sets x 8 ways (was 64x4, same 256-entry total): APT eviction rate was
  * uncorrelated with occupancy (peak never exceeded 61 of 256 across 55
  * benchmark runs; correlation with eviction rate was 0.006) -- thrashing

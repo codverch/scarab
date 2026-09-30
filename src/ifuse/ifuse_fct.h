@@ -30,7 +30,8 @@
  * a 6-bit offset magnitude, a 1-bit direction, a 3-bit log2(LD2 access
  * size), a 10-bit confidence score (IFUSE_FCT_CONFIDENCE_MAX), and 1 valid
  * bit: 101 bits/row. A 512-row FCT (ifuse_fct_hash_bits = 9) costs
- * 512 * 101 = 51,712 bits = 6.3125 KiB.
+ * 512 * 101 = 51,712 bits = 6.3125 KiB, plus tree-PLRU state: 3 bits per
+ * 4-way set, 128 * 3 = 384 bits.
  *
  * ld1_effective_addr, ld2_effective_addr, ld1_micro_op_num, and
  * ld2_micro_op_num are simulator-side bookkeeping, not part of the modeled

@@ -235,26 +235,22 @@ static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
     ld2_op->state = OS_DONE;
 }
 
-/*
- * How many cycles after LOAD1's data arrives LOAD2's dependents may wake.
+/**
+ * Models the fused datapath: LOAD2 gets its data from LOAD1's memory access
+ * rather than issuing its own cache access, and its dependents may wake
+ * IFUSE_LD2_WAKE_DELAY cycles after LOAD1's data arrives.
  *
  * LOAD1 performs the single fused memory access, and that access returns both
  * LOAD1's and LOAD2's data. An ideal datapath could hand LOAD2's half to its
  * consumers in the same cycle as LOAD1's half. Real hardware probably cannot:
  * the second value has to be split off the wide access and written into a
  * separate physical register before the scheduler can broadcast its tag.
- * This constant charges one cycle for that extra step.
+ * --ifuse_ld2_wake_delay (IFUSE_LD2_WAKE_DELAY, default 1) charges cycles for
+ * that extra step.
  *
  * Example: if LOAD1's data is ready in cycle 100, LOAD1's consumers can issue
- * in cycle 100 and LOAD2's consumers in cycle 101. Setting this to 0 recovers
+ * in cycle 100 and LOAD2's consumers in cycle 101. Setting it to 0 recovers
  * the original same-cycle model.
- */
-static const Counter IFUSE_LD2_WAKE_DELAY_CYCLES = 1;
-
-/**
- * Models the fused datapath: LOAD2 gets its data from LOAD1's memory access
- * rather than issuing its own cache access. Its dependents see it as ready
- * IFUSE_LD2_WAKE_DELAY_CYCLES after LOAD1's wake cycle.
  */
 static void ifuse_exec_pair_signal_ld2(
     IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns)) {
@@ -274,7 +270,7 @@ static void ifuse_exec_pair_signal_ld2(
     // simple_wake() (map.c). Pushing LOAD2's wake_cycle back therefore
     // delays all of LOAD2's dependents: the ones woken below, and any that
     // reach map later and are woken from add_to_wake_up_lists().
-    ld2_op->wake_cycle = pair->ld1_wake_cycle + IFUSE_LD2_WAKE_DELAY_CYCLES;
+    ld2_op->wake_cycle = pair->ld1_wake_cycle + IFUSE_LD2_WAKE_DELAY;
     ld2_op->exec_cycle = pair->ld1_wake_cycle;
 
     // LOAD2's fused result is produced into the physical register reserved by
