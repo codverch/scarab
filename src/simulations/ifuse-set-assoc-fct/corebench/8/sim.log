@@ -1,0 +1,59 @@
+Scarab gitrev: 36c4b3029
+Scarab started at Wed Sep 30 14:47:41 2026
+
+Initialized Ramulator. 
+Stray memory record detected at seq. 1647: PC: 0x7faa7f974f19, PID: 7, TID: 7, Addr: 0x7faa7fa1c08d. Suppressing further messages.
+** Heartbeat:   3% -- { 1000001 } -- 0.00 KIPS (111.11 KIPS)
+** Heartbeat:   6% -- { 2000008 } -- 66.67 KIPS (83.33 KIPS)
+** Heartbeat:  10% -- { 3000011 } -- 66.67 KIPS (76.92 KIPS)
+** Heartbeat:  13% -- { 4000012 } -- 58.82 KIPS (71.43 KIPS)
+** Heartbeat:  16% -- { 5000013 } -- 76.92 KIPS (72.46 KIPS)
+** Heartbeat:  20% -- { 6000018 } -- 90.91 KIPS (75.00 KIPS)
+** Heartbeat:  23% -- { 7000019 } -- 58.82 KIPS (72.17 KIPS)
+** Heartbeat:  26% -- { 8000023 } -- 52.63 KIPS (68.97 KIPS)
+** Heartbeat:  30% -- { 9000027 } -- 62.50 KIPS (68.18 KIPS)
+** Heartbeat:  33% -- { 10000027 } -- 55.56 KIPS (66.67 KIPS)
+** Heartbeat:  36% -- { 11000027 } -- 62.50 KIPS (66.27 KIPS)
+** Heartbeat:  40% -- { 12000031 } -- 100.00 KIPS (68.18 KIPS)
+** Heartbeat:  43% -- { 13000037 } -- 66.67 KIPS (68.06 KIPS)
+** Heartbeat:  46% -- { 14000042 } -- 100.00 KIPS (69.65 KIPS)
+** Heartbeat:  50% -- { 15000045 } -- 66.67 KIPS (69.44 KIPS)
+** Heartbeat:  53% -- { 16000049 } -- 83.33 KIPS (70.18 KIPS)
+** Heartbeat:  56% -- { 17000055 } -- 90.91 KIPS (71.13 KIPS)
+** Heartbeat:  60% -- { 18000061 } -- 66.67 KIPS (70.87 KIPS)
+** Heartbeat:  63% -- { 19000068 } -- 55.56 KIPS (69.85 KIPS)
+** Heartbeat:  66% -- { 20000073 } -- 58.82 KIPS (69.20 KIPS)
+** Heartbeat:  70% -- { 21000076 } -- 58.82 KIPS (68.63 KIPS)
+** Heartbeat:  73% -- { 22000077 } -- 62.50 KIPS (68.32 KIPS)
+** Heartbeat:  76% -- { 23000079 } -- 62.50 KIPS (68.05 KIPS)
+** Heartbeat:  80% -- { 24000085 } -- 58.82 KIPS (67.61 KIPS)
+** Heartbeat:  83% -- { 25000085 } -- 66.67 KIPS (67.57 KIPS)
+** Heartbeat:  86% -- { 26000089 } -- 83.33 KIPS (68.06 KIPS)
+** Heartbeat:  90% -- { 27000092 } -- 90.91 KIPS (68.70 KIPS)
+** Heartbeat:  93% -- { 28000093 } -- 100.00 KIPS (69.48 KIPS)
+** Heartbeat:  96% -- { 29000093 } -- 111.11 KIPS (70.39 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7faa7f904040
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:11869986    time:3709370625000       -- 2.53 IPC (2.53 IPC) --  N/A  KIPS (70.92 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34131513  I=30038785  C=11869986):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34131513  I=30038785  C=11869986):  Command "python3 /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x275456) [0x5555557c9456]
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x31969e) [0x55555586d69e]
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x1e6ea3) [0x55555573aea3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x1eb69e) [0x55555573f69e]
+[38785 'Patching gap in trace by injecting a Jmp' lines removed before commit]
