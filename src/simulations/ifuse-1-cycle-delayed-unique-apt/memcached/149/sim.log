@@ -1,0 +1,58 @@
+Scarab gitrev: 749e7c037
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Wed Sep 30 16:19:31 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (50.00 KIPS)
+** Heartbeat:   6% -- { 2000008 } -- 52.63 KIPS (51.28 KIPS)
+** Heartbeat:  10% -- { 3000011 } -- 50.00 KIPS (50.85 KIPS)
+** Heartbeat:  13% -- { 4000015 } -- 58.82 KIPS (52.63 KIPS)
+** Heartbeat:  16% -- { 5000016 } -- 71.43 KIPS (55.56 KIPS)
+** Heartbeat:  20% -- { 6000021 } -- 62.50 KIPS (56.60 KIPS)
+** Heartbeat:  23% -- { 7000024 } -- 55.56 KIPS (56.45 KIPS)
+** Heartbeat:  26% -- { 8000031 } -- 55.56 KIPS (56.34 KIPS)
+** Heartbeat:  30% -- { 9000032 } -- 52.63 KIPS (55.90 KIPS)
+** Heartbeat:  33% -- { 10000033 } -- 62.50 KIPS (56.50 KIPS)
+** Heartbeat:  36% -- { 11000033 } -- 83.33 KIPS (58.20 KIPS)
+** Heartbeat:  40% -- { 12000034 } -- 58.82 KIPS (58.25 KIPS)
+** Heartbeat:  43% -- { 13000037 } -- 55.56 KIPS (58.04 KIPS)
+** Heartbeat:  46% -- { 14000041 } -- 52.63 KIPS (57.61 KIPS)
+** Heartbeat:  50% -- { 15000048 } -- 55.56 KIPS (57.47 KIPS)
+** Heartbeat:  53% -- { 16000049 } -- 55.56 KIPS (57.35 KIPS)
+** Heartbeat:  56% -- { 17000056 } -- 58.82 KIPS (57.43 KIPS)
+** Heartbeat:  60% -- { 18000056 } -- 58.82 KIPS (57.51 KIPS)
+** Heartbeat:  63% -- { 19000058 } -- 55.56 KIPS (57.40 KIPS)
+** Heartbeat:  66% -- { 20000062 } -- 58.82 KIPS (57.47 KIPS)
+** Heartbeat:  70% -- { 21000062 } -- 62.50 KIPS (57.69 KIPS)
+** Heartbeat:  73% -- { 22000066 } -- 66.67 KIPS (58.05 KIPS)
+** Heartbeat:  76% -- { 23000070 } -- 83.33 KIPS (58.82 KIPS)
+** Heartbeat:  80% -- { 24000070 } -- 100.00 KIPS (59.85 KIPS)
+** Heartbeat:  83% -- { 25000070 } -- 90.91 KIPS (60.68 KIPS)
+** Heartbeat:  86% -- { 26000072 } -- 100.00 KIPS (61.61 KIPS)
+** Heartbeat:  90% -- { 27000075 } -- 90.91 KIPS (62.36 KIPS)
+** Heartbeat:  93% -- { 28000076 } -- 71.43 KIPS (62.64 KIPS)
+** Heartbeat:  96% -- { 29000078 } -- 90.91 KIPS (63.32 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff71aca70
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:18345113    time:5732847812500       -- 1.64 IPC (1.64 IPC) --  N/A  KIPS (63.97 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=47817997  I=32440647  C=18345113):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=47817997  I=32440647  C=18345113):  Command "python3 /home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/src/scarab_current(+0x2755e6) [0x5555557c95e6]
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/src/scarab_current(+0x3198ae) [0x55555586d8ae]
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/src/scarab_current(+0x1e6eb3) [0x55555573aeb3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-unique-apt/scarab/src/scarab_current(+0x1eb6ae) [0x55555573f6ae]

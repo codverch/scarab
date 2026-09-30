@@ -1,0 +1,57 @@
+Scarab gitrev: 749e7c037
+Scarab started at Wed Sep 30 16:08:11 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (83.33 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 83.33 KIPS (83.33 KIPS)
+** Heartbeat:  10% -- { 3000008 } -- 76.92 KIPS (81.08 KIPS)
+** Heartbeat:  13% -- { 4000013 } -- 83.33 KIPS (81.63 KIPS)
+** Heartbeat:  16% -- { 5000016 } -- 83.33 KIPS (81.97 KIPS)
+** Heartbeat:  20% -- { 6000021 } -- 83.33 KIPS (82.19 KIPS)
+** Heartbeat:  23% -- { 7000026 } -- 83.33 KIPS (82.35 KIPS)
+** Heartbeat:  26% -- { 8000031 } -- 83.33 KIPS (82.47 KIPS)
+** Heartbeat:  30% -- { 9000036 } -- 83.33 KIPS (82.57 KIPS)
+** Heartbeat:  33% -- { 10000036 } -- 76.92 KIPS (81.97 KIPS)
+** Heartbeat:  36% -- { 11000037 } -- 83.33 KIPS (82.09 KIPS)
+** Heartbeat:  40% -- { 12000042 } -- 83.33 KIPS (82.19 KIPS)
+** Heartbeat:  43% -- { 13000044 } -- 83.33 KIPS (82.28 KIPS)
+** Heartbeat:  46% -- { 14000049 } -- 76.92 KIPS (81.87 KIPS)
+** Heartbeat:  50% -- { 15000053 } -- 76.92 KIPS (81.52 KIPS)
+** Heartbeat:  53% -- { 16000059 } -- 76.92 KIPS (81.22 KIPS)
+** Heartbeat:  56% -- { 17000065 } -- 83.33 KIPS (81.34 KIPS)
+** Heartbeat:  60% -- { 18000071 } -- 83.33 KIPS (81.45 KIPS)
+** Heartbeat:  63% -- { 19000072 } -- 83.33 KIPS (81.55 KIPS)
+** Heartbeat:  66% -- { 20000074 } -- 76.92 KIPS (81.30 KIPS)
+** Heartbeat:  70% -- { 21000077 } -- 83.33 KIPS (81.40 KIPS)
+** Heartbeat:  73% -- { 22000084 } -- 76.92 KIPS (81.18 KIPS)
+** Heartbeat:  76% -- { 23000091 } -- 76.92 KIPS (80.99 KIPS)
+** Heartbeat:  80% -- { 24000095 } -- 71.43 KIPS (80.54 KIPS)
+** Heartbeat:  83% -- { 25000095 } -- 76.92 KIPS (80.39 KIPS)
+** Heartbeat:  86% -- { 26000097 } -- 71.43 KIPS (80.00 KIPS)
+** Heartbeat:  90% -- { 27000098 } -- 83.33 KIPS (80.12 KIPS)
+** Heartbeat:  93% -- { 28000098 } -- 83.33 KIPS (80.23 KIPS)
+** Heartbeat:  96% -- { 29000100 } -- 71.43 KIPS (79.89 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f2641a3c043
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-unique-apt/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-unique-apt/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-unique-apt/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-unique-apt/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-unique-apt/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:15007818    time:4689943125000       -- 2.00 IPC (2.00 IPC) --  N/A  KIPS (80.43 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33560820  I=30000000  C=15007818):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33560820  I=30000000  C=15007818):  Command "python3 /home/deepmish/scarab_stage/ifuse-unique-apt/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-unique-apt/scarab/src/scarab_current(+0x2755e6) [0x5555557c95e6]
+/home/deepmish/scarab_stage/ifuse-unique-apt/scarab/src/scarab_current(+0x3198ae) [0x55555586d8ae]
+/home/deepmish/scarab_stage/ifuse-unique-apt/scarab/src/scarab_current(+0x1e6eb3) [0x55555573aeb3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-unique-apt/scarab/src/scarab_current(+0x1eb6ae) [0x55555573f6ae]

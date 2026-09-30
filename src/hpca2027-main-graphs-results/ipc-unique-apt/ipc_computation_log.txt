@@ -1,0 +1,396 @@
+====================================================================================================
+DETAILED IPC COMPUTATION LOG
+====================================================================================================
+
+
+================================================================================
+APP: bfs
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 3.251774
+
+--- I-FUSE ---
+Number of traces: 4
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 17: IPC=3.850990, Weight=0.885998, Contribution=3.411969
+  Trace 94: IPC=3.850990, Weight=0.028891, Contribution=0.111260
+  Trace 96: IPC=3.850990, Weight=0.067413, Contribution=0.259606
+  Trace 103: IPC=3.850990, Weight=0.017698, Contribution=0.068156
+Weighted Average IPC: 3.850990
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 4
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 17: IPC=3.785271, Weight=0.885998, Contribution=3.353742
+  Trace 94: IPC=3.785271, Weight=0.028891, Contribution=0.109361
+  Trace 96: IPC=3.785271, Weight=0.067413, Contribution=0.255176
+  Trace 103: IPC=3.785271, Weight=0.017698, Contribution=0.066992
+Weighted Average IPC: 3.785271
+
+--- SUMMARY FOR bfs ---
+Baseline: 3.251774
+I-Fuse         3.850990 (normalized: 1.1843)
+1-cycle-delayed I-Fuse 3.785271 (normalized: 1.1641)
+
+================================================================================
+APP: dfs
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 3.255217
+
+--- I-FUSE ---
+Number of traces: 4
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 8: IPC=3.934872, Weight=0.529412, Contribution=2.083168
+  Trace 28: IPC=3.934872, Weight=0.372549, Contribution=1.465932
+  Trace 94: IPC=3.934872, Weight=0.029412, Contribution=0.115732
+  Trace 96: IPC=3.934872, Weight=0.068627, Contribution=0.270040
+Weighted Average IPC: 3.934872
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 4
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 8: IPC=3.823176, Weight=0.529412, Contribution=2.024036
+  Trace 28: IPC=3.823176, Weight=0.372549, Contribution=1.424321
+  Trace 94: IPC=3.823176, Weight=0.029412, Contribution=0.112447
+  Trace 96: IPC=3.823176, Weight=0.068627, Contribution=0.262375
+Weighted Average IPC: 3.823176
+
+--- SUMMARY FOR dfs ---
+Baseline: 3.255217
+I-Fuse         3.934872 (normalized: 1.2088)
+1-cycle-delayed I-Fuse 3.823176 (normalized: 1.1745)
+
+================================================================================
+APP: pagerank
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 3.295305
+
+--- I-FUSE ---
+Number of traces: 5
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 91: IPC=3.916657, Weight=0.842556, Contribution=3.300003
+  Trace 94: IPC=3.916657, Weight=0.036239, Contribution=0.141936
+  Trace 97: IPC=3.916657, Weight=0.018120, Contribution=0.070968
+  Trace 99: IPC=3.916657, Weight=0.063418, Contribution=0.248387
+  Trace 107: IPC=3.916657, Weight=0.039667, Contribution=0.155362
+Weighted Average IPC: 3.916657
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 5
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 91: IPC=3.848030, Weight=0.842556, Contribution=3.242181
+  Trace 94: IPC=3.848030, Weight=0.036239, Contribution=0.139449
+  Trace 97: IPC=3.848030, Weight=0.018120, Contribution=0.069724
+  Trace 99: IPC=3.848030, Weight=0.063418, Contribution=0.244035
+  Trace 107: IPC=3.848030, Weight=0.039667, Contribution=0.152639
+Weighted Average IPC: 3.848030
+
+--- SUMMARY FOR pagerank ---
+Baseline: 3.295305
+I-Fuse         3.916657 (normalized: 1.1886)
+1-cycle-delayed I-Fuse 3.848030 (normalized: 1.1677)
+
+================================================================================
+APP: corebench
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 2.168386
+
+--- I-FUSE ---
+Number of traces: 3
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 4: IPC=2.632451, Weight=0.100000, Contribution=0.263245
+  Trace 8: IPC=2.697734, Weight=0.300000, Contribution=0.809320
+  Trace 9: IPC=2.653189, Weight=0.600000, Contribution=1.591914
+Weighted Average IPC: 2.664479
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 3
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 4: IPC=2.558465, Weight=0.100000, Contribution=0.255847
+  Trace 8: IPC=2.616431, Weight=0.300000, Contribution=0.784929
+  Trace 9: IPC=2.569580, Weight=0.600000, Contribution=1.541748
+Weighted Average IPC: 2.582524
+
+--- SUMMARY FOR corebench ---
+Baseline: 2.168386
+I-Fuse         2.664479 (normalized: 1.2288)
+1-cycle-delayed I-Fuse 2.582524 (normalized: 1.1910)
+
+================================================================================
+APP: appworld
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 1.502476
+
+--- I-FUSE ---
+Number of traces: 3
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 4: IPC=1.653798, Weight=0.100654, Contribution=0.166461
+  Trace 5: IPC=1.653798, Weight=0.100654, Contribution=0.166461
+  Trace 9: IPC=1.653798, Weight=0.798692, Contribution=1.320875
+Weighted Average IPC: 1.653798
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 3
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 4: IPC=1.630346, Weight=0.100654, Contribution=0.164101
+  Trace 5: IPC=1.630346, Weight=0.100654, Contribution=0.164101
+  Trace 9: IPC=1.630346, Weight=0.798692, Contribution=1.302144
+Weighted Average IPC: 1.630346
+
+--- SUMMARY FOR appworld ---
+Baseline: 1.502476
+I-Fuse         1.653798 (normalized: 1.1007)
+1-cycle-delayed I-Fuse 1.630346 (normalized: 1.0851)
+
+================================================================================
+APP: terminal_bench
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 1.793171
+
+--- I-FUSE ---
+Number of traces: 2
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 5: IPC=2.093285, Weight=0.588372, Contribution=1.231630
+  Trace 12: IPC=2.007078, Weight=0.411628, Contribution=0.826169
+Weighted Average IPC: 2.057800
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 2
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 5: IPC=2.044264, Weight=0.588372, Contribution=1.202788
+  Trace 12: IPC=1.970205, Weight=0.411628, Contribution=0.810991
+Weighted Average IPC: 2.013779
+
+--- SUMMARY FOR terminal_bench ---
+Baseline: 1.793171
+I-Fuse         2.057800 (normalized: 1.1476)
+1-cycle-delayed I-Fuse 2.013779 (normalized: 1.1230)
+
+================================================================================
+APP: cachebench
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 1.373049
+
+--- I-FUSE ---
+Number of traces: 1
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 0: IPC=1.580673, Weight=1.000000, Contribution=1.580673
+Weighted Average IPC: 1.580673
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 1
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 0: IPC=1.530716, Weight=1.000000, Contribution=1.530716
+Weighted Average IPC: 1.530716
+
+--- SUMMARY FOR cachebench ---
+Baseline: 1.373049
+I-Fuse         1.580673 (normalized: 1.1512)
+1-cycle-delayed I-Fuse 1.530716 (normalized: 1.1148)
+
+================================================================================
+APP: clickhouse
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 1.885365
+
+--- I-FUSE ---
+Number of traces: 1
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 17: IPC=2.316787, Weight=1.000000, Contribution=2.316787
+Weighted Average IPC: 2.316787
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 1
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 17: IPC=2.302211, Weight=1.000000, Contribution=2.302211
+Weighted Average IPC: 2.302211
+
+--- SUMMARY FOR clickhouse ---
+Baseline: 1.885365
+I-Fuse         2.316787 (normalized: 1.2288)
+1-cycle-delayed I-Fuse 2.302211 (normalized: 1.2211)
+
+================================================================================
+APP: duckdb
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 2.942192
+
+--- I-FUSE ---
+Number of traces: 2
+Total weight: 0.999814
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 5: IPC=3.068442, Weight=0.299944, Contribution=0.920361
+  Trace 6: IPC=3.068442, Weight=0.699870, Contribution=2.147510
+Weighted Average IPC: 3.068442
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 2
+Total weight: 0.999814
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 5: IPC=3.052929, Weight=0.299944, Contribution=0.915708
+  Trace 6: IPC=3.052929, Weight=0.699870, Contribution=2.136653
+Weighted Average IPC: 3.052929
+
+--- SUMMARY FOR duckdb ---
+Baseline: 2.942192
+I-Fuse         3.068442 (normalized: 1.0429)
+1-cycle-delayed I-Fuse 3.052929 (normalized: 1.0376)
+
+================================================================================
+APP: leveldb
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 1.756687
+
+--- I-FUSE ---
+Number of traces: 2
+Total weight: 0.999900
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 5: IPC=2.071141, Weight=0.599940, Contribution=1.242560
+  Trace 9: IPC=2.071141, Weight=0.399960, Contribution=0.828373
+Weighted Average IPC: 2.071141
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 2
+Total weight: 0.999900
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 5: IPC=2.033802, Weight=0.599940, Contribution=1.220159
+  Trace 9: IPC=2.033802, Weight=0.399960, Contribution=0.813439
+Weighted Average IPC: 2.033802
+
+--- SUMMARY FOR leveldb ---
+Baseline: 1.756687
+I-Fuse         2.071141 (normalized: 1.1790)
+1-cycle-delayed I-Fuse 2.033802 (normalized: 1.1577)
+
+================================================================================
+APP: memcached
+================================================================================
+
+--- BASELINE ---
+Weighted Average IPC: 1.493687
+
+--- I-FUSE ---
+Number of traces: 5
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 149: IPC=1.641462, Weight=0.200000, Contribution=0.328292
+  Trace 156: IPC=1.640635, Weight=0.200000, Contribution=0.328127
+  Trace 162: IPC=1.782498, Weight=0.200000, Contribution=0.356500
+  Trace 169: IPC=1.598735, Weight=0.200000, Contribution=0.319747
+  Trace 216: IPC=1.322862, Weight=0.200000, Contribution=0.264572
+Weighted Average IPC: 1.597238
+
+--- 1-CYCLE-DELAYED I-FUSE ---
+Number of traces: 5
+Total weight: 1.000000
+Traces (trace_id, IPC, Weight, IPC*Weight):
+  Trace 149: IPC=1.634796, Weight=0.200000, Contribution=0.326959
+  Trace 156: IPC=1.634486, Weight=0.200000, Contribution=0.326897
+  Trace 162: IPC=1.779983, Weight=0.200000, Contribution=0.355997
+  Trace 169: IPC=1.596450, Weight=0.200000, Contribution=0.319290
+  Trace 216: IPC=1.318045, Weight=0.200000, Contribution=0.263609
+Weighted Average IPC: 1.592752
+
+--- SUMMARY FOR memcached ---
+Baseline: 1.493687
+I-Fuse         1.597238 (normalized: 1.0693)
+1-cycle-delayed I-Fuse 1.592752 (normalized: 1.0663)
+
+
+====================================================================================================
+NORMALIZED VALUES (to Baseline)
+====================================================================================================
+
+bfs:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.1843
+  1-cycle-delayed I-Fuse normalized:    1.1641
+
+dfs:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.2088
+  1-cycle-delayed I-Fuse normalized:    1.1745
+
+pagerank:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.1886
+  1-cycle-delayed I-Fuse normalized:    1.1677
+
+corebench:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.2288
+  1-cycle-delayed I-Fuse normalized:    1.1910
+
+appworld:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.1007
+  1-cycle-delayed I-Fuse normalized:    1.0851
+
+terminal_bench:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.1476
+  1-cycle-delayed I-Fuse normalized:    1.1230
+
+cachebench:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.1512
+  1-cycle-delayed I-Fuse normalized:    1.1148
+
+clickhouse:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.2288
+  1-cycle-delayed I-Fuse normalized:    1.2211
+
+duckdb:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.0429
+  1-cycle-delayed I-Fuse normalized:    1.0376
+
+leveldb:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.1790
+  1-cycle-delayed I-Fuse normalized:    1.1577
+
+memcached:
+  Baseline normalized: 1.0000
+  I-Fuse normalized:    1.0693
+  1-cycle-delayed I-Fuse normalized:    1.0663
+
+====================================================================================================
+LOG FILE COMPLETE
+====================================================================================================
