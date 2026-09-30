@@ -17,20 +17,16 @@
 /**
  * Fusion Candidate Table (FCT) runtime policy.
  *
- * The FCT models a single LD2 candidate for each LD1 PC. It is populated up
- * front from an optional PGO candidate file and can also receive candidates
- * promoted by the retire-stage runtime training table. Correct predictions
- * reinforce a row and mispredictions penalize it.
+ * The FCT models a single LD2 candidate for each LD1 PC. 
+ * It receives candidates from the retire-stage runtime training table. 
+ * Correct predictions are promoted by the retire-stage runtime training table. 
+ * Mispredictions are penalized.
  *
- * The table is organized like a cache, not a CAM: 2^IFUSE_FCT_HASH_BITS rows
+ * The table is organized like a cache: 2^IFUSE_FCT_HASH_BITS rows
  * split into IFUSE_FCT_WAYS ways, so 512 rows at the default 4 ways is 128
  * sets of 4. A hash of the LD1 PC picks one set, and only that set's tags are
  * compared. When a new LD1 needs a row and its set is full, tree-PLRU picks
  * the way to evict, the same replacement the APT and ACI use.
- *
- * This replaced a fully associative table that exited the simulator once all
- * rows were taken. corebench trains more than 512 distinct LD1 PCs, so it
- * could not finish; a real table evicts instead.
  */
 
 static FCT_Row*     fct_rows = NULL;  // fct_num_sets * fct_num_ways rows, set-major
