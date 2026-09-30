@@ -181,9 +181,11 @@ static APT_Entry* apt_allocate_entry(unsigned int set) {
         way = ifuse_plru_victim(plru, set, num_ways);
         apt_clear_entry(set, way, false);
         STAT_EVENT(0, APT_EVICTIONS);
-    } else {
-        apt_note_prediction_inserted();
     }
+    // Count the new entry in both cases. An eviction already uncounted the
+    // victim in apt_clear_entry(); counting the insert only when a way was
+    // free made the live count drift low after every eviction.
+    apt_note_prediction_inserted();
 
     APT_Entry* entry = apt_entry_at(set, way);
     memset(entry, 0, sizeof(*entry));
@@ -229,6 +231,25 @@ void apt_observe_live_ld2_predictions(uns proc_id) {
     INC_STAT_EVENT(proc_id, APT_LIVE_LD2_PREDICTION_TOTAL,
                    apt_live_ld2_prediction_count);
     INC_STAT_EVENT(proc_id, APT_LIVE_LD2_PREDICTION_AVG,
+                   apt_live_ld2_prediction_count);
+}
+
+/*
+ * An in-flight fusion candidate is a valid APT entry: LD1 has been predicted to
+ * fuse and its LD2 has not yet reached rename. apt_observe_live_ld2_predictions()
+ * samples the same count once per predicted LD1, so busy stretches of code
+ * weigh more there; this samples it once per cycle, which is the average a
+ * table-sizing argument needs.
+ */
+void apt_observe_cycle(uns proc_id) {
+    if (!apt_initialized) {
+        return;
+    }
+
+    STAT_EVENT(proc_id, IFUSE_INFLIGHT_CANDIDATES_OBSERVED_CYCLES);
+    INC_STAT_EVENT(proc_id, IFUSE_INFLIGHT_CANDIDATES_TOTAL,
+                   apt_live_ld2_prediction_count);
+    INC_STAT_EVENT(proc_id, IFUSE_INFLIGHT_CANDIDATES_PER_CYCLE,
                    apt_live_ld2_prediction_count);
 }
 

@@ -1943,10 +1943,66 @@ void reg_file_consume(Op *op) {
   Procedure:
   --- write back the dst registers
 */
+/*
+ * Physical register file write-port usage.
+ *
+ * Every physical register write needs a write port in the cycle the value is
+ * written back. reg_file_produce() is often called before that cycle: an ALU
+ * op is produced when it issues, with wake_cycle = issue + latency. Counting
+ * at the call would put the write in the wrong cycle, so we count it at
+ * op->wake_cycle instead, in a ring of per-cycle counters, and
+ * reg_file_observe_cycle() reads out one slot per cycle. A fused LD2 is
+ * counted too: it writes its own register at LD1's wake cycle plus the LD2
+ * wake delay.
+ *
+ * The ring only has to reach as far ahead as the longest execute latency,
+ * since loads are produced when their data returns. A write further out than
+ * the ring is counted in PRF_WRITES_BEYOND_RING rather than silently dropped,
+ * so a nonzero value means the ring is too small.
+ */
+#define PRF_WRITE_RING_SIZE 1024
+static uns prf_write_ring[MAX_NUM_PROCS][REG_FILE_REG_TYPE_NUM][PRF_WRITE_RING_SIZE];
+
+static void reg_file_count_writes(Op *op) {
+  Counter write_cycle = MAX2(op->wake_cycle, cycle_count);
+  if (write_cycle - cycle_count >= PRF_WRITE_RING_SIZE) {
+    STAT_EVENT(op->proc_id, PRF_WRITES_BEYOND_RING);
+    return;
+  }
+
+  for (uns ii = 0; ii < op->inst_info->table_info.num_dest_regs; ++ii) {
+    int reg_type = reg_file_get_reg_type(op->dst_reg_id[ii][REG_TABLE_TYPE_ARCHITECTURAL]);
+    if (reg_type != REG_FILE_REG_TYPE_OTHER)
+      prf_write_ring[op->proc_id][reg_type][write_cycle % PRF_WRITE_RING_SIZE]++;
+  }
+}
+
+/*
+  Called by:
+  --- cmp_model.c -> once per core per cycle, after all pipeline stages
+  Procedure:
+  --- record how many write ports each register file used this cycle
+*/
+void reg_file_observe_cycle(uns proc_id) {
+  STAT_EVENT(proc_id, PRF_WRITE_OBSERVED_CYCLES);
+  for (uns reg_type = 0; reg_type < REG_FILE_REG_TYPE_NUM; ++reg_type) {
+    uns *slot = &prf_write_ring[proc_id][reg_type][cycle_count % PRF_WRITE_RING_SIZE];
+    uns writes = *slot;
+    *slot = 0;
+
+    // GP and vector stats are laid out side by side, so reg_type picks the one.
+    INC_STAT_EVENT(proc_id, PRF_WRITES_GP + reg_type, writes);
+    INC_STAT_EVENT(proc_id, PRF_WRITE_PORTS_PER_CYCLE_GP + reg_type, writes);
+    STAT_EVENT(proc_id, (reg_type == REG_FILE_REG_TYPE_GENERAL_PURPOSE ? PRF_WRITE_PORTS_GP_0 : PRF_WRITE_PORTS_VEC_0) +
+                            MIN2(writes, 8));
+  }
+}
+
 void reg_file_produce(Op *op) {
   ASSERT(map_data->proc_id,
          REG_RENAMING_SCHEME >= REG_RENAMING_SCHEME_INFINITE && REG_RENAMING_SCHEME < REG_RENAMING_SCHEME_NUM);
   reg_renaming_scheme_func_table[REG_RENAMING_SCHEME].produce(op);
+  reg_file_count_writes(op);
 }
 
 /*

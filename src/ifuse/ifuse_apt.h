@@ -127,6 +127,7 @@ bool apt_take_ld2_physical_reg_id(Addr ld2_pc_addr,
  * is APT_LIVE_LD2_PREDICTION_PEAK (use this to size a finite APT).
  */
 void apt_observe_live_ld2_predictions(uns proc_id);
+void apt_observe_cycle(uns proc_id);
 
 /**
  * Removes entries whose LD2 did not arrive within IFUSE_FUSION_DISTANCE.

@@ -218,6 +218,7 @@ void reg_file_rename(Op *op);                 // alloc destination registers for
 Flag reg_file_issue(Op *op);                  // check the op before being issued into the FU
 void reg_file_consume(Op *op);                // consume the src registers
 void reg_file_produce(Op *op);                // write back the dst registers
+void reg_file_observe_cycle(uns proc_id);     // sample PRF write-port usage for this cycle
 void reg_file_recover(Op *op);                // flush registers of misprediction operands
 void reg_file_recover_ifuse(Op *op);          // flush younger operands after an IFuse LOAD2 failure
 void reg_file_precommit(Op *op);              // update the register metadata when an op is non-spec

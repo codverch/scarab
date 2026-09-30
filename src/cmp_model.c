@@ -58,6 +58,7 @@
 #include "freq.h"
 #include "ft.h"
 #include "idq_stage.h"
+#include "ifuse/ifuse_apt.h"
 #include "ifuse/ifuse_recovery.h"
 #include "ifuse/ifuse_train_retire.h"
 #include "issue_queue.h"
@@ -270,6 +271,10 @@ void cmp_cores(void) {
       update_eip();
 
       cmp_measure_chip_util();
+
+      // Per-cycle occupancy samples, taken after every stage has run.
+      reg_file_observe_cycle(proc_id);
+      apt_observe_cycle(proc_id);
     }
   }
 }
