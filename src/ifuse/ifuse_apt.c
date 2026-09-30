@@ -21,8 +21,11 @@
  * LD1 inserts a live prediction keyed by LD2 PC; LD2 probes the set selected
  * by hash(LD2 PC) and claims one unmatched entry with a matching LD2 PC.
  *
- * Multiple dynamic LD1s may wait for the same LD2 PC (up to num_ways in the
- * set). IFUSE_APT_MATCH_POLICY chooses first- or most-recent-inserted.
+ * With IFUSE_APT_UNIQUE_LD2 (default), a new LD1 prediction overwrites any
+ * unmatched entry already waiting for the same LD2 PC, so a lookup hits at
+ * most one way and needs no age comparison, like a normal cache. Without it,
+ * multiple dynamic LD1s may wait for the same LD2 PC (up to num_ways in the
+ * set) and IFUSE_APT_MATCH_POLICY chooses first- or most-recent-inserted.
  *
  * On insert into a full set, tree-PLRU selects the victim way to replace.
  */
@@ -287,6 +290,15 @@ APT_Entry* apt_insert_entry(Addr ld1_pc_addr,
     }
 
     unsigned int set = apt_set_index(ld2_pc_addr);
+    if (IFUSE_APT_UNIQUE_LD2) {
+        // Clearing the older entry drops its ACI prediction and frees its
+        // reserved LD2 register, exactly like a PLRU eviction.
+        APT_Entry* older = apt_find_matching_entry(set, ld2_pc_addr);
+        if (older) {
+            apt_clear_entry(set, apt_entry_way(older), false);
+            STAT_EVENT(0, APT_SAME_LD2_OVERWRITES);
+        }
+    }
     APT_Entry* entry = apt_allocate_entry(set);
 
     entry->ld2_pc_addr                      = ld2_pc_addr;
@@ -340,6 +352,14 @@ bool apt_reopen_matched_entry(Addr ld2_pc_addr,
     APT_Entry* entry =
         apt_find_matched_entry(set, ld2_pc_addr, ld1_micro_op_num);
     if (!entry) {
+        return false;
+    }
+
+    // A newer LD1 already waits for this LD2 PC. Keep it, not the reopened
+    // older claim, so the LD2 PC stays unique among unmatched entries.
+    if (IFUSE_APT_UNIQUE_LD2 && apt_find_matching_entry(set, ld2_pc_addr)) {
+        apt_clear_entry(set, apt_entry_way(entry), false);
+        STAT_EVENT(0, APT_SAME_LD2_OVERWRITES);
         return false;
     }
 

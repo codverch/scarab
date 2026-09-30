@@ -4,6 +4,11 @@ DEF_PARAM(ifuse_fusion_distance, IFUSE_FUSION_DISTANCE, uns, uns, 512, )
  * micro-op in it. 128 entries = 1.71875 KiB at 110 bits/entry. */
 DEF_PARAM(ifuse_rlb_capacity, IFUSE_RLB_CAPACITY, uns, uns, 128, )
 DEF_PARAM(ifuse_apt_match_policy, IFUSE_APT_MATCH_POLICY, uns, uns, 1, )
+/* 1: a new LD1 prediction overwrites any unmatched APT entry waiting for the
+ * same LD2 PC, so each LD2 PC has at most one waiting entry and lookup needs
+ * no age ordering (ifuse_apt_match_policy then has nothing to choose between).
+ * 0: every dynamic LD1 gets its own entry and the match policy picks one. */
+DEF_PARAM(ifuse_apt_unique_ld2, IFUSE_APT_UNIQUE_LD2, Flag, Flag, TRUE, )
 
 /* Retire-stage runtime discovery. 32 sets x 4 ways = 128 TT entries. */
 DEF_PARAM(ifuse_runtime_training_enabled, IFUSE_RUNTIME_TRAINING_ENABLED, Flag, Flag, TRUE, )
