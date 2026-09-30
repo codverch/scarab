@@ -23,6 +23,9 @@ DEF_STAT(FCT_EVICTIONS, COUNT, NO_RATIO)
  * are crowding into a few sets (raise ifuse_rlb_ways). */
 DEF_STAT(RLB_AGE_EVICTIONS, COUNT, NO_RATIO)
 DEF_STAT(RLB_CAPACITY_EVICTIONS, COUNT, NO_RATIO)
+/* Matches where the partial tag agreed but the full line address did not:
+ * a load paired with an unrelated older load. Simulator-only check. */
+DEF_STAT(RLB_TAG_ALIAS_MATCHES, COUNT, NO_RATIO)
 
 /* Retire-stage runtime candidate discovery and bounded training table. */
 DEF_STAT(IFUSE_TRAINING_PAIRS_DISCOVERED, COUNT, NO_RATIO)

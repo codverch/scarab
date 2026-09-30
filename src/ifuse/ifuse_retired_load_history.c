@@ -105,6 +105,7 @@ typedef struct HistoryRow {
     uint8_t  offset;        // byte offset within the line
     Counter  micro_op_num;
     bool     valid;
+    uint64_t full_line;     // simulator only: detects partial-tag aliasing
 } HistoryRow;
 
 static HistoryRow* rows;  // all ways of set 0, then all ways of set 1, ...
@@ -264,6 +265,7 @@ void retired_load_history_insert(Addr pc, Addr effective_addr,
     row->offset = (uint8_t)(effective_addr & (HISTORY_LINE_SIZE - 1U));
     row->micro_op_num = micro_op_num;
     row->valid = true;
+    row->full_line = line_addr(effective_addr);
 }
 
 /* Looks for a live entry in the same line as effective_addr. On a hit, fills
@@ -293,6 +295,8 @@ bool retired_load_history_take_match(Addr effective_addr,
                 (effective_addr & ~(Addr)(HISTORY_LINE_SIZE - 1U)) |
                 row->offset;
             match->micro_op_num = row->micro_op_num;
+            if (row->full_line != line_addr(effective_addr))
+                STAT_EVENT(0, RLB_TAG_ALIAS_MATCHES);
             row->valid = false;
             return true;
         }
