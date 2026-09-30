@@ -1,0 +1,58 @@
+Scarab gitrev: 36c4b3029
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Wed Sep 30 14:53:12 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000001 } -- 0.00 KIPS (55.56 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 62.50 KIPS (58.82 KIPS)
+** Heartbeat:  10% -- { 3000005 } -- 76.92 KIPS (63.83 KIPS)
+** Heartbeat:  13% -- { 4000005 } -- 90.91 KIPS (68.97 KIPS)
+** Heartbeat:  16% -- { 5000005 } -- 100.00 KIPS (73.53 KIPS)
+** Heartbeat:  20% -- { 6000008 } -- 111.11 KIPS (77.92 KIPS)
+** Heartbeat:  23% -- { 7000013 } -- 100.00 KIPS (80.46 KIPS)
+** Heartbeat:  26% -- { 8000013 } -- 90.91 KIPS (81.63 KIPS)
+** Heartbeat:  30% -- { 9000016 } -- 90.91 KIPS (82.57 KIPS)
+** Heartbeat:  33% -- { 10000016 } -- 100.00 KIPS (84.03 KIPS)
+** Heartbeat:  36% -- { 11000022 } -- 125.00 KIPS (86.61 KIPS)
+** Heartbeat:  40% -- { 12000024 } -- 90.91 KIPS (86.96 KIPS)
+** Heartbeat:  43% -- { 13000026 } -- 100.00 KIPS (87.84 KIPS)
+** Heartbeat:  46% -- { 14000027 } -- 125.00 KIPS (89.74 KIPS)
+** Heartbeat:  50% -- { 15000027 } -- 125.00 KIPS (91.46 KIPS)
+** Heartbeat:  53% -- { 16000028 } -- 125.00 KIPS (93.02 KIPS)
+** Heartbeat:  56% -- { 17000031 } -- 111.11 KIPS (93.92 KIPS)
+** Heartbeat:  60% -- { 18000031 } -- 90.91 KIPS (93.75 KIPS)
+** Heartbeat:  63% -- { 19000033 } -- 142.86 KIPS (95.48 KIPS)
+** Heartbeat:  66% -- { 20000036 } -- 142.86 KIPS (97.09 KIPS)
+** Heartbeat:  70% -- { 21000041 } -- 142.86 KIPS (98.59 KIPS)
+** Heartbeat:  73% -- { 22000041 } -- 125.00 KIPS (99.55 KIPS)
+** Heartbeat:  76% -- { 23000044 } -- 142.86 KIPS (100.88 KIPS)
+** Heartbeat:  80% -- { 24000044 } -- 142.86 KIPS (102.13 KIPS)
+** Heartbeat:  83% -- { 25000049 } -- 142.86 KIPS (103.31 KIPS)
+** Heartbeat:  86% -- { 26000049 } -- 142.86 KIPS (104.42 KIPS)
+** Heartbeat:  90% -- { 27000053 } -- 142.86 KIPS (105.47 KIPS)
+** Heartbeat:  93% -- { 28000055 } -- 142.86 KIPS (106.46 KIPS)
+** Heartbeat:  96% -- { 29000060 } -- 111.11 KIPS (106.62 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff72fe49e
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed-apt-newest/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:22621737    time:7069292812500       -- 1.33 IPC (1.33 IPC) --  N/A  KIPS (106.76 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=50150064  I=33169591  C=22621737):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=50150064  I=33169591  C=22621737):  Command "python3 /home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x275456) [0x5555557c9456]
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x31969e) [0x55555586d69e]
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x1e6ea3) [0x55555573aea3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-set-assoc-fct/scarab/src/scarab_current(+0x1eb69e) [0x55555573f69e]
