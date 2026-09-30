@@ -1,0 +1,57 @@
+Scarab gitrev: a4196d2e7
+Scarab started at Wed Sep 30 02:48:40 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000004 } -- 0.00 KIPS (76.92 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 76.92 KIPS (76.92 KIPS)
+** Heartbeat:  10% -- { 3000005 } -- 83.33 KIPS (78.95 KIPS)
+** Heartbeat:  13% -- { 4000005 } -- 90.91 KIPS (81.63 KIPS)
+** Heartbeat:  16% -- { 5000008 } -- 90.91 KIPS (83.33 KIPS)
+** Heartbeat:  20% -- { 6000013 } -- 142.86 KIPS (89.55 KIPS)
+** Heartbeat:  23% -- { 7000018 } -- 142.86 KIPS (94.59 KIPS)
+** Heartbeat:  26% -- { 8000023 } -- 83.33 KIPS (93.02 KIPS)
+** Heartbeat:  30% -- { 9000028 } -- 90.91 KIPS (92.78 KIPS)
+** Heartbeat:  33% -- { 10000030 } -- 142.86 KIPS (96.15 KIPS)
+** Heartbeat:  36% -- { 11000030 } -- 125.00 KIPS (98.21 KIPS)
+** Heartbeat:  40% -- { 12000036 } -- 100.00 KIPS (98.36 KIPS)
+** Heartbeat:  43% -- { 13000041 } -- 142.86 KIPS (100.78 KIPS)
+** Heartbeat:  46% -- { 14000046 } -- 142.86 KIPS (102.94 KIPS)
+** Heartbeat:  50% -- { 15000053 } -- 111.11 KIPS (103.45 KIPS)
+** Heartbeat:  53% -- { 16000056 } -- 142.86 KIPS (105.26 KIPS)
+** Heartbeat:  56% -- { 17000059 } -- 142.86 KIPS (106.92 KIPS)
+** Heartbeat:  60% -- { 18000059 } -- 111.11 KIPS (107.14 KIPS)
+** Heartbeat:  63% -- { 19000060 } -- 83.33 KIPS (105.56 KIPS)
+** Heartbeat:  66% -- { 20000061 } -- 83.33 KIPS (104.17 KIPS)
+** Heartbeat:  70% -- { 21000065 } -- 111.11 KIPS (104.48 KIPS)
+** Heartbeat:  73% -- { 22000068 } -- 90.91 KIPS (103.77 KIPS)
+** Heartbeat:  76% -- { 23000070 } -- 83.33 KIPS (102.68 KIPS)
+** Heartbeat:  80% -- { 24000074 } -- 76.92 KIPS (101.27 KIPS)
+** Heartbeat:  83% -- { 25000079 } -- 83.33 KIPS (100.40 KIPS)
+** Heartbeat:  86% -- { 26000081 } -- 76.92 KIPS (99.24 KIPS)
+** Heartbeat:  90% -- { 27000086 } -- 90.91 KIPS (98.90 KIPS)
+** Heartbeat:  93% -- { 28000093 } -- 83.33 KIPS (98.25 KIPS)
+** Heartbeat:  96% -- { 29000094 } -- 83.33 KIPS (97.64 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f2644df342d
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/mcpat', '/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:14928447    time:4665139687500       -- 2.01 IPC (2.01 IPC) --  N/A  KIPS (96.77 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33566253  I=30000000  C=14928447):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33566253  I=30000000  C=14928447):  Command "python3 /home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/src/scarab_current(+0x2741a6) [0x5555557c81a6]
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/src/scarab_current(+0x31782e) [0x55555586b82e]
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/src/scarab_current(+0x1e5ec3) [0x555555739ec3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-1-cycle-delayed/scarab/src/scarab_current(+0x1ea6be) [0x55555573e6be]
