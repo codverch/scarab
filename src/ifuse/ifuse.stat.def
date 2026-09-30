@@ -11,11 +11,16 @@ DEF_STAT(FCT_RUNTIME_CONFLICTS, COUNT, NO_RATIO)
 /* A new LD1 needed a row in a full set and evicted the tree-PLRU victim. */
 DEF_STAT(FCT_EVICTIONS, COUNT, NO_RATIO)
 
-/* RLB (retired load history) capacity pressure: entries removed because they
- * aged past IFUSE_FUSION_DISTANCE vs. entries forced out early because the
- * buffer was full despite still being inside the distance window. A rising
- * share of CAPACITY_EVICTIONS relative to AGE_EVICTIONS means
- * ifuse_rlb_capacity is too small for the workload's load density. */
+/* Why entries leave the RLB (retired load buffer), other than by matching.
+ *
+ * AGE: the entry got older than IFUSE_FUSION_DISTANCE. It is counted the next
+ * time its set is accessed, so entries in sets that are never touched again
+ * are missed.
+ *
+ * CAPACITY: the entry was still young enough to fuse, but its set was full
+ * and it was the oldest. This is lost opportunity. If CAPACITY is large
+ * relative to AGE, the RLB is too small (raise ifuse_rlb_capacity) or loads
+ * are crowding into a few sets (raise ifuse_rlb_ways). */
 DEF_STAT(RLB_AGE_EVICTIONS, COUNT, NO_RATIO)
 DEF_STAT(RLB_CAPACITY_EVICTIONS, COUNT, NO_RATIO)
 

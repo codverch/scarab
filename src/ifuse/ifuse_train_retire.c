@@ -51,5 +51,5 @@ void ifuse_train_retired_op(Op* op) {
     }
 
     retired_load_history_insert(op->inst_info->addr, op->oracle_info.va,
-                                op->oracle_info.mem_size, op->op_num);
+                                op->op_num);
 }

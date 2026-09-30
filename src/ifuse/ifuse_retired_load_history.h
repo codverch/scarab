@@ -5,15 +5,16 @@
 
 #include "globals/global_types.h"
 
+/* What a match hands back about the older load (LD1). pc holds only the low
+ * bits the RLB stores; see ifuse_retired_load_history.c. */
 typedef struct RetiredLoadHistoryEntry {
     Addr    pc;
     Addr    effective_addr;
-    uns     mem_size;
     Counter micro_op_num;
 } RetiredLoadHistoryEntry;
 
 void retired_load_history_init(void);
-void retired_load_history_insert(Addr pc, Addr effective_addr, uns mem_size,
+void retired_load_history_insert(Addr pc, Addr effective_addr,
                                  Counter micro_op_num);
 bool retired_load_history_take_match(Addr effective_addr,
                                      Counter micro_op_num,

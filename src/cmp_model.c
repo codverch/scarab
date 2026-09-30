@@ -573,6 +573,11 @@ void cmp_warmup(Op* op) {
    * therefore their architecturally correct state at the timing boundary.
    */
   op->ifuse_load_role = NOT_FUSION_CANDIDATE;
+  /* The reusable warmup Op never passes through op_pool_setup_op(), so it has
+   * no op_num of its own. The retired load buffer measures fusion distance in
+   * op_num, so give it the same count the timing model would: sim.c bumps
+   * op_count once per micro-op before calling us. */
+  op->op_num = op_count[op->proc_id];
   ifuse_train_retired_op(op);
 }
 

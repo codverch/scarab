@@ -45,10 +45,9 @@ static void fct_preload_from_file(void);
 
 /*
  * Truncates ld1_pc_addr to IFUSE_FCT_PC_TAG_BITS for storage/comparison, the
- * same way ifuse_training_table.c's pc_tag() truncates TT tags. Only the
- * stored/compared LD1 tag shrinks; fct_set_index() below still hashes the
- * full PC to pick the set, and ld2_pc_addr is never truncated -- see the
- * FCT_Row storage-model comment in ifuse_fct.h for why.
+ * same way ifuse_training_table.c's pc_tag() truncates TT tags.
+ * fct_set_index() below hashes the same truncated bits. ld2_pc_addr is never
+ * truncated -- see the FCT_Row storage-model comment in ifuse_fct.h for why.
  */
 static uint64_t fct_pc_tag(Addr pc) {
     unsigned int bits = IFUSE_FCT_PC_TAG_BITS;
@@ -106,10 +105,13 @@ void fct_init(void) {
 }
 
 /**
- * Returns the set that ld1_pc_addr maps to. Same PC hash as apt_set_index().
+ * Returns the set that ld1_pc_addr maps to. Same PC hash as apt_set_index(),
+ * but over only the tag bits: runtime-trained rows arrive with an LD1 PC the
+ * retired load buffer has already cut to those bits, and a row must land in
+ * the same set whether it comes from there or from a full frontend PC.
  */
 static unsigned int fct_set_index(Addr ld1_pc_addr) {
-    uint64_t h = (uint64_t)ld1_pc_addr;
+    uint64_t h = fct_pc_tag(ld1_pc_addr);
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccdULL;
     h ^= h >> 33;

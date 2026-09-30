@@ -1,8 +1,16 @@
 DEF_PARAM(ifuse_fusion_distance, IFUSE_FUSION_DISTANCE, uns, uns, 512, )
-/* RLB physical capacity, decoupled from ifuse_fusion_distance: entries only
- * need to cover the loads live within the distance window, not every
- * micro-op in it. 128 entries = 1.71875 KiB at 110 bits/entry. */
+/* RLB entries. This is separate from ifuse_fusion_distance because the RLB
+ * only holds loads, not every micro-op in the window. 128 entries * 77 bits
+ * = 1.20 KiB. */
 DEF_PARAM(ifuse_rlb_capacity, IFUSE_RLB_CAPACITY, uns, uns, 128, )
+/* Ways per RLB set. The set is picked by hashing the load's cache block
+ * address. 128 entries / 8 ways = 16 sets. capacity / ways must be a power of
+ * two. Set ways equal to capacity for a fully associative RLB. */
+DEF_PARAM(ifuse_rlb_ways, IFUSE_RLB_WAYS, uns, uns, 8, )
+/* Low line-address bits the RLB compares, index bits included: the 4 index
+ * bits come free from the set, the other 28 are stored as the tag. 32 matches
+ * the partial line tag in Helios (MICRO 2022). */
+DEF_PARAM(ifuse_rlb_line_tag_bits, IFUSE_RLB_LINE_TAG_BITS, uns, uns, 32, )
 DEF_PARAM(ifuse_apt_match_policy, IFUSE_APT_MATCH_POLICY, uns, uns, 1, )
 /* 1: a new LD1 prediction overwrites any unmatched APT entry waiting for the
  * same LD2 PC, so each LD2 PC has at most one waiting entry and lookup needs
