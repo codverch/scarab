@@ -75,6 +75,13 @@
 #define PRINT_RETIRED_UOP(proc_id, args...) _DEBUG_LEAN(proc_id, DEBUG_RETIRED_UOPS, ##args)
 
 #define DEBUG_NODE_WIDTH ISSUE_WIDTH
+
+/* HELIOS: a correctly fused load tail has left the pipeline once its fused micro-op is validated (paper
+ * IV-C, Cases 5/6): it holds no ROB, RS, or LQ entry and no retire slot. It stays on the node list only so
+ * retire order and the extended commit group still see it, like a macro-fused op. */
+static inline Flag helios_frees_backend(Op* op) {
+  return HELIOS_DO_FUSION && op->fused && op->inst_info->table_info.mem_type == MEM_LD;
+}
 /**************************************************************************************/
 /* Global Variables */
 
@@ -229,7 +236,7 @@ void flush_window() {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, op->off_path || helios_flush_squash_allowed());
-      if (!op->macro_fused)
+      if (!op->macro_fused && !helios_frees_backend(op))
         flush_ops++;
       ASSERT(node->proc_id, op->off_path || helios_flush_squash_allowed());
       ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
@@ -263,7 +270,7 @@ void flush_window() {
       // so this stays a no-op there.)
       op->recovery_scheduled = FALSE;
       DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
-      if (!op->macro_fused)
+      if (!op->macro_fused && !helios_frees_backend(op))
         keep_ops++;
       last = &op->next_node;
       node->node_tail = op;
@@ -308,7 +315,7 @@ void debug_print_node_table() {
     ASSERT(node->proc_id, temp[slot_num] == NULL);
     temp[slot_num] = op;
     printed_all++;
-    if (!op->macro_fused)
+    if (!op->macro_fused && !helios_frees_backend(op))
       printed_non_fused++;
     empty = FALSE;
 
@@ -379,8 +386,10 @@ void node_fill_rob(Stage_Data* src_sd) {
   // Go through all the ops in the issue buffer and stick them into the Node Table.
   // We will stick them into the RS later
   for (ii = 0; ii < src_sd->max_op_count; ii++) {
-    /* if node table is full, stall */
-    if (is_node_table_full()) {
+    Op* op = src_sd->ops[ii];
+
+    /* if node table is full, stall (a fused load tail needs no ROB entry) */
+    if (is_node_table_full() && !(op && helios_frees_backend(op))) {
       collect_node_table_full_stats(node->node_head);
       rob_block_issue_reason = ROB_BLOCK_ISSUE_FULL;
       return;
@@ -388,11 +397,11 @@ void node_fill_rob(Stage_Data* src_sd) {
     rob_block_issue_reason = ROB_BLOCK_ISSUE_NONE;
 
     // If it is not full, issue the next op
-    Op* op = src_sd->ops[ii];
     if (!op)
       continue;
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+        !helios_frees_backend(op)) {
       if (!lsq_available(op->inst_info->table_info.mem_type)) {
         DEBUG(node->proc_id, "Node fill stalled: LSQ full for op_num:%s mem_type:%s src_sd_op_count:%d node_count:%d\n",
               unsstr64(op->op_num), op->inst_info->table_info.mem_type == MEM_LD ? "LD" : "ST", src_sd->op_count,
@@ -434,7 +443,7 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     // Jump uop after CMP or TEST will be fused into one uop
     node_fuse_op(op);
-    if (!op->macro_fused)
+    if (!op->macro_fused && !helios_frees_backend(op))
       node->node_count++;
 
     ASSERTM(node->proc_id, node->node_count <= NODE_TABLE_SIZE,
@@ -503,7 +512,8 @@ void node_retire() {
 
     /**op is ready to retire**/
     ASSERTM(node->proc_id, op->state != OS_TENTATIVE, "op_num: %llu\n", op->op_num);
-    ret_count++;
+    if (!helios_frees_backend(op))
+      ret_count++;
     DEBUG(node->proc_id, "Retiring op:%llu\n", op->op_num);
 
     // This op is confirmed to be retiring. Update the UCH, and train the FP
@@ -606,12 +616,14 @@ void node_retire() {
 
     node_precommit_retire(op);
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    Flag no_backend = helios_frees_backend(op);
+    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+        !no_backend) {
       lsq_commit(op);
     }
 
     Op* next_retired = op->next_node;
-    Flag macro_fused_saved = op->macro_fused;
+    Flag macro_fused_saved = op->macro_fused || no_backend;
 
     if (model->op_retired_hook)
       model->op_retired_hook(op);
@@ -675,7 +687,7 @@ Flag op_not_ready_for_retire(Op* op) {
 Flag is_node_table_empty() {
   if (node->node_count == 0) {
     if (node->node_head != NULL) {
-      ASSERT(node->proc_id, node->node_head->macro_fused);
+      ASSERT(node->proc_id, node->node_head->macro_fused || helios_frees_backend(node->node_head));
       return FALSE;
     }
 
@@ -773,7 +785,9 @@ void node_precommit_update(void) {
     if (op->precommitted)
       continue;
 
-    precommit_count++;
+    // A fused load tail uses no retire slot, so it must not use a precommit slot either.
+    if (!helios_frees_backend(op))
+      precommit_count++;
     node->node_precommit = op;
     op->precommitted = TRUE;
     op->precommit_cycle = cycle_count;
