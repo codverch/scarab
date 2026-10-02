@@ -709,19 +709,20 @@ void add_to_wake_up_lists(Op* op, void (*wake_action)(Op*, Op*, uns)) {
 }
 
 /**************************************************************************************/
-/* helios_wire_fused_reg_src: wire one extra REG_DATA_DEP source onto an already-mapped fused head.
+/* helios_wire_fused_src: wire one extra REG_DATA_DEP or MEM_DATA_DEP source onto an already-mapped fused head.
  * Mirrors the per-source body of add_to_wake_up_lists. Used by heliosAddFusionDep to make the fused
  * single access wait for the TAIL's source operands too (paper NCS_Ready), not just the head's. The
  * producer may be YOUNGER than the head (a catalyst), so op_sources_add_fused is used (the wake-up
  * machinery keys on unique_num, not op_num; checkDeadlock guarantees no self-wait). */
 
-Flag helios_wire_fused_reg_src(Op* consumer, Op* producer) {
+Flag helios_wire_fused_src(Op* consumer, Op* producer, Dep_Type type) {
   uns ii;
   ASSERT(map_data->proc_id, consumer && producer);
+  ASSERT(map_data->proc_id, type == REG_DATA_DEP || type == MEM_DATA_DEP);
 
-  /* honor the model's reg-dep policy: if reg deps aren't modeled, the head doesn't wait on its own
-   * reg sources either, so it must not wait on the tail's. */
-  if (!OBEY_REG_DEP)
+  /* honor the model's dep policy: if a dep kind isn't modeled, the head doesn't wait on its own
+   * sources of that kind either, so it must not wait on the tail's. */
+  if ((type == REG_DATA_DEP && !OBEY_REG_DEP) || (type == MEM_DATA_DEP && !MEM_OBEY_STORE_DEP))
     return FALSE;
 
   if (!producer->op_pool_valid || producer->proc_id != consumer->proc_id)
@@ -733,18 +734,18 @@ Flag helios_wire_fused_reg_src(Op* consumer, Op* producer) {
   if (producer->op_num >= consumer->op_num)
     return FALSE;
 
-  /* dedup: if the producer is already a REG_DATA_DEP source of the head (SBR pairs share the base
-   * register), the head already waits on it -- nothing to add. */
+  /* dedup: if the producer is already a source of this kind (SBR pairs share the base register, or
+   * both nucleii read the same store), the head already waits on it -- nothing to add. */
   for (ii = 0; ii < consumer->num_srcs; ii++) {
-    if (consumer->src_info[ii].type == REG_DATA_DEP && consumer->src_info[ii].op == producer &&
+    if (consumer->src_info[ii].type == type && consumer->src_info[ii].op == producer &&
         consumer->src_info[ii].unique_num == producer->unique_num)
       return FALSE;
   }
 
-  uns bit = op_sources_add(consumer, REG_DATA_DEP, producer, producer->op_num, producer->unique_num);
+  uns bit = op_sources_add(consumer, type, producer, producer->op_num, producer->unique_num);
 
   /* producer already produced -> source is immediately satisfied. */
-  if (producer->wake_up_signaled[REG_DATA_DEP]) {
+  if (producer->wake_up_signaled[type]) {
     op_sources_clear_not_rdy(consumer, bit);
     return FALSE;
   }
@@ -760,7 +761,7 @@ Flag helios_wire_fused_reg_src(Op* consumer, Op* producer) {
 
   wake->op = consumer;
   wake->unique_num = consumer->unique_num;
-  wake->dep_type = REG_DATA_DEP;
+  wake->dep_type = type;
   wake->rdy_bit = bit;
   wake->next = NULL;
 

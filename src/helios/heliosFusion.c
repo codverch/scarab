@@ -17,6 +17,8 @@
 #include "statistics.h" 
 
 #include "general.param.h"
+#include "core.param.h"              // ROB / LQ / SQ sizes (extended commit group capacity check)
+#include "globals/assert.h"
 #include "isa/isa_macros.h"
 #include "globals/global_vars.h"  // cycle_count (head-driven tail completion timing)
 #include "map.h"                   // wake_up_ops (tail self-produces + wakes its consumers)
@@ -58,6 +60,15 @@ static uint64_t storeTrackEvictedUpTo = 0;
  * @return void
  */
 void heliosFusionInit(void) {
+    // An extended commit group spans at most HELIOS_FUSION_WINDOW + 1 ops starting at the ROB head. If
+    // the ROB, LQ, or SQ cannot hold a whole group, its members can fill the structure before the tail
+    // dispatches, and the head can then never retire (deadlock).
+    if (HELIOS_DO_FUSION && HELIOS_EXTENDED_COMMIT_GROUP) {
+        ASSERTM(0, NODE_TABLE_SIZE > HELIOS_FUSION_WINDOW && LOAD_QUEUE_ENTRY_NUM > HELIOS_FUSION_WINDOW &&
+                   STORE_QUEUE_ENTRY_NUM > HELIOS_FUSION_WINDOW,
+                "helios_extended_commit_group needs node_table_size, load_queue_entry_num and "
+                "store_queue_entry_num > helios_fusion_window (%u)\n", HELIOS_FUSION_WINDOW);
+    }
     predictorInit();
     initLSUCH();
 
@@ -239,6 +250,34 @@ static bool sameBlockStoreInCatalyst(uint64_t headMicroOpNumber, uint64_t headAd
         if (sharesCacheBlock(st->memoryAddress, st->accessSize, headAddress, headSize) ||
             sharesCacheBlock(st->memoryAddress, st->accessSize, tailOp->oracle_info.va,
                              tailOp->oracle_info.mem_size)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief Check whether a store between the head and the tail writes any byte the tail reads. The fused
+ * load reads the tail's bytes at the head's position, before that store, which is a memory-order
+ * violation (paper IV-C, Case 7). Stores already overwritten in the tracking ring are not seen.
+ *
+ * @param headMicroOpNumber The global micro-operation number of the head of the fusion pair.
+ * @param tailOp The tail of the fusion pair.
+ *
+ * @return Boolean indicating if a catalyst store writes the tail's bytes.
+ */
+static bool catalystStoreWritesTail(uint64_t headMicroOpNumber, Op *tailOp) {
+    uint64_t tailStart = tailOp->oracle_info.va;
+    uint64_t tailEnd   = tailStart + tailOp->oracle_info.mem_size;
+
+    for (int i = 0; i < STORE_TRACK_TABLE_SIZE; i++) {
+        StoreTrackEntry *st = &storeTrackTable[i];
+        if (!st->valid ||
+            st->globalMicroOpNumber <= headMicroOpNumber ||
+            st->globalMicroOpNumber >= tailOp->globalMicroOpNumber) {
+            continue;
+        }
+        if (st->memoryAddress < tailEnd && tailStart < st->memoryAddress + st->accessSize) {
             return true;
         }
     }
@@ -443,10 +482,14 @@ static void recordFusion(uint64_t headMicroOpNumber, uint64_t tailMicroOpNumber)
 }
 
 /* A fused head is "holdable" (can still be delayed for its tail's operands) only while it is still
- * pre-issue: in the frontend / ROB / RS but not yet woken onto the ready list. Op_State is ordered
- * FETCHED < IN_ROB < IN_RS < (ready/scheduled/...) so state <= OS_IN_RS && !in_rdy_list captures it. */
+ * pre-issue: in the frontend / ROB / RS but not yet on the ready list. A held head whose sources were
+ * all satisfied by simple_wake sits in OS_READY / OS_WAIT_FWD off the ready list, and is still held. */
+static inline Flag heliosHeadWaiting(Op *headOp) {
+    return headOp->state == OS_IN_RS || headOp->state == OS_READY || headOp->state == OS_WAIT_FWD;
+}
+
 static inline Flag heliosHeadHoldable(Op *headOp) {
-    return headOp && headOp->state <= OS_IN_RS && !headOp->in_rdy_list;
+    return headOp && (headOp->state <= OS_IN_RS || heliosHeadWaiting(headOp)) && !headOp->in_rdy_list;
 }
 
 /* paper NCS_Ready: mark a just-fused head to be held pre-issue until its tail maps (see the dispatch
@@ -459,10 +502,11 @@ static void heliosHoldFusedHead(Op *headOp) {
         headOp->fusedHeadPendingTail = TRUE;
 }
 
-/* Release a held fused head: splice the TAIL's REG_DATA_DEP source producers into the head's wake-up
- * deps so the fused single access waits for them too (paper: the fused micro-op carries both nucleii's
- * sources). Runs at the tail's MAP (= paper Rename). If the head already issued despite the hold (rare
- * large-distance race), count the optimistic residue instead. Called only with a live head. */
+/* Release a held fused head: splice the TAIL's register producers and the older stores it reads
+ * (REG_DATA_DEP / MEM_DATA_DEP) into the head's wake-up deps so the fused single access waits for them
+ * too (paper: the fused micro-op carries both nucleii's sources and is disambiguated like any load).
+ * Runs at the tail's MAP (= paper Rename). If the head already issued (hold disabled or force-released),
+ * count the optimistic residue instead. Called only with a live head. */
 static void heliosWaitTailSrcs(Op *tail, Op *head) {
     if (!HELIOS_FUSED_WAIT_TAIL_SRCS || !head || !head->fusedHeadPendingTail)
         return;
@@ -475,7 +519,8 @@ static void heliosWaitTailSrcs(Op *tail, Op *head) {
     }
 
     for (uns i = 0; i < tail->num_srcs; i++) {
-        if (tail->src_info[i].type != REG_DATA_DEP)
+        Dep_Type type = tail->src_info[i].type;
+        if (type != REG_DATA_DEP && type != MEM_DATA_DEP)
             continue;
         Op *producer = tail->src_info[i].op;
         if (!producer || !producer->op_pool_valid || producer->unique_num != tail->src_info[i].unique_num)
@@ -484,18 +529,25 @@ static void heliosWaitTailSrcs(Op *tail, Op *head) {
         // catalyst producer inverts RS age-order and can deadlock Scarab's in-order-fill scheduler
         // (older head stuck in RS waiting for a younger op that can't get an RS slot). Skip those --
         // the catalyst-RaW timing for that rare DBR pair stays optimistic (counted). SBR pairs share
-        // the base (deduped); DBR pairs with an older base producer are still modeled.
+        // the base (deduped); DBR pairs with an older base producer are still modeled. A catalyst store
+        // the tail reads never gets here: validatePrediction turns it into a mis-fusion flush.
         if (producer->op_num >= head->op_num) {
             STAT_EVENT(head->proc_id, HELIOS_FUSED_TAIL_SRC_YOUNGER_SKIPPED);
             continue;
         }
-        helios_wire_fused_reg_src(head, producer);
+        helios_wire_fused_src(head, producer, type);
     }
     STAT_EVENT(head->proc_id, HELIOS_FUSED_HEAD_HELD_FOR_TAIL);
 
+    // A held head whose own sources were all satisfied sits in OS_READY / OS_WAIT_FWD. If the tail just
+    // added a pending source, put it back to OS_IN_RS: cmp_wake ignores ops in any other state, so the
+    // producer's wake-up would otherwise be dropped and the head would never issue.
+    if (heliosHeadWaiting(head) && !op_sources_not_rdy_is_clear(head))
+        head->state = OS_IN_RS;
+
     // The head sat in the RS held; if its sources are now all satisfied, nothing else will wake it,
     // so push it onto the ready list now (mirrors cmp_wake's tail logic).
-    if (head->state == OS_IN_RS && op_sources_not_rdy_is_clear(head) &&
+    if (heliosHeadWaiting(head) && op_sources_not_rdy_is_clear(head) &&
         cycle_count >= head->issue_cycle && !head->in_rdy_list) {
         issue_queue_wakeup(head);
     }
@@ -510,7 +562,7 @@ static void heliosReleaseHeldHead(Op *head) {
     if (!head || !head->fusedHeadPendingTail)
         return;
     head->fusedHeadPendingTail = FALSE;
-    if (head->state == OS_IN_RS && op_sources_not_rdy_is_clear(head) &&
+    if (heliosHeadWaiting(head) && op_sources_not_rdy_is_clear(head) &&
         cycle_count >= head->issue_cycle && !head->in_rdy_list) {
         issue_queue_wakeup(head);
     }
@@ -656,16 +708,22 @@ void validatePrediction(Op *op) {
             return;
         }
 
-        // Helios (MICRO'22, Sec. IV-B4): NCS load-pair fusion MAY have loads and stores in its
-        // catalyst -- loads already execute speculatively out-of-order with respect to stores while
-        // respecting sequential semantics, so a store->load (RAW) hazard is resolved by the normal
-        // memory-disambiguation / store-to-load-forwarding path, NOT by a preemptive fusion flush.
-        // The only memory-related flush the paper takes for a load pair is a genuine memory-dependency
-        // misprediction (its repair Case 7) -- identical to what an unfused load would incur. In
-        // Scarab that ordering is enforced by oracle store dependences (map.c::add_store_deps, gated
-        // by --mem_obey_store_dep), which the fused tail still acquires, so the tail's value stays
-        // correct without a flush. Hence no store-hazard check here. (Store-pair fusion still unfuses
-        // in place on a catalyst store to the same cache block below.)
+        // A catalyst store that writes the tail's bytes is a memory-order violation: the fused load
+        // read them at the head's position. Flush at execute like any memory-dependence misprediction
+        // (paper IV-C, Case 7). The violation exists only because of the fusion, so it counts as a
+        // fusion misprediction and resets the FP (paper IV-A2); otherwise the pair would flush forever.
+        if (catalystStoreWritesTail(headMicroOpNumber, op)) {
+            op->isPredictionCorrect = false;
+            op->fusionMemOrderViolation = true;
+            op->logForFlushing = true;
+            STAT_EVENT(op->proc_id, HELIOS_REJECT_CATALYST_STORE_ALIAS);
+            return;
+        }
+
+        // Helios (MICRO'22, Sec. IV-B4): a load pair MAY have loads and stores in its catalyst; the fused
+        // load is disambiguated like any load. A store older than the head that the tail reads makes the
+        // fused access wait for its data (heliosWaitTailSrcs splices the tail's MEM_DATA_DEP into the
+        // head). A catalyst store the tail reads is the violation handled above.
 
         // Record the fusion pair so it can be counted for nest-overlap checking.
         recordFusion(headMicroOpNumber, tailMicroOpNumber);
@@ -887,6 +945,46 @@ void checkFusionCandidates(Op *op) {
     if (predictedDistance > 0 && predictedDistance <= HELIOS_FUSION_WINDOW) {
         op->isFusionCandidate = true;
         op->predictedDistanceToHead = predictedDistance;
+    }
+}
+
+/**
+ * @brief Enforce the paper's residency rule (IV-A, condition 3): fusion only succeeds if the head is
+ * still in the Allocation Queue, or in the same decode group, when the tail reaches it. Called when the
+ * tail finishes decode. If the head has already entered map (rename), the pair is unfused in place:
+ * the head is released and stays consumed, since a head that left the AQ can no longer fuse.
+ *
+ * @param tail The operation that just finished decode.
+ *
+ * @return void
+ */
+void heliosCheckHeadInAQ(Op *tail) {
+    if (!HELIOS_DO_FUSION || !HELIOS_REQUIRE_HEAD_IN_AQ || !tail->fused)
+        return;
+
+    Op *head = tail->fusedHeadOp;
+    Flag headLive = (head && head->op_pool_valid && head->op_num == tail->partnerMicroOpNumber &&
+                     head->proc_id == tail->proc_id);
+    if (headLive && (head->map_cycle == MAX_CTR || head->decode_cycle == tail->decode_cycle))
+        return;  // head still in the AQ, or decoded together with the tail
+
+    tail->fused               = false;
+    tail->isPredictionCorrect = false;
+    tail->fusedHeadOp         = NULL;
+    STAT_EVENT(tail->proc_id, HELIOS_REJECT_HEAD_LEFT_AQ);
+
+    for (int i = 0; i < NCSF_RING_SIZE; i++) {
+        FusionIntervalEntry *e = &activeFusions[i];
+        if (e->valid && e->headMicroOpNumber == tail->partnerMicroOpNumber &&
+            e->tailMicroOpNumber == tail->globalMicroOpNumber) {
+            e->valid = false;
+        }
+    }
+
+    if (headLive) {
+        head->headConsumed        = false;  // unfused: the head trains the UCH at commit
+        head->fusedGroupLastOpNum = 0;
+        heliosReleaseHeldHead(head);
     }
 }
 
@@ -1142,6 +1240,7 @@ void heliosFetchHook(Op *op) {
     op->globalFusionPrediction     = false;
     op->isPredictionCorrect        = false;
     op->fusionAddressMisprediction = false;
+    op->fusionMemOrderViolation    = false;
     op->logForFlushing             = false;
     op->fused                      = false;
     op->headConsumed               = false;
@@ -1219,7 +1318,7 @@ void heliosCommit(Op *op) {
         return;
     }
 
-    bool fpMispredict = op->fusionAddressMisprediction;
+    bool fpMispredict = op->fusionAddressMisprediction || op->fusionMemOrderViolation;
 
     // Lower the FP's confidence of this pair if the prediction is incorrect and was not handled in place.
     if (op->isFusionCandidate && fpMispredict) {

@@ -133,3 +133,6 @@ DEF_PARAM( helios_fused_wait_tail_srcs  , HELIOS_FUSED_WAIT_TAIL_SRCS, Flag   , 
  * fault/mispredict can still unfuse/flush the not-yet-retired head (precise exceptions). Set 0 to let
  * the head retire at its own done_cycle (prior behavior). */
 DEF_PARAM( helios_extended_commit_group , HELIOS_EXTENDED_COMMIT_GROUP, Flag  , Flag      , TRUE     ,       )
+/* Paper IV-A condition 3: unfuse a pair in place if the head has already been renamed when the tail
+ * finishes decode (head no longer in the Allocation Queue), unless both were decoded together. */
+DEF_PARAM( helios_require_head_in_aq    , HELIOS_REQUIRE_HEAD_IN_AQ  , Flag   , Flag      , FALSE    ,       )

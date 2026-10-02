@@ -100,6 +100,7 @@ bool checkDeadlock(Op *tailOp, uint64_t headMicroOpNumber);
 void validatePrediction(Op *op);
 void flushTables(uint64_t globalMicroOpNumber);
 void checkFusionCandidates(Op *op);
+void heliosCheckHeadInAQ(Op *tail);
 void heliosAddFusionDep(Op *op);
 void heliosCompleteFusedTail(Op *head);
 void heliosWakeFusedStoreTailDeps(Op *head);

@@ -184,6 +184,7 @@ struct Op_struct {
   Flag     fusionNestLimited;  
   Flag     fusionHeadEvicted;
   Flag     fusionAddressMisprediction;
+  Flag     fusionMemOrderViolation;   // HELIOS: a catalyst store wrote the tail's bytes (flush + FP reset)
   Flag     logForFlushing;
   Counter  helios_macro_last_op_num; /* Number of the last micro-instruction of this op's macro-instruction. Used as the squash boundary for a mis-fusion flush */ 
   Addr     helios_macro_next_fetch_addr; /* Next dynamic PC of this op's macro-instruction. Used as the re-steer fetch-target for a mis-fusion flush */

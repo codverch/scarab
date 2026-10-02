@@ -187,6 +187,8 @@ DEF_STAT(  HELIOS_REJECT_SERIALIZING,        COUNT, NO_RATIO )
 DEF_STAT(  HELIOS_REJECT_ADDR_MISMATCH,      COUNT, NO_RATIO )
 DEF_STAT(  HELIOS_REJECT_STORE_HAZARD,       COUNT, NO_RATIO )
 DEF_STAT(  HELIOS_REJECT_TYPE_DISABLED,      COUNT, NO_RATIO )
+DEF_STAT(  HELIOS_REJECT_CATALYST_STORE_ALIAS, COUNT, NO_RATIO )  // catalyst store writes the tail's bytes -> flush
+DEF_STAT(  HELIOS_REJECT_HEAD_LEFT_AQ,       COUNT, NO_RATIO )  // head renamed before tail decoded (helios_require_head_in_aq)
 
 // Benefit: cache-port accesses skipped by fused tails
 DEF_STAT(  HELIOS_DCACHE_PORTS_SAVED,        COUNT, NO_RATIO )
