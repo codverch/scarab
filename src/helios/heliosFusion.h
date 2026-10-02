@@ -56,6 +56,19 @@ typedef struct {
     bool isSerializing;
 } RegTrackEntry;
 
+/* Every in-flight store, in fetch order, whether or not it is a head candidate. Used to unfuse a
+ * store pair in place when a catalyst store writes the same cache block as the pair. */
+typedef struct {
+    uint64_t globalMicroOpNumber;
+    uint64_t memoryAddress;
+    uint8_t accessSize;
+    bool valid;
+} StoreTrackEntry;
+
+#define STORE_TRACK_TABLE_SIZE 256
+extern StoreTrackEntry storeTrackTable[STORE_TRACK_TABLE_SIZE];
+extern int storeTrackTableHead;
+
 #define REG_TRACK_TABLE_SIZE 1024
 extern RegTrackEntry regTrackTable[REG_TRACK_TABLE_SIZE];
 extern int regTrackTableHead;
@@ -81,6 +94,7 @@ void heliosFetchHook(Op *op);
 void heliosCommit(Op *op);
 void addLoadHead(Op *op);
 void addStoreHead(Op *op);
+void trackStore(Op *op);
 void trackRegWrites(Op *op);
 bool checkDeadlock(Op *tailOp, uint64_t headMicroOpNumber);
 void validatePrediction(Op *op);

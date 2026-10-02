@@ -26,9 +26,11 @@
 
 LoadHeadTableEntry loadHeadTable[LOAD_HEAD_TABLE_SIZE];
 StoreHeadTableEntry storeHeadTable[STORE_HEAD_TABLE_SIZE];
+StoreTrackEntry storeTrackTable[STORE_TRACK_TABLE_SIZE];
 RegTrackEntry regTrackTable[REG_TRACK_TABLE_SIZE];
 FusionIntervalEntry activeFusions[NCSF_RING_SIZE];
 
+int storeTrackTableHead = 0;
 int regTrackTableHead = 0;
 int activeFusionsHead = 0;
 
@@ -39,6 +41,12 @@ int activeFusionsHead = 0;
  * is the mis-fused memory op.
  */
 static Counter heliosMacroLastOpNum[MAX_NUM_PROCS] = {0};
+
+/**
+ * @brief Youngest globalMicroOpNumber of a still-valid store that was overwritten in the store tracking
+ * ring. A store pair whose head is older than this may have lost a catalyst store, so it is unfused.
+ */
+static uint64_t storeTrackEvictedUpTo = 0;
 
 /**
  * @brief Initializes the fusion data structures. This includes the predictor
@@ -55,8 +63,11 @@ void heliosFusionInit(void) {
 
     memset(loadHeadTable, 0, sizeof(loadHeadTable));
     memset(storeHeadTable, 0, sizeof(storeHeadTable));
+    memset(storeTrackTable, 0, sizeof(storeTrackTable));
     memset(regTrackTable, 0, sizeof(regTrackTable));
     memset(activeFusions, 0, sizeof(activeFusions));
+    storeTrackTableHead = 0;
+    storeTrackEvictedUpTo = 0;
     regTrackTableHead = 0;
     activeFusionsHead = 0;
 }
@@ -160,6 +171,78 @@ void addStoreHead(Op *op) {
     entry->headConsumed = false;
     entry->fused = false;
     entry->headOp = op;
+}
+
+/**
+ * @brief Record every fetched store, including predicted tails, so a store pair can detect a
+ * catalyst store to its cache block.
+ *
+ * @param op The operation to track.
+ *
+ * @return void
+ */
+void trackStore(Op *op) {
+    if (op->inst_info->table_info.mem_type != MEM_ST) {
+        return;
+    }
+
+    StoreTrackEntry *entry = &storeTrackTable[storeTrackTableHead];
+    if (entry->valid && entry->globalMicroOpNumber > storeTrackEvictedUpTo) {
+        storeTrackEvictedUpTo = entry->globalMicroOpNumber;
+    }
+    entry->globalMicroOpNumber = op->globalMicroOpNumber;
+    entry->memoryAddress = op->oracle_info.va;
+    entry->accessSize = op->oracle_info.mem_size;
+    entry->valid = true;
+    storeTrackTableHead = (storeTrackTableHead + 1) % STORE_TRACK_TABLE_SIZE;
+}
+
+/**
+ * @brief Check whether two accesses touch a common cache block. An access may span two blocks.
+ */
+static bool sharesCacheBlock(uint64_t address1, uint8_t size1, uint64_t address2, uint8_t size2) {
+    uint64_t first1 = getCacheBlockAddress(address1);
+    uint64_t last1  = getCacheBlockAddress(address1 + (size1 ? size1 - 1 : 0));
+    uint64_t first2 = getCacheBlockAddress(address2);
+    uint64_t last2  = getCacheBlockAddress(address2 + (size2 ? size2 - 1 : 0));
+    return first1 <= last2 && first2 <= last1;
+}
+
+/**
+ * @brief Check whether a store between the head and the tail writes a cache block that either
+ * nucleus of the store pair writes. Fusing across such a store would reorder two writes to the
+ * same block. Stores to other blocks do not block fusion.
+ *
+ * @param headMicroOpNumber The global micro-operation number of the head of the fusion pair.
+ * @param headAddress The head's memory address.
+ * @param headSize The head's access size.
+ * @param tailOp The tail of the fusion pair.
+ *
+ * @return Boolean indicating if a same-block store lies in the catalyst.
+ */
+static bool sameBlockStoreInCatalyst(uint64_t headMicroOpNumber, uint64_t headAddress, uint8_t headSize,
+                                     Op *tailOp) {
+    uint64_t tailMicroOpNumber = tailOp->globalMicroOpNumber;
+
+    // A catalyst store may have been overwritten in the ring; we cannot prove the pair safe.
+    if (headMicroOpNumber < storeTrackEvictedUpTo) {
+        return true;
+    }
+
+    for (int i = 0; i < STORE_TRACK_TABLE_SIZE; i++) {
+        StoreTrackEntry *st = &storeTrackTable[i];
+        if (!st->valid ||
+            st->globalMicroOpNumber <= headMicroOpNumber ||
+            st->globalMicroOpNumber >= tailMicroOpNumber) {
+            continue;
+        }
+        if (sharesCacheBlock(st->memoryAddress, st->accessSize, headAddress, headSize) ||
+            sharesCacheBlock(st->memoryAddress, st->accessSize, tailOp->oracle_info.va,
+                             tailOp->oracle_info.mem_size)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -582,7 +665,7 @@ void validatePrediction(Op *op) {
         // Scarab that ordering is enforced by oracle store dependences (map.c::add_store_deps, gated
         // by --mem_obey_store_dep), which the fused tail still acquires, so the tail's value stays
         // correct without a flush. Hence no store-hazard check here. (Store-pair fusion still unfuses
-        // in place on a catalyst store below, matching the paper's NCSF_StorePair handling.)
+        // in place on a catalyst store to the same cache block below.)
 
         // Record the fusion pair so it can be counted for nest-overlap checking.
         recordFusion(headMicroOpNumber, tailMicroOpNumber);
@@ -644,17 +727,13 @@ void validatePrediction(Op *op) {
             return;
         }
 
-        // Unfuse the pair in place if an intermediate store exists in the fusion pair's catalyst.
-        for (int i = 0; i < STORE_HEAD_TABLE_SIZE; i++) {
-            StoreHeadTableEntry *st = &storeHeadTable[i];
-            if (st->valid &&
-                st->globalMicroOpNumber > headMicroOpNumber &&
-                st->globalMicroOpNumber < tailMicroOpNumber) {
-                op->isPredictionCorrect = false;
-                op->fusionBlockedByStore = true;
-                STAT_EVENT(op->proc_id, HELIOS_REJECT_STORE_HAZARD);
-                return;
-            }
+        // Unfuse the pair in place if a catalyst store writes the same cache block as the head or
+        // the tail. Catalyst stores to other blocks do not block fusion.
+        if (sameBlockStoreInCatalyst(headMicroOpNumber, head->memoryAddress, head->accessSize, op)) {
+            op->isPredictionCorrect = false;
+            op->fusionBlockedByStore = true;
+            STAT_EVENT(op->proc_id, HELIOS_REJECT_STORE_HAZARD);
+            return;
         }
 
         // Trigger a pipeline flush if the pair of micro operations access non-contiguous memory regions/do
@@ -748,6 +827,17 @@ void flushTables(uint64_t globalMicroOpNumber) {
         if (entry->valid && (entry->globalMicroOpNumber > globalMicroOpNumber)) {
             entry->valid = false;
         }
+    }
+
+    for (int i = 0; i < STORE_TRACK_TABLE_SIZE; i++) {
+        StoreTrackEntry *entry = &storeTrackTable[i];
+        if (entry->valid && (entry->globalMicroOpNumber > globalMicroOpNumber)) {
+            entry->valid = false;
+        }
+    }
+    // An overwritten store younger than the flush point was squashed anyway.
+    if (storeTrackEvictedUpTo > globalMicroOpNumber) {
+        storeTrackEvictedUpTo = globalMicroOpNumber;
     }
 
     for (int i = 0; i < REG_TRACK_TABLE_SIZE; i++) {
@@ -1103,6 +1193,9 @@ void heliosFetchHook(Op *op) {
             }
         }
     }
+
+    // Track every store so a later store pair can see catalyst stores to its cache block.
+    trackStore(op);
 
     // Track register writes from every op so checkDeadlock can find the producers of a
     // tail's source registers.
