@@ -1237,6 +1237,12 @@ void heliosCommit(Op *op) {
     if (op->fused || op->headConsumed) {
         if (op->fused)
             STAT_EVENT(op->proc_id, HELIOS_FUSIONS_COMMITTED);
+        // Record the head-to-tail distance of each committed fused load pair.
+        if (op->fused && memType == MEM_LD) {
+            uint64_t distance = op->globalMicroOpNumber - op->partnerMicroOpNumber;
+            INC_STAT_EVENT(op->proc_id, HELIOS_FUSED_LOAD_DIST_SUM, distance);
+            STAT_EVENT(op->proc_id, HELIOS_FUSED_LOAD_DIST_1 + MIN2(distance, 65) - 1);
+        }
         return;
     }
 
