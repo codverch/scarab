@@ -25,6 +25,7 @@
 #include "map_rename.h"            // reg_file_consume (balance finite-RF src accounting for the non-issuing tail)
 #include "model.h"                 // model->wake_hook
 #include "issue_queue.h"           // issue_queue_wakeup (release a held fused head onto the ready list)
+#include "bp/bp.h"                 // g_bp_data (global branch history for the fusion predictor)
 
 LoadHeadTableEntry loadHeadTable[LOAD_HEAD_TABLE_SIZE];
 StoreHeadTableEntry storeHeadTable[STORE_HEAD_TABLE_SIZE];
@@ -936,7 +937,7 @@ void checkFusionCandidates(Op *op) {
     // at a later point in time against the validated outcome (updateSelector).
     bool localPredicts = false;
     bool globalPredicts = false;
-    uint16_t predictedDistance = predictFusion(op->inst_info->addr, op->bp_pred_info->pred_global_hist,
+    uint16_t predictedDistance = predictFusion(op->inst_info->addr, op->heliosGlobalHist,
                                                &localPredicts, &globalPredicts);
     op->localFusionPrediction  = localPredicts;
     op->globalFusionPrediction = globalPredicts;
@@ -1225,6 +1226,11 @@ void heliosFetchHook(Op *op) {
 
     op->globalMicroOpNumber = op->op_num;
 
+    // Global branch history at this op's prediction. bp_pred_info->pred_global_hist is only set for
+    // branches at this point, and for other ops it is later overwritten with the icache-time history,
+    // so the FP keeps its own copy and uses it for both prediction and training.
+    op->heliosGlobalHist = g_bp_data->global_hist;
+
     // Record the op_num of the last micro-instruction of this op's macro-instruction. num_uop is the
     // macro's total micro-instruction count, so the last micro-instruction is at (bom op_num + num_uop - 1).
     // Attach it to every micro-instruction within the macro.
@@ -1323,12 +1329,12 @@ void heliosCommit(Op *op) {
     // Lower the FP's confidence of this pair if the prediction is incorrect and was not handled in place.
     if (op->isFusionCandidate && fpMispredict) {
         STAT_EVENT(op->proc_id, HELIOS_FUSION_MISPREDICT);
-        updatePredictor(op->inst_info->addr, op->bp_pred_info->pred_global_hist);
+        updatePredictor(op->inst_info->addr, op->heliosGlobalHist);
     }
 
     // Train the selector given the fusion outcome and the sub-predictor's decisions.
     if (op->isFusionCandidate && (op->isPredictionCorrect || fpMispredict))
-        updateSelector(op->inst_info->addr, op->bp_pred_info->pred_global_hist,
+        updateSelector(op->inst_info->addr, op->heliosGlobalHist,
                        op->localFusionPrediction, op->globalFusionPrediction,
                        op->isPredictionCorrect);
 
@@ -1361,6 +1367,6 @@ void heliosCommit(Op *op) {
     // A real fuseable pair was confirmed at commit. Train the FP on the tail's PC,
     // using the global history captured when this op was predicted.
     if (distance > 0) {
-        addInstructionToPredictor(op->inst_info->addr, op->bp_pred_info->pred_global_hist, distance);
+        addInstructionToPredictor(op->inst_info->addr, op->heliosGlobalHist, distance);
     }
 }
