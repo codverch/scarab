@@ -271,148 +271,262 @@ static Flag parse_csv_number(const char* text, uns64* value) {
 }
 
 /*
+ * Candidate logs ending in ".gz" are written and read through gzip so a
+ * full-length run's log stays a fraction of its plain-text size.
+ */
+static Flag log_is_gzip(void) {
+  size_t len = strlen(IDEAL_FUSION_LOG);
+  return len > 3 && strcmp(IDEAL_FUSION_LOG + len - 3, ".gz") == 0;
+}
+
+static FILE* open_log(const char* mode) {
+  char cmd[IDEAL_FUSION_CSV_LINE_SIZE + 32];
+
+  if (!log_is_gzip())
+    return fopen(IDEAL_FUSION_LOG, mode);
+  if (mode[0] == 'w')
+    snprintf(cmd, sizeof(cmd), "gzip -1 > '%s'", IDEAL_FUSION_LOG);
+  else
+    snprintf(cmd, sizeof(cmd), "gzip -dc '%s'", IDEAL_FUSION_LOG);
+  return popen(cmd, mode);
+}
+
+static int close_log(FILE* log) {
+  return log_is_gzip() ? pclose(log) : fclose(log);
+}
+
+/*
  * Pass 2 reads the complete metadata recorded by pass 1. Keeping addresses,
  * offsets, and sizes alongside sequence numbers makes later LOAD1 modeling
  * explicit and keeps the candidate log useful for debugging.
  */
-static void load_pair_indexes(void) {
-  FILE* pair_log;
-  char line[IDEAL_FUSION_CSV_LINE_SIZE];
-  Counter line_num = 0;
-  Counter loaded_pair_count = 0;
-  Counter skipped_distance_count = 0;
+static FILE* pair_log = NULL;
+static Counter pair_log_line_num = 0;
+static Counter loaded_pair_count = 0;
+static Counter skipped_distance_count = 0;
 
-  if (pair_indexes_loaded)
-    return;
+static void open_pair_log(void) {
+  char line[IDEAL_FUSION_CSV_LINE_SIZE];
 
   if (!IDEAL_FUSION_LOG || !IDEAL_FUSION_LOG[0]) {
     fprintf(stderr, "Ideal fusion: candidate log path must not be empty.\n");
     exit(EXIT_FAILURE);
   }
 
-  pair_log = fopen(IDEAL_FUSION_LOG, "r");
+  pair_log = open_log("r");
   if (!pair_log) {
     fprintf(stderr, "Ideal fusion: could not open candidate log '%s': %s\n",
             IDEAL_FUSION_LOG, strerror(errno));
     exit(EXIT_FAILURE);
   }
 
-  if (!fgets(line, sizeof(line), pair_log)) {
-    fclose(pair_log);
+  if (!fgets(line, sizeof(line), pair_log))
     pair_log_error(1, "missing CSV header");
-  }
-  line_num++;
+  pair_log_line_num++;
   line[strcspn(line, "\r\n")] = '\0';
-  if (strcmp(line, IDEAL_FUSION_CSV_HEADER) != 0) {
-    fclose(pair_log);
-    pair_log_error(line_num, "unexpected CSV header");
+  if (strcmp(line, IDEAL_FUSION_CSV_HEADER) != 0)
+    pair_log_error(pair_log_line_num, "unexpected CSV header");
+}
+
+static void close_pair_log(void) {
+  if (ferror(pair_log)) {
+    fprintf(stderr, "Ideal fusion: could not read candidate log '%s': %s\n",
+            IDEAL_FUSION_LOG, strerror(errno));
+    exit(EXIT_FAILURE);
   }
 
+  if (close_log(pair_log) != 0) {
+    fprintf(stderr, "Ideal fusion: could not close candidate log '%s'\n",
+            IDEAL_FUSION_LOG);
+    exit(EXIT_FAILURE);
+  }
+  pair_log = NULL;
+
+  printf("Ideal fusion pass %u: loaded %llu candidate pair(s) from '%s' "
+         "(distance < %u, skipped %llu)\n",
+         IDEAL_FUSION_PASS, loaded_pair_count, IDEAL_FUSION_LOG,
+         IDEAL_FUSION_DISTANCE, skipped_distance_count);
+  fflush(stdout);
+}
+
+/*
+ * Reads the next pair within the distance window into *pair. Returns FALSE at
+ * the end of the log.
+ */
+static Flag read_next_pair(Ideal_Fusion_Pair* pair) {
+  char line[IDEAL_FUSION_CSV_LINE_SIZE];
+
   while (fgets(line, sizeof(line), pair_log)) {
-    Ideal_Fusion_Pair pair = {0};
     char* fields[IDEAL_FUSION_CSV_FIELDS];
     char* saveptr = NULL;
     char* field;
     uns64 values[IDEAL_FUSION_CSV_FIELDS];
     uns field_count = 0;
     Counter recorded_distance;
+    Counter line_num = ++pair_log_line_num;
 
-    line_num++;
     line[strcspn(line, "\r\n")] = '\0';
     if (!line[0])
       continue;
 
     for (field = strtok_r(line, ",", &saveptr); field;
          field = strtok_r(NULL, ",", &saveptr)) {
-      if (field_count == IDEAL_FUSION_CSV_FIELDS) {
-        fclose(pair_log);
+      if (field_count == IDEAL_FUSION_CSV_FIELDS)
         pair_log_error(line_num, "too many CSV fields");
-      }
       fields[field_count++] = field;
     }
 
-    if (field_count != IDEAL_FUSION_CSV_FIELDS) {
-      fclose(pair_log);
+    if (field_count != IDEAL_FUSION_CSV_FIELDS)
       pair_log_error(line_num, "wrong number of CSV fields");
-    }
 
     for (field_count = 0; field_count < IDEAL_FUSION_CSV_FIELDS;
          field_count++) {
-      if (!parse_csv_number(fields[field_count], &values[field_count])) {
-        fclose(pair_log);
+      if (!parse_csv_number(fields[field_count], &values[field_count]))
         pair_log_error(line_num, "invalid numeric field");
-      }
     }
 
-    if (values[3] > UINT_MAX || values[8] > UINT_MAX) {
-      fclose(pair_log);
+    if (values[3] > UINT_MAX || values[8] > UINT_MAX)
       pair_log_error(line_num, "memory size is out of range");
-    }
 
-    pair.load1_pc = values[0];
-    pair.load1_data_addr = values[1];
-    pair.load1_block_offset = values[2];
-    pair.load1_mem_size = values[3];
-    pair.load1_micro_op_num = values[4];
-    pair.load2_pc = values[5];
-    pair.load2_data_addr = values[6];
-    pair.load2_block_offset = values[7];
-    pair.load2_mem_size = values[8];
-    pair.load2_micro_op_num = values[9];
+    memset(pair, 0, sizeof(*pair));
+    pair->load1_pc = values[0];
+    pair->load1_data_addr = values[1];
+    pair->load1_block_offset = values[2];
+    pair->load1_mem_size = values[3];
+    pair->load1_micro_op_num = values[4];
+    pair->load2_pc = values[5];
+    pair->load2_data_addr = values[6];
+    pair->load2_block_offset = values[7];
+    pair->load2_mem_size = values[8];
+    pair->load2_micro_op_num = values[9];
     recorded_distance = values[10];
 
-    if (pair.load1_micro_op_num == 0 ||
-        pair.load2_micro_op_num <= pair.load1_micro_op_num ||
-        pair.load2_micro_op_num - pair.load1_micro_op_num !=
-          recorded_distance) {
-      fclose(pair_log);
+    if (pair->load1_micro_op_num == 0 ||
+        pair->load2_micro_op_num <= pair->load1_micro_op_num ||
+        pair->load2_micro_op_num - pair->load1_micro_op_num !=
+          recorded_distance)
       pair_log_error(line_num, "invalid micro-op sequence numbers");
-    }
 
-    if (get_cache_block_addr(pair.load1_data_addr) !=
-          get_cache_block_addr(pair.load2_data_addr) ||
-        pair.load1_block_offset !=
-          pair.load1_data_addr - get_cache_block_addr(pair.load1_data_addr) ||
-        pair.load2_block_offset !=
-          pair.load2_data_addr - get_cache_block_addr(pair.load2_data_addr) ||
-        !access_fits_in_cache_block(pair.load1_data_addr,
-                                    pair.load1_mem_size) ||
-        !access_fits_in_cache_block(pair.load2_data_addr,
-                                    pair.load2_mem_size)) {
-      fclose(pair_log);
+    if (get_cache_block_addr(pair->load1_data_addr) !=
+          get_cache_block_addr(pair->load2_data_addr) ||
+        pair->load1_block_offset !=
+          pair->load1_data_addr - get_cache_block_addr(pair->load1_data_addr) ||
+        pair->load2_block_offset !=
+          pair->load2_data_addr - get_cache_block_addr(pair->load2_data_addr) ||
+        !access_fits_in_cache_block(pair->load1_data_addr,
+                                    pair->load1_mem_size) ||
+        !access_fits_in_cache_block(pair->load2_data_addr,
+                                    pair->load2_mem_size))
       pair_log_error(line_num, "inconsistent cache-block metadata");
-    }
 
-    /* Pass 2: apply fusion only for pairs within the distance window. */
+    /* Apply fusion only for pairs within the distance window. */
     if (recorded_distance >= IDEAL_FUSION_DISTANCE) {
       skipped_distance_count++;
       continue;
     }
 
-    index_fusion_pair(&pair);
     loaded_pair_count++;
+    return TRUE;
   }
 
-  if (ferror(pair_log)) {
-    fclose(pair_log);
-    fprintf(stderr, "Ideal fusion: could not read candidate log '%s': %s\n",
-            IDEAL_FUSION_LOG, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
+  return FALSE;
+}
 
-  if (fclose(pair_log) != 0) {
-    fprintf(stderr, "Ideal fusion: could not close candidate log '%s': %s\n",
-            IDEAL_FUSION_LOG, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
+/* Measurement mode looks pairs up at wake time, so it indexes the whole log. */
+static void load_pair_indexes(void) {
+  Ideal_Fusion_Pair pair;
 
+  if (pair_indexes_loaded)
+    return;
+
+  open_pair_log();
+  while (read_next_pair(&pair))
+    index_fusion_pair(&pair);
+  close_pair_log();
   pair_indexes_loaded = TRUE;
+}
 
-  printf("Ideal fusion pass 2: loaded %llu candidate pair(s) from '%s' "
-         "(distance < %u, skipped %llu)\n",
-         loaded_pair_count, IDEAL_FUSION_LOG, IDEAL_FUSION_DISTANCE,
-         skipped_distance_count);
-  fflush(stdout);
+/*
+ * Pass 2 looks pairs up only when an on-path load is fetched, and fetch
+ * sequence numbers only grow. Pass 1 logs pairs in LOAD2 order, so pass 2
+ * streams the log and keeps just the pairs a nearby op can still match:
+ * those whose LOAD2 lies within IDEAL_FUSION_DISTANCE ahead of the current op
+ * (any LOAD1 at op n has its LOAD2 before n + distance) and not yet behind it.
+ * This bounds memory to roughly one window of pairs instead of the full log.
+ */
+typedef struct Ideal_Fusion_Window_Entry_struct {
+  Counter load1_micro_op_num;
+  Counter load2_micro_op_num;
+  struct Ideal_Fusion_Window_Entry_struct* next;
+} Ideal_Fusion_Window_Entry;
+
+static Ideal_Fusion_Window_Entry* window_head = NULL;
+static Ideal_Fusion_Window_Entry* window_tail = NULL;
+static Ideal_Fusion_Pair next_pair;
+static Flag next_pair_valid = FALSE;
+static Flag pair_stream_done = FALSE;
+static Counter last_load2_micro_op_num = 0;
+
+static void unindex_pair(Ideal_Fusion_Pair** index, Counter key,
+                         Counter load1_micro_op_num) {
+  Ideal_Fusion_Pair** slot = &index[get_pair_index_bucket(key)];
+
+  for (; *slot; slot = &(*slot)->next) {
+    if ((*slot)->load1_micro_op_num == load1_micro_op_num) {
+      Ideal_Fusion_Pair* stale = *slot;
+      *slot = stale->next;
+      free(stale);
+      return;
+    }
+  }
+}
+
+static void advance_pair_window(Counter micro_op_num) {
+  if (!pair_log && !pair_stream_done)
+    open_pair_log();
+
+  while (!pair_stream_done) {
+    if (!next_pair_valid) {
+      if (!read_next_pair(&next_pair)) {
+        close_pair_log();
+        pair_stream_done = TRUE;
+        break;
+      }
+      if (next_pair.load2_micro_op_num < last_load2_micro_op_num)
+        pair_log_error(pair_log_line_num, "pairs are not in LOAD2 order");
+      last_load2_micro_op_num = next_pair.load2_micro_op_num;
+      next_pair_valid = TRUE;
+    }
+    if (next_pair.load2_micro_op_num > micro_op_num + IDEAL_FUSION_DISTANCE)
+      break;
+
+    Ideal_Fusion_Window_Entry* entry = (Ideal_Fusion_Window_Entry*)malloc(sizeof(*entry));
+    if (!entry) {
+      fprintf(stderr, "Ideal fusion: could not allocate pass-2 window entry.\n");
+      exit(EXIT_FAILURE);
+    }
+    entry->load1_micro_op_num = next_pair.load1_micro_op_num;
+    entry->load2_micro_op_num = next_pair.load2_micro_op_num;
+    entry->next = NULL;
+    if (window_tail)
+      window_tail->next = entry;
+    else
+      window_head = entry;
+    window_tail = entry;
+    index_fusion_pair(&next_pair);
+    next_pair_valid = FALSE;
+  }
+
+  /* Drop pairs whose LOAD2 has already been fetched. */
+  while (window_head && window_head->load2_micro_op_num < micro_op_num) {
+    Ideal_Fusion_Window_Entry* stale = window_head;
+    unindex_pair(load1_pair_index, stale->load1_micro_op_num, stale->load1_micro_op_num);
+    unindex_pair(load2_pair_index, stale->load2_micro_op_num, stale->load1_micro_op_num);
+    window_head = stale->next;
+    if (!window_head)
+      window_tail = NULL;
+    free(stale);
+  }
 }
 
 static void candidate_log_error(const char* action) {
@@ -428,9 +542,9 @@ static void close_candidate_log(void) {
   if (fflush(candidate_log) != 0)
     fprintf(stderr, "Ideal fusion: could not flush candidate output file '%s': %s\n",
             IDEAL_FUSION_LOG, strerror(errno));
-  if (fclose(candidate_log) != 0)
-    fprintf(stderr, "Ideal fusion: could not close candidate output file '%s': %s\n",
-            IDEAL_FUSION_LOG, strerror(errno));
+  if (close_log(candidate_log) != 0)
+    fprintf(stderr, "Ideal fusion: could not close candidate output file '%s'\n",
+            IDEAL_FUSION_LOG);
   candidate_log = NULL;
 }
 
@@ -443,7 +557,7 @@ static void open_candidate_log(void) {
     exit(EXIT_FAILURE);
   }
 
-  candidate_log = fopen(IDEAL_FUSION_LOG, "w");
+  candidate_log = open_log("w");
   if (!candidate_log)
     candidate_log_error("open");
 
@@ -619,7 +733,7 @@ void ideal_fusion_on_fetch_op(Op* op) {
   op->ideal_fusion_micro_op_num = ++next_on_path_micro_op_num;
 
   if (IDEAL_FUSION_PASS == 2) {
-    load_pair_indexes();
+    advance_pair_window(op->ideal_fusion_micro_op_num);
     classify_load(op);
     return;
   }
