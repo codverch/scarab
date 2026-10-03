@@ -47,6 +47,7 @@
 #include "bp/bp.h"
 
 #include "ft.h"
+#include "ideal-fusion/ideal_fusion.h"
 #include "map.h"
 #include "map_rename.h"
 #include "model.h"
@@ -266,6 +267,9 @@ static inline void stage_process_op(Op* op) {
 
   /* setting wake up lists */
   add_to_wake_up_lists(op, model->wake_hook);
+
+  /* Ideal-fusion Load2 buffer coordination (after wake-up lists exist). */
+  ideal_fusion_on_map(op, model->wake_hook);
 }
 
 static inline void map_stage_collect_stat(Flag stall, Flag starved) {

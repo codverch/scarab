@@ -777,6 +777,10 @@ void init_pin_opcode_convert(void) {
   iclass_to_scarab_map[XED_ICLASS_ADOX] = {OP_IADD, -1, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_AESENC]   = {OP_PIPELINED_MEDIUM, -1, -1, NONE};
   iclass_to_scarab_map[XED_ICLASS_AESENCLAST]   = {OP_PIPELINED_MEDIUM, -1, -1, NONE};
+  iclass_to_scarab_map[XED_ICLASS_SHA256MSG1]   = {OP_PIPELINED_MEDIUM, 16, -1, NONE};
+  iclass_to_scarab_map[XED_ICLASS_SHA256MSG2]   = {OP_PIPELINED_MEDIUM, 16, -1, NONE};
+  iclass_to_scarab_map[XED_ICLASS_SHA256RNDS2]  = {OP_PIPELINED_MEDIUM, 16, -1, NONE};
+  iclass_to_scarab_map[XED_ICLASS_REP_XSHA256]  = {OP_PIPELINED_MEDIUM, 16, -1, NONE};
   iclass_to_scarab_map[XED_ICLASS_AND]      = {OP_LOGIC, -1, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_ANDN]     = {OP_LOGIC, -1, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_ANDNPD]   = {OP_LOGIC, 8, -1, NONE};
@@ -1268,6 +1272,7 @@ void init_pin_opcode_convert(void) {
 
   iclass_to_scarab_map[XED_ICLASS_RDTSC]  = {OP_NOTPIPELINED_SLOW, 4, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_RDTSCP]  = {OP_NOTPIPELINED_SLOW, 8, 1, NONE}; // 4 bytes for time-stamp (somehow), 4 for processor id
+  iclass_to_scarab_map[XED_ICLASS_RDPID]  = {OP_NOTPIPELINED_SLOW, 4, 1, NONE};
   iclass_to_scarab_map[XED_ICLASS_RDPKRU] = {OP_MOV, 1, 2, NONE};
   // INS_Opcode() never returns REPEAT variants of the iclasses
   iclass_to_scarab_map[XED_ICLASS_REPE_CMPSB]  = {OP_ICMP, 1, 1, NONE};

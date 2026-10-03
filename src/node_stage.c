@@ -55,10 +55,12 @@
 #include "exec_ports.h"
 #include "ft.h"
 #include "icache_stage.h"
+#include "ideal-fusion/ideal_fusion.h"
 #include "issue_queue.h"
 #include "lsq.h"
 #include "map.h"
 #include "map_rename.h"
+#include "model.h"
 #include "op_pool.h"
 #include "sim.h"
 #include "statistics.h"
@@ -225,7 +227,7 @@ void flush_window() {
       DEBUG(node->proc_id, "Node window flushing op_num:%llu off_path:%u\n", (unsigned long long)op->op_num,
             op->off_path);
       ASSERT(node->proc_id, op->off_path);
-      if (!op->macro_fused)
+      if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
         flush_ops++;
       ASSERT(node->proc_id, op->off_path);
       ASSERT(node->proc_id, op->op_num > bp_recovery_info->recovery_op_num);
@@ -242,7 +244,7 @@ void flush_window() {
         op->recovery_scheduled = FALSE;
       }
       DEBUG(node->proc_id, "Node keeping  op:%s node_id:%llu\n", unsstr64(op->op_num), op->node_id);
-      if (!op->macro_fused)
+      if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
         keep_ops++;
       last = &op->next_node;
       node->node_tail = op;
@@ -280,7 +282,7 @@ void debug_print_node_table() {
     ASSERT(node->proc_id, temp[slot_num] == NULL);
     temp[slot_num] = op;
     printed_all++;
-    if (!op->macro_fused)
+    if (!op->macro_fused && !ideal_fusion_load2_is_nop(op))
       printed_non_fused++;
     empty = FALSE;
 
@@ -364,7 +366,10 @@ void node_fill_rob(Stage_Data* src_sd) {
     if (!op)
       continue;
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    Flag ideal_fusion_skip_lsq = ideal_fusion_load2_is_nop(op);
+    if (!ideal_fusion_skip_lsq &&
+        (op->inst_info->table_info.mem_type == MEM_LD ||
+         op->inst_info->table_info.mem_type == MEM_ST)) {
       if (!lsq_available(op->inst_info->table_info.mem_type)) {
         DEBUG(node->proc_id, "Node fill stalled: LSQ full for op_num:%s mem_type:%s src_sd_op_count:%d node_count:%d\n",
               unsstr64(op->op_num), op->inst_info->table_info.mem_type == MEM_LD ? "LD" : "ST", src_sd->op_count,
@@ -406,7 +411,8 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     // Jump uop after CMP or TEST will be fused into one uop
     node_fuse_op(op);
-    if (!op->macro_fused)
+    Flag ideal_fusion_skip_count = ideal_fusion_load2_is_nop(op);
+    if (!op->macro_fused && !ideal_fusion_skip_count)
       node->node_count++;
 
     ASSERTM(node->proc_id, node->node_count <= NODE_TABLE_SIZE,
@@ -417,7 +423,16 @@ void node_fill_rob(Stage_Data* src_sd) {
 
     DEBUG(node->proc_id, "Issuing the op op_num:%s off_path:%d\n", unsstr64(op->op_num), op->off_path);
 
-    op->state = OS_IN_ROB;
+    if (ideal_fusion_load2_is_nop(op)) {
+      STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD2_BYPASSED);
+      op->state = OS_DONE;
+      op->precommitted = TRUE;
+      op->precommit_cycle = cycle_count;
+      op->done_cycle = cycle_count;
+      op->dcache_cycle = cycle_count;
+    } else {
+      op->state = OS_IN_ROB;
+    }
 
     /* always stop issuing after a synchronizing op */
     if (op->inst_info->table_info.bar_type & BAR_ISSUE)
@@ -541,8 +556,21 @@ void node_retire() {
     if (op->inst_info->table_info.mem_type == MEM_LD && (op->done_cycle - op->sched_cycle) < 5) {
       STAT_EVENT(op->proc_id, LD_EXEC_CYCLES_0 + (op->done_cycle - op->sched_cycle));
     }
-    if (op->inst_info->table_info.mem_type == MEM_LD) {
+    // Count real loads plus converted LOAD2 ops (ideal fusion), which retire
+    // as nops but still represent a load we want to account for.
+    if (op->inst_info->table_info.mem_type == MEM_LD || op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2) {
       STAT_EVENT(op->proc_id, LD_NO_DEPENDENTS + (op->wake_up_head ? 1 : 0));
+
+      // Total on-path memory loads (retire guarantees on-path); includes the
+      // converted LOAD2 ops since they are still real program loads.
+      STAT_EVENT(op->proc_id, ONPATH_MEM_LOADS);
+
+      // Fused-load accounting: each retired LOAD2 is one fused load; count both
+      // members of the pair (LOAD1 + LOAD2) toward loads participating in fusion.
+      if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2) {
+        STAT_EVENT(op->proc_id, IDEAL_FUSION_FUSED_LOADS);
+        INC_STAT_EVENT(op->proc_id, IDEAL_FUSION_LOADS_PARTICIPATED, 2);
+      }
 
       /* Accumulate on-path load latency (retire guarantees on-path here).
        * Skip loads with unset timestamps so MAX_CTR does not inflate the sums. */
@@ -574,7 +602,9 @@ void node_retire() {
 
     node_precommit_retire(op);
 
-    if (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) {
+    if (!ideal_fusion_load2_is_nop(op) &&
+        (op->inst_info->table_info.mem_type == MEM_LD ||
+         op->inst_info->table_info.mem_type == MEM_ST)) {
       lsq_commit(op);
     }
 
@@ -587,8 +617,8 @@ void node_retire() {
       printf("[ft_free_op] stage=node_stage:retire op_num=%llu op=%p\n", (unsigned long long)op->op_num, (void*)op);
       ft_free_op(op);
     }
-    // the fused op does not occupy the ROB entry
-    if (!macro_fused_saved)
+    // the fused op does not occupy the ROB entry; same for ideal-fusion LOAD2
+    if (!macro_fused_saved && !ideal_fusion_load2_is_nop(op))
       node->node_count--;
 
     ASSERT(node->proc_id, node->node_count >= 0);
@@ -645,7 +675,16 @@ Flag op_not_ready_for_retire(Op* op) {
 Flag is_node_table_empty() {
   if (node->node_count == 0) {
     if (node->node_head != NULL) {
-      ASSERT(node->proc_id, node->node_head->macro_fused);
+      Flag all_skippable = TRUE;
+      for (Op* o = node->node_head; o; o = o->next_node) {
+        if (o->macro_fused)
+          continue;
+        if (ideal_fusion_load2_is_nop(o))
+          continue;
+        all_skippable = FALSE;
+        break;
+      }
+      ASSERT(node->proc_id, all_skippable);
       return FALSE;
     }
 
@@ -732,7 +771,8 @@ void node_precommit_update(void) {
       return;
 
     // wait until looking up the d-cache for memory operands
-    if ((op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
+    if (!ideal_fusion_load2_is_nop(op) &&
+        (op->inst_info->table_info.mem_type == MEM_LD || op->inst_info->table_info.mem_type == MEM_ST) &&
         op->dcache_cycle > cycle_count)
       return;
 

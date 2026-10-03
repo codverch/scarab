@@ -78,7 +78,10 @@ help-nocolor: ## Print this message
 # scarab_phony is a fake file that causes this rule to always run.
 # We tried to make this a phony target, but it did not work. We suspect phony
 # targets cannot be file paths.
-$(BUILD_DIR_PREFIX)/%/scarab_phony: $(BUILD_DIR_PREFIX)/%/Makefile gitrev pin_exec
+# pin_exec is only required for the PIN exec-driven frontend. Memtrace simulations
+# (including ideal-fusion pass-1) do not use it. The ideal-fusion branch replaced
+# ifuse with ideal-fusion, so pin_exec may fail to build even when scarab is fine.
+$(BUILD_DIR_PREFIX)/%/scarab_phony: $(BUILD_DIR_PREFIX)/%/Makefile gitrev
 	@make -j --no-print-directory -C $(dir $@)
 	ln -sf $(dir $@)scarab scarab
 
