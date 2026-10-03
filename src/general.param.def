@@ -116,11 +116,9 @@ DEF_PARAM( segment_instr_count          , SEGMENT_INSTR_COUNT       , uns64  , u
 /* HELIOS load/store fusion */
 DEF_PARAM( helios_do_fusion             , HELIOS_DO_FUSION           , Flag   , Flag      , FALSE    ,       )
 DEF_PARAM( helios_enable_flushes        , HELIOS_ENABLE_FLUSHES      , Flag   , Flag      , TRUE     ,       )
-/* Fusion predictor confidence. Defaults model the paper's 2-bit counter (IV-A2): a new distance starts
- * at 1, fusion needs the saturated value 3, and a fusion misprediction resets the counter to 0. */
-DEF_PARAM( helios_confidence_threshold  , HELIOS_CONFIDENCE_THRESHOLD, uns    , uns       , 3        ,       )
-DEF_PARAM( helios_confidence_increment  , HELIOS_CONFIDENCE_INCREMENT, uns    , uns       , 1        ,       )
-DEF_PARAM( helios_confidence_decrement  , HELIOS_CONFIDENCE_DECREMENT, uns    , uns       , 3        ,       )
+DEF_PARAM( helios_confidence_threshold  , HELIOS_CONFIDENCE_THRESHOLD, uns    , uns       , 150      ,       )
+DEF_PARAM( helios_confidence_increment  , HELIOS_CONFIDENCE_INCREMENT, uns    , uns       , 10        ,       )
+DEF_PARAM( helios_confidence_decrement  , HELIOS_CONFIDENCE_DECREMENT, uns    , uns       , 10       ,       )
 DEF_PARAM( helios_fusion_window         , HELIOS_FUSION_WINDOW       , uns    , uns       , 64       ,       )
 /* Gate store-store fusion independently of loads. Default TRUE preserves HELIOS behavior when
  * HELIOS_DO_FUSION is on; set 0 to disable store pairs while load pairs keep fusing. */
