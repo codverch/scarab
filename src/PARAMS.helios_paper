@@ -186,10 +186,8 @@
 --promote_to_higher_priority_mem_req_type 1
 
 ### Memory
-# HELIOS: RAM is a flat 160-cycle latency. MEMORY_CYCLES counts RAMULATOR_TCK
-# (833333fs) cycles, so 60 x 833333 / 312500 = 160 core cycles.
---constant_memory_latency       1
---memory_cycles                 60
+# HELIOS: the paper uses a flat 160-cycle RAM. Scarab's constant_memory_latency
+# path asserts with an MLC present, so this keeps Sunny Cove's Ramulator DDR4.
 --addr_translation		random
 
 --mem_priority_ifetch        0
