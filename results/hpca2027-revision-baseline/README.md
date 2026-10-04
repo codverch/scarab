@@ -44,6 +44,10 @@ ROB 352 solid, ROB 512 hatched):
 
 ![Backend stalls, paper style](backend_stalls/backend-resource-stalls.png)
 
+One panel per resource, each on its own scale:
+
+![Backend stalls by resource, paper style](backend_stalls/backend-resource-stalls-by-resource.png)
+
 ![Backend stalls by resource](backend_stalls/backend_stalls.png)
 
 ROB, LQ and SQ are below ~1% of cycles, so they are zoomed here:
