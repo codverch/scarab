@@ -1,0 +1,46 @@
+# HPCA 2027 revision: Golden Cove baseline, ROB 352 vs 512
+
+## Setup
+
+| | |
+|---|---|
+| Core | Golden Cove (`src/PARAMS.golden_cove`) |
+| ROB 512 | Golden Cove as-is (`--node_table_size 512`) |
+| ROB 352 | Golden Cove with `--node_table_size 352`; nothing else changed |
+| Workloads | SPEC CPU2017 speed_int, Helios fixed-region traces ([dataset](https://huggingface.co/datasets/harry1332/helios-spec2017-fixed-region-20261002)) |
+| Window | 500M instructions from instruction 1, no warmup (Helios methodology) |
+| Scarab branch | `hpca2027-revision-baseline` |
+| Launcher | scarab-infra `hpca2027-revision`: `json/hpca2027-revision/baseline.sh` |
+
+## IPC
+
+| Benchmark | ROB 352 | ROB 512 | ROB 512 speedup |
+|---|---:|---:|---:|
+| gcc_s | 2.024 | 2.023 | -0.02% |
+| gcc_s_2 | 2.024 | 2.024 | +0.01% |
+| gcc_s_3 | 2.023 | 2.024 | +0.01% |
+| leela_s | 1.569 | 1.569 | +0.00% |
+| mcf_s | 1.006 | 1.006 | +0.01% |
+| omnetpp_s | 0.923 | 0.924 | +0.02% |
+| xalancbmk_s | 0.749 | 0.749 | +0.01% |
+| **Geomean** | **1.370** | **1.370** | **+0.01%** |
+
+IPC = `Cumulative_Instructions / Cumulative_Cycles` from `core.stat.0.csv`.
+Machine-readable copy: [`ipc.csv`](ipc.csv).
+
+## Layout
+
+```
+rob-352/<benchmark>/   Scarab stats (*.stat.0.csv), PARAMS.out, sim.log
+rob-512/<benchmark>/   same, for ROB 512
+ipc.csv
+```
+
+## Reproduce
+
+```bash
+cd ~/scarab-infra && git checkout hpca2027-revision
+./json/hpca2027-revision/baseline.sh            # register traces + run
+./json/hpca2027-revision/baseline.sh --status
+./json/hpca2027-revision/baseline.sh --package  # regenerate this directory
+```
