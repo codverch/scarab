@@ -102,7 +102,7 @@
 # rs_sizes 160 in total, but they are split between four different reservation stations https://www.anandtech.com/show/14514/examining-intels-ice-lake-microarchitecture-and-sunny-cove/3
 # Remove Port 4 and Port 9 (one RS) from the original architecture and allow ST to Port 3 and Port 7
 # 160 - 32 = 128 entries for RS
-# HELIOS: 160-entry IQ, Sunny Cove split scaled (no inline comment: list params parse it as values)
+# HELIOS: 160-entry IQ, Sunny Cove split scaled
 --rs_sizes                      80 40 40
 # RS1 connected to port 0,1,5,6 - port 0,1,4,5 in scarab (rs_connections b00110011), RS2 to port 2,7, RS3 to port 3,6
 --rs_connections                b00110011 b10000100 b01001000
@@ -186,10 +186,8 @@
 --promote_to_higher_priority_mem_req_type 1
 
 ### Memory
-# HELIOS: RAM is a flat 160-cycle latency. MEMORY_CYCLES counts RAMULATOR_TCK
-# (833333fs) cycles, so 60 x 833333 / 312500 = 160 core cycles.
---constant_memory_latency       1
---memory_cycles                 60
+# HELIOS: the paper uses a flat 160-cycle RAM. Scarab's constant_memory_latency
+# path asserts with an MLC present, so this keeps Sunny Cove's Ramulator DDR4.
 --addr_translation		random
 
 --mem_priority_ifetch        0
