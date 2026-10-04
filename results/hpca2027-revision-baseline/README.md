@@ -28,11 +28,21 @@
 IPC = `Cumulative_Instructions / Cumulative_Cycles` from `core.stat.0.csv`.
 Machine-readable copy: [`ipc.csv`](ipc.csv).
 
+## Top-down
+
+![Top-down level 1](topdown/topdown_level1.png)
+
+![Top-down level 2](topdown/topdown_level2.png)
+
+Percentages are Scarab's `TOPDOWN_*_BOUND` counters (`core.stat.0.csv`); all
+values are in [`topdown/topdown.csv`](topdown/topdown.csv).
+
 ## Layout
 
 ```
 rob-352/<benchmark>/   Scarab stats (*.stat.0.csv), PARAMS.out, sim.log
 rob-512/<benchmark>/   same, for ROB 512
+topdown/               top-down figures (PNG + PDF) and topdown.csv
 ipc.csv
 ```
 
