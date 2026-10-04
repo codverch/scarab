@@ -41,10 +41,15 @@ values are in [`topdown/topdown.csv`](topdown/topdown.csv).
 
 ![Backend stalls by resource](backend_stalls/backend_stalls.png)
 
+ROB, LQ and SQ are below ~1% of cycles, so they are zoomed here:
+
+![ROB, LQ, SQ stalls](backend_stalls/backend_stalls_rob_lq_sq.png)
+
 % of cycles rename/allocation is blocked, by the full backend resource:
-register file (`MAP_STAGE_STALL_ITSELF`), ROB / load queue / store queue
-(`MAP_STAGE_STALLED` split by `FULL_WINDOW_STALL`, `LSQ_FULL_LOAD_QUEUE`,
-`LSQ_FULL_STORE_QUEUE`). Values: [`backend_stalls/backend_stalls.csv`](backend_stalls/backend_stalls.csv).
+RAT (`MAP_STAGE_STALL_ITSELF`: no free physical register to rename into),
+ROB / LQ / SQ (`MAP_STAGE_STALLED` split by `FULL_WINDOW_STALL`,
+`LSQ_FULL_LOAD_QUEUE`, `LSQ_FULL_STORE_QUEUE`). Scarab never blocks
+allocation on a full issue queue, so there is no IQ component. Values: [`backend_stalls/backend_stalls.csv`](backend_stalls/backend_stalls.csv).
 
 ## Layout
 
@@ -52,7 +57,7 @@ register file (`MAP_STAGE_STALL_ITSELF`), ROB / load queue / store queue
 rob-352/<benchmark>/   Scarab stats (*.stat.0.csv), PARAMS.out, sim.log
 rob-512/<benchmark>/   same, for ROB 512
 topdown/               top-down figures (PNG + PDF) and topdown.csv
-backend_stalls/        backend stall-by-resource figure (PNG + PDF) and CSV
+backend_stalls/        backend stall-by-resource figures (PNG + PDF) and CSV
 ipc.csv
 ```
 
