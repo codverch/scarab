@@ -102,7 +102,8 @@
 # rs_sizes 160 in total, but they are split between four different reservation stations https://www.anandtech.com/show/14514/examining-intels-ice-lake-microarchitecture-and-sunny-cove/3
 # Remove Port 4 and Port 9 (one RS) from the original architecture and allow ST to Port 3 and Port 7
 # 160 - 32 = 128 entries for RS
---rs_sizes                      80 40 40   # HELIOS: 160-entry IQ, Sunny Cove split scaled
+# HELIOS: 160-entry IQ, Sunny Cove split scaled
+--rs_sizes                      80 40 40
 # RS1 connected to port 0,1,5,6 - port 0,1,4,5 in scarab (rs_connections b00110011), RS2 to port 2,7, RS3 to port 3,6
 --rs_connections                b00110011 b10000100 b01001000
 # Bug fix: fu_types should converted from the LSB, but from the MSB before the fix. Reorder fu_types with port 0->7 (0,1,5,6,4,9,2,8,3,7 previously)
