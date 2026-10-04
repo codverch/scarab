@@ -37,12 +37,22 @@ Machine-readable copy: [`ipc.csv`](ipc.csv).
 Percentages are Scarab's `TOPDOWN_*_BOUND` counters (`core.stat.0.csv`); all
 values are in [`topdown/topdown.csv`](topdown/topdown.csv).
 
+## Backend stalls by resource
+
+![Backend stalls by resource](backend_stalls/backend_stalls.png)
+
+% of cycles rename/allocation is blocked, by the full backend resource:
+register file (`MAP_STAGE_STALL_ITSELF`), ROB / load queue / store queue
+(`MAP_STAGE_STALLED` split by `FULL_WINDOW_STALL`, `LSQ_FULL_LOAD_QUEUE`,
+`LSQ_FULL_STORE_QUEUE`). Values: [`backend_stalls/backend_stalls.csv`](backend_stalls/backend_stalls.csv).
+
 ## Layout
 
 ```
 rob-352/<benchmark>/   Scarab stats (*.stat.0.csv), PARAMS.out, sim.log
 rob-512/<benchmark>/   same, for ROB 512
 topdown/               top-down figures (PNG + PDF) and topdown.csv
+backend_stalls/        backend stall-by-resource figure (PNG + PDF) and CSV
 ipc.csv
 ```
 
