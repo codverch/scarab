@@ -188,7 +188,8 @@
 ### Memory
 # HELIOS: RAM is a flat 160-cycle latency. MEMORY_CYCLES counts RAMULATOR_TCK
 # (833333fs) cycles, so 60 x 833333 / 312500 = 160 core cycles.
---constant_memory_latency       1
+# Ramulator DRAM: the constant-latency path asserts in memory.c on this Scarab
+--constant_memory_latency       0
 --memory_cycles                 60
 --addr_translation		random
 
