@@ -60,6 +60,16 @@ ROB / LQ / SQ (`MAP_STAGE_STALLED` split by `FULL_WINDOW_STALL`,
 `LSQ_FULL_LOAD_QUEUE`, `LSQ_FULL_STORE_QUEUE`). Scarab never blocks
 allocation on a full issue queue, so there is no IQ component. Values: [`backend_stalls/backend_stalls.csv`](backend_stalls/backend_stalls.csv).
 
+## Retirement blocked by a load at the ROB head
+
+![Retire stalls, load at ROB head](rob_head/rob-head-load-retire-stalls.png)
+
+% of cycles retirement is blocked because the op at the ROB head is a load
+that missed the L1D (`RET_BLOCKED_DC_MISS`; Scarab sets `dcmiss` only for
+loads), split into loads served by L2/LLC (`RET_BLOCKED_L1_ACCESS`; Scarab's
+"L1" is the LLC) and by DRAM (the rest). Loads at the head that hit in L1D
+are not counted. Values: [`rob_head/rob-head-load-retire-stalls.csv`](rob_head/rob-head-load-retire-stalls.csv).
+
 ## Layout
 
 ```
@@ -67,6 +77,7 @@ rob-352/<benchmark>/   Scarab stats (*.stat.0.csv), PARAMS.out, sim.log
 rob-512/<benchmark>/   same, for ROB 512
 topdown/               top-down figures (PNG + PDF) and topdown.csv
 backend_stalls/        backend stall-by-resource figures (PNG + PDF) and CSV
+rob_head/              retire stalls with a load at the ROB head (PNG + PDF + CSV)
 ipc.csv
 ```
 
