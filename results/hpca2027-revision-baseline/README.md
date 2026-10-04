@@ -39,6 +39,11 @@ values are in [`topdown/topdown.csv`](topdown/topdown.csv).
 
 ## Backend stalls by resource
 
+Paper style (same canvas and colors as `hpca2027-characterization/plot_backend_resource_stalls.py`;
+ROB 352 solid, ROB 512 hatched):
+
+![Backend stalls, paper style](backend_stalls/backend-resource-stalls.png)
+
 ![Backend stalls by resource](backend_stalls/backend_stalls.png)
 
 ROB, LQ and SQ are below ~1% of cycles, so they are zoomed here:
