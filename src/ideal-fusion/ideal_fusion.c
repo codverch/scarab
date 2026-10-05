@@ -23,11 +23,14 @@
 #define IDEAL_FUSION_LOAD_CANDIDATE_BUCKETS 4096
 #define IDEAL_FUSION_PAIR_INDEX_BUCKETS 1000003
 #define IDEAL_FUSION_CSV_FIELDS 11
+/* With --ideal_fusion_stores the log gains an is_store column. */
+#define IDEAL_FUSION_CSV_FIELDS_STORES 12
 #define IDEAL_FUSION_CSV_LINE_SIZE 1024
 #define IDEAL_FUSION_CSV_HEADER                                                   \
   "load1_pc,load1_data_addr,load1_block_offset,load1_mem_size,"                  \
   "load1_micro_op_num,load2_pc,load2_data_addr,load2_block_offset,"              \
   "load2_mem_size,load2_micro_op_num,micro_op_distance"
+#define IDEAL_FUSION_CSV_HEADER_STORES IDEAL_FUSION_CSV_HEADER ",is_store"
 
 typedef struct Ideal_Fusion_Load_Candidate_struct {
   Addr pc;
@@ -51,6 +54,7 @@ typedef struct Ideal_Fusion_Pair_struct {
   Addr load2_block_offset;
   uns load1_mem_size;
   uns load2_mem_size;
+  Flag is_store; /* both ops are stores (STORE1/STORE2) */
   struct Ideal_Fusion_Pair_struct* next;
 } Ideal_Fusion_Pair;
 
@@ -67,6 +71,15 @@ static Ideal_Fusion_Load_Candidate*
 static Counter last_load_cleanup_micro_op_num = 0;
 static FILE* candidate_log = NULL;
 static Counter logged_candidate_pair_count = 0;
+
+/*
+ * Store pairs follow Helios (Singh et al., MICRO'22, Sec. IV-B4): two stores
+ * may fuse only if no other store lies between them, since fusing across a
+ * store risks violating store-store ordering. So the only STORE1 candidate is
+ * the most recent on-path store, like the paper's single-entry store UCH.
+ */
+static Ideal_Fusion_Load_Candidate last_store;
+static Flag last_store_valid = FALSE;
 
 /*
  * A fetched op knows only its own sequence number. Store each pair in two
@@ -220,26 +233,28 @@ void ideal_fusion_measure_on_wake(Op* op) {
  * Pass 2 only tags the fetched load in this step. Later pipeline changes will
  * use the role and partner number to model the fused LOAD1 and LOAD2 behavior.
  */
-static void classify_load(Op* op) {
+static void classify_op(Op* op) {
   Ideal_Fusion_Pair* pair;
+  Mem_Type mem_type = op->inst_info->table_info.mem_type;
+  Flag is_store = mem_type == MEM_ST;
 
-  if (op->inst_info->table_info.mem_type != MEM_LD ||
+  if ((mem_type != MEM_LD && !(is_store && IDEAL_FUSION_STORES)) ||
       op->oracle_info.va == 0 || op->oracle_info.mem_size == 0)
     return;
 
   pair = lookup_load1_pair(op->ideal_fusion_micro_op_num);
-  if (pair) {
-    op->ideal_fusion_load_role = IDEAL_FUSION_LOAD1;
+  if (pair && pair->is_store == is_store) {
+    op->ideal_fusion_load_role = is_store ? IDEAL_FUSION_STORE1 : IDEAL_FUSION_LOAD1;
     op->ideal_fusion_partner_micro_op_num = pair->load2_micro_op_num;
-    STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD1_TAGGED);
+    STAT_EVENT(op->proc_id, is_store ? IDEAL_FUSION_STORE1_TAGGED : IDEAL_FUSION_LOAD1_TAGGED);
     return;
   }
 
   pair = lookup_load2_pair(op->ideal_fusion_micro_op_num);
-  if (pair) {
-    op->ideal_fusion_load_role = IDEAL_FUSION_LOAD2;
+  if (pair && pair->is_store == is_store) {
+    op->ideal_fusion_load_role = is_store ? IDEAL_FUSION_STORE2 : IDEAL_FUSION_LOAD2;
     op->ideal_fusion_partner_micro_op_num = pair->load1_micro_op_num;
-    STAT_EVENT(op->proc_id, IDEAL_FUSION_LOAD2_TAGGED);
+    STAT_EVENT(op->proc_id, is_store ? IDEAL_FUSION_STORE2_TAGGED : IDEAL_FUSION_LOAD2_TAGGED);
   }
 }
 
@@ -304,6 +319,8 @@ static FILE* pair_log = NULL;
 static Counter pair_log_line_num = 0;
 static Counter loaded_pair_count = 0;
 static Counter skipped_distance_count = 0;
+static Counter skipped_store_count = 0;
+static uns pair_log_fields = IDEAL_FUSION_CSV_FIELDS;
 
 static void open_pair_log(void) {
   char line[IDEAL_FUSION_CSV_LINE_SIZE];
@@ -324,7 +341,11 @@ static void open_pair_log(void) {
     pair_log_error(1, "missing CSV header");
   pair_log_line_num++;
   line[strcspn(line, "\r\n")] = '\0';
-  if (strcmp(line, IDEAL_FUSION_CSV_HEADER) != 0)
+  if (strcmp(line, IDEAL_FUSION_CSV_HEADER_STORES) == 0)
+    pair_log_fields = IDEAL_FUSION_CSV_FIELDS_STORES;
+  else if (strcmp(line, IDEAL_FUSION_CSV_HEADER) == 0)
+    pair_log_fields = IDEAL_FUSION_CSV_FIELDS;
+  else
     pair_log_error(pair_log_line_num, "unexpected CSV header");
 }
 
@@ -343,9 +364,9 @@ static void close_pair_log(void) {
   pair_log = NULL;
 
   printf("Ideal fusion pass %u: loaded %llu candidate pair(s) from '%s' "
-         "(distance < %u, skipped %llu)\n",
+         "(distance < %u, skipped %llu; store pairs skipped %llu)\n",
          IDEAL_FUSION_PASS, loaded_pair_count, IDEAL_FUSION_LOG,
-         IDEAL_FUSION_DISTANCE, skipped_distance_count);
+         IDEAL_FUSION_DISTANCE, skipped_distance_count, skipped_store_count);
   fflush(stdout);
 }
 
@@ -357,10 +378,10 @@ static Flag read_next_pair(Ideal_Fusion_Pair* pair) {
   char line[IDEAL_FUSION_CSV_LINE_SIZE];
 
   while (fgets(line, sizeof(line), pair_log)) {
-    char* fields[IDEAL_FUSION_CSV_FIELDS];
+    char* fields[IDEAL_FUSION_CSV_FIELDS_STORES];
     char* saveptr = NULL;
     char* field;
-    uns64 values[IDEAL_FUSION_CSV_FIELDS];
+    uns64 values[IDEAL_FUSION_CSV_FIELDS_STORES];
     uns field_count = 0;
     Counter recorded_distance;
     Counter line_num = ++pair_log_line_num;
@@ -371,16 +392,15 @@ static Flag read_next_pair(Ideal_Fusion_Pair* pair) {
 
     for (field = strtok_r(line, ",", &saveptr); field;
          field = strtok_r(NULL, ",", &saveptr)) {
-      if (field_count == IDEAL_FUSION_CSV_FIELDS)
+      if (field_count == pair_log_fields)
         pair_log_error(line_num, "too many CSV fields");
       fields[field_count++] = field;
     }
 
-    if (field_count != IDEAL_FUSION_CSV_FIELDS)
+    if (field_count != pair_log_fields)
       pair_log_error(line_num, "wrong number of CSV fields");
 
-    for (field_count = 0; field_count < IDEAL_FUSION_CSV_FIELDS;
-         field_count++) {
+    for (field_count = 0; field_count < pair_log_fields; field_count++) {
       if (!parse_csv_number(fields[field_count], &values[field_count]))
         pair_log_error(line_num, "invalid numeric field");
     }
@@ -400,6 +420,7 @@ static Flag read_next_pair(Ideal_Fusion_Pair* pair) {
     pair->load2_mem_size = values[8];
     pair->load2_micro_op_num = values[9];
     recorded_distance = values[10];
+    pair->is_store = pair_log_fields == IDEAL_FUSION_CSV_FIELDS_STORES && values[11] != 0;
 
     if (pair->load1_micro_op_num == 0 ||
         pair->load2_micro_op_num <= pair->load1_micro_op_num ||
@@ -422,6 +443,12 @@ static Flag read_next_pair(Ideal_Fusion_Pair* pair) {
     /* Apply fusion only for pairs within the distance window. */
     if (recorded_distance >= IDEAL_FUSION_DISTANCE) {
       skipped_distance_count++;
+      continue;
+    }
+
+    /* Store pairs are fused only when --ideal_fusion_stores is on. */
+    if (pair->is_store && !IDEAL_FUSION_STORES) {
+      skipped_store_count++;
       continue;
     }
 
@@ -561,24 +588,27 @@ static void open_candidate_log(void) {
   if (!candidate_log)
     candidate_log_error("open");
 
-  if (fprintf(candidate_log, "%s\n", IDEAL_FUSION_CSV_HEADER) < 0 ||
+  if (fprintf(candidate_log, "%s\n",
+              IDEAL_FUSION_STORES ? IDEAL_FUSION_CSV_HEADER_STORES : IDEAL_FUSION_CSV_HEADER) < 0 ||
       fflush(candidate_log) != 0)
     candidate_log_error("initialize");
   atexit(close_candidate_log);
 }
 
-static void log_matched_pair(Ideal_Fusion_Load_Candidate* load1, Op* load2) {
+static void log_matched_pair(Ideal_Fusion_Load_Candidate* load1, Op* load2, Flag is_store) {
   Counter distance = load2->ideal_fusion_micro_op_num - load1->micro_op_num;
   Addr load2_block_addr = get_cache_block_addr(load2->oracle_info.va);
 
   open_candidate_log();
   if (fprintf(candidate_log,
-              "0x%llx,0x%llx,%llu,%u,%llu,0x%llx,0x%llx,%llu,%u,%llu,%llu\n",
+              "0x%llx,0x%llx,%llu,%u,%llu,0x%llx,0x%llx,%llu,%u,%llu,%llu",
               load1->pc, load1->virtual_addr, load1->cache_block_offset,
               load1->mem_size, load1->micro_op_num, load2->inst_info->addr,
               load2->oracle_info.va, load2->oracle_info.va - load2_block_addr,
               load2->oracle_info.mem_size, load2->ideal_fusion_micro_op_num,
-              distance) < 0)
+              distance) < 0 ||
+      (IDEAL_FUSION_STORES && fprintf(candidate_log, ",%d", is_store ? 1 : 0) < 0) ||
+      fputc('\n', candidate_log) == EOF)
     candidate_log_error("write to");
 
   if (++logged_candidate_pair_count % 1000 == 0 &&
@@ -706,6 +736,43 @@ static void invalidate_loads_for_store(Op* store) {
   }
 }
 
+static void fill_candidate(Ideal_Fusion_Load_Candidate* candidate, Op* op) {
+  candidate->pc = op->inst_info->addr;
+  candidate->virtual_addr = op->oracle_info.va;
+  candidate->cache_block_addr = get_cache_block_addr(op->oracle_info.va);
+  candidate->cache_block_offset = op->oracle_info.va - candidate->cache_block_addr;
+  candidate->mem_size = op->oracle_info.mem_size;
+  candidate->micro_op_num = op->ideal_fusion_micro_op_num;
+  candidate->fused = FALSE;
+  candidate->next = NULL;
+}
+
+/*
+ * Pairs a store with the immediately preceding on-path store when both access
+ * the same cache block within the fusion window. Any store, fused or not,
+ * replaces the candidate, so no pair spans an intermediate store, and a fused
+ * STORE2 never becomes a STORE1.
+ */
+static void match_store(Op* store) {
+  if (store->oracle_info.va == 0 || store->oracle_info.mem_size == 0) {
+    last_store_valid = FALSE;
+    return;
+  }
+
+  if (last_store_valid &&
+      last_store.cache_block_addr == get_cache_block_addr(store->oracle_info.va) &&
+      access_fits_in_cache_block(last_store.virtual_addr, last_store.mem_size) &&
+      access_fits_in_cache_block(store->oracle_info.va, store->oracle_info.mem_size) &&
+      store->ideal_fusion_micro_op_num - last_store.micro_op_num < IDEAL_FUSION_DISTANCE) {
+    log_matched_pair(&last_store, store, TRUE);
+    last_store_valid = FALSE;
+    return;
+  }
+
+  fill_candidate(&last_store, store);
+  last_store_valid = TRUE;
+}
+
 static void cleanup_stale_loads(Counter current_micro_op_num) {
   uns bucket;
 
@@ -734,7 +801,7 @@ void ideal_fusion_on_fetch_op(Op* op) {
 
   if (IDEAL_FUSION_PASS == 2) {
     advance_pair_window(op->ideal_fusion_micro_op_num);
-    classify_load(op);
+    classify_op(op);
     return;
   }
 
@@ -749,21 +816,24 @@ void ideal_fusion_on_fetch_op(Op* op) {
 
   if (op->inst_info->table_info.mem_type == MEM_ST) {
     invalidate_loads_for_store(op);
+    if (IDEAL_FUSION_STORES)
+      match_store(op);
     return;
   }
 
   Ideal_Fusion_Load_Candidate* load1 = find_matching_load1(op);
 
   if (load1) {
-    log_matched_pair(load1, op);
+    log_matched_pair(load1, op, FALSE);
     load1->fused = TRUE;
   } else {
     track_load(op);
   }
 }
 
-Flag ideal_fusion_load2_is_nop(const Op* op) {
-  return op && op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2;
+Flag ideal_fusion_tail_is_nop(const Op* op) {
+  return op && (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD2 ||
+                op->ideal_fusion_load_role == IDEAL_FUSION_STORE2);
 }
 
 Load2BufferNode* ideal_fusion_find_load2_buffer(Counter load1_micro_op_num) {
@@ -810,12 +880,22 @@ void ideal_fusion_remove_load2_buffer(Load2BufferNode* node) {
   }
 }
 
+/*
+ * A LOAD2's register dependents get the value when LOAD1 completes. A STORE2
+ * writes through the fused STORE1, so loads that depend on it in memory wake
+ * when STORE1 executes.
+ */
 static void ideal_fusion_complete_load2(Op* load2, Counter load1_wake_cycle,
                                         Counter load1_done_cycle,
                                         void (*wake_action)(Op*, Op*, uns)) {
   load2->wake_cycle = load1_wake_cycle;
   load2->done_cycle = load1_done_cycle;
-  wake_up_ops(load2, REG_DATA_DEP, wake_action);
+  if (load2->ideal_fusion_load_role == IDEAL_FUSION_STORE2) {
+    wake_up_ops(load2, MEM_ADDR_DEP, wake_action);
+    wake_up_ops(load2, MEM_DATA_DEP, wake_action);
+  } else {
+    wake_up_ops(load2, REG_DATA_DEP, wake_action);
+  }
 }
 
 void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns)) {
@@ -824,14 +904,15 @@ void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns)) {
   if (!op || op->off_path || IDEAL_FUSION_PASS != 2)
     return;
 
-  if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD1) {
+  if (op->ideal_fusion_load_role == IDEAL_FUSION_LOAD1 ||
+      op->ideal_fusion_load_role == IDEAL_FUSION_STORE1) {
     node = ideal_fusion_find_load2_buffer(op->ideal_fusion_micro_op_num);
     if (!node)
       node = ideal_fusion_create_load2_buffer(op->ideal_fusion_micro_op_num);
     return;
   }
 
-  if (!ideal_fusion_load2_is_nop(op))
+  if (!ideal_fusion_tail_is_nop(op))
     return;
 
   node = ideal_fusion_find_load2_buffer(op->ideal_fusion_partner_micro_op_num);
@@ -853,12 +934,15 @@ void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns)) {
   }
 }
 
-void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns)) {
+void ideal_fusion_on_head_wake(Op* load1, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
   Load2BufferNode* node;
   Op* load2;
 
-  if (!load1 || load1->off_path || IDEAL_FUSION_PASS != 2 ||
-      load1->ideal_fusion_load_role != IDEAL_FUSION_LOAD1)
+  if (!load1 || load1->off_path || IDEAL_FUSION_PASS != 2)
+    return;
+  /* LOAD1 completes on its register wake, STORE1 when it executes. */
+  if (!(load1->ideal_fusion_load_role == IDEAL_FUSION_LOAD1 && type == REG_DATA_DEP) &&
+      !(load1->ideal_fusion_load_role == IDEAL_FUSION_STORE1 && type == MEM_DATA_DEP))
     return;
 
   node = ideal_fusion_find_load2_buffer(load1->ideal_fusion_micro_op_num);
@@ -876,7 +960,7 @@ void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns)) {
   load2 = node->entry.load2;
   if (!load2->op_pool_valid ||
       load2->unique_num != node->entry.load2_unique_num ||
-      !ideal_fusion_load2_is_nop(load2)) {
+      !ideal_fusion_tail_is_nop(load2)) {
     ideal_fusion_remove_load2_buffer(node);
     return;
   }

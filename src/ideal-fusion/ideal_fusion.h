@@ -2,6 +2,7 @@
 #define __IDEAL_FUSION_H__
 
 #include "globals/global_types.h"
+#include "op_info.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,7 +18,9 @@ void ideal_fusion_on_fetch_op(Op* op);
 
 /*
  * Pass-2 actuation:
- *   - LOAD2 stays on the ROB chain but does not consume node_count / LSQ / RS
+ *   - LOAD2 (and STORE2 with --ideal_fusion_stores) stays on the ROB chain but
+ *     does not consume node_count / LSQ / RS
+ *   - STORE2's memory dependents wake when STORE1 executes
  *   - LOAD2 renames normally (own physical dest); src consumer registration skipped
  *   - Load2 buffer coordinates LOAD1 completion with LOAD2 dependent wakeup
  */
@@ -47,8 +50,11 @@ Load2BufferNode* ideal_fusion_create_load2_buffer(Counter load1_micro_op_num);
 void ideal_fusion_remove_load2_buffer(Load2BufferNode* node);
 
 void ideal_fusion_on_map(Op* op, void (*wake_action)(Op*, Op*, uns));
-void ideal_fusion_on_load1_wake(Op* load1, void (*wake_action)(Op*, Op*, uns));
-Flag ideal_fusion_load2_is_nop(const Op* op);
+/* Called from wake_up_ops: a LOAD1 (register wake) or STORE1 (memory wake)
+ * completes its pair's tail. */
+void ideal_fusion_on_head_wake(Op* head, Dep_Type type, void (*wake_action)(Op*, Op*, uns));
+/* TRUE for a fused pair's tail (LOAD2 or STORE2), which takes no ROB, LSQ or RS entry. */
+Flag ideal_fusion_tail_is_nop(const Op* op);
 
 /* Measurement mode (IDEAL_FUSION_PASS == 3): log real completion cycles of
  * paired loads without applying fusion. */
