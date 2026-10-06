@@ -1,0 +1,46 @@
+Scarab gitrev: 51ed53166
+Scarab started at Tue Oct  6 22:49:03 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000001 } -- 0.00 KIPS (58.82 KIPS)
+** Heartbeat:   6% -- { 2000002 } -- 58.82 KIPS (58.82 KIPS)
+** Heartbeat:  10% -- { 3000008 } -- 58.82 KIPS (58.82 KIPS)
+** Heartbeat:  13% -- { 4000013 } -- 55.56 KIPS (57.97 KIPS)
+** Heartbeat:  16% -- { 5000018 } -- 58.82 KIPS (58.14 KIPS)
+** Heartbeat:  20% -- { 6000022 } -- 58.82 KIPS (58.25 KIPS)
+** Heartbeat:  23% -- { 7000025 } -- 62.50 KIPS (58.82 KIPS)
+** Heartbeat:  26% -- { 8000026 } -- 58.82 KIPS (58.82 KIPS)
+** Heartbeat:  30% -- { 9000026 } -- 66.67 KIPS (59.60 KIPS)
+** Heartbeat:  33% -- { 10000030 } -- 55.56 KIPS (59.17 KIPS)
+** Heartbeat:  36% -- { 11000033 } -- 55.56 KIPS (58.82 KIPS)
+** Heartbeat:  40% -- { 12000034 } -- 66.67 KIPS (59.41 KIPS)
+** Heartbeat:  43% -- { 13000037 } -- 71.43 KIPS (60.19 KIPS)
+** Heartbeat:  46% -- { 14000042 } -- 71.43 KIPS (60.87 KIPS)
+** Heartbeat:  50% -- { 15000043 } -- 58.82 KIPS (60.73 KIPS)
+** Heartbeat:  53% -- { 16000044 } -- 66.67 KIPS (61.07 KIPS)
+** Heartbeat:  56% -- { 17000050 } -- 55.56 KIPS (60.71 KIPS)
+** Heartbeat:  60% -- { 18000054 } -- 55.56 KIPS (60.40 KIPS)
+** Heartbeat:  63% -- { 19000057 } -- 58.82 KIPS (60.32 KIPS)
+** Heartbeat:  66% -- { 20000057 } -- 58.82 KIPS (60.24 KIPS)
+** Heartbeat:  70% -- { 21000062 } -- 58.82 KIPS (60.17 KIPS)
+** Heartbeat:  73% -- { 22000065 } -- 58.82 KIPS (60.11 KIPS)
+** Heartbeat:  76% -- { 23000070 } -- 58.82 KIPS (60.05 KIPS)
+** Heartbeat:  80% -- { 24000077 } -- 62.50 KIPS (60.15 KIPS)
+** Heartbeat:  83% -- { 25000082 } -- 62.50 KIPS (60.24 KIPS)
+** Heartbeat:  86% -- { 26000083 } -- 76.92 KIPS (60.75 KIPS)
+** Heartbeat:  90% -- { 27000086 } -- 71.43 KIPS (61.09 KIPS)
+** Heartbeat:  93% -- { 28000087 } -- 58.82 KIPS (61.00 KIPS)
+** Heartbeat:  96% -- { 29000088 } -- 52.63 KIPS (60.67 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f12f76bf38d
+python3: can't open file '/home/deepmish/scarab_stage/ifuse-sa-3-L1-D-read-ports/scarab/bin/power/power_intf.py': [Errno 2] No such file or directory
+** Core 0 Finished:    insts:30000000    cycles:18584418    time:5807630625000       -- 1.61 IPC (1.61 IPC) --  N/A  KIPS (60.85 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33832534  I=30000000  C=18584418):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33832534  I=30000000  C=18584418):  Command "python3 /home/deepmish/scarab_stage/ifuse-sa-3-L1-D-read-ports/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-sa-l1d-read-ports/scarab/src/scarab_current(+0x275736) [0x5555557c9736]
+/home/deepmish/scarab_stage/ifuse-sa-l1d-read-ports/scarab/src/scarab_current(+0x3190ee) [0x55555586d0ee]
+/home/deepmish/scarab_stage/ifuse-sa-l1d-read-ports/scarab/src/scarab_current(+0x1e6ec3) [0x55555573aec3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-sa-l1d-read-ports/scarab/src/scarab_current(+0x1eb6be) [0x55555573f6be]
