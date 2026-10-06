@@ -26,9 +26,9 @@
 	<param name="virtual_address_width"              value="64"/>              <!--  -->
 	<param name="physical_address_width"             value="52"/>              <!-- "address width determins the tag_width in Cache, LSQ and " "buffers in cache controller default value is machine_bits, if " "not set" -->
 	<param name="virtual_memory_page_size"           value="4096"/>            <!-- "This page size(B) is complete different from the page size in " "Main memo secction. this page size is the size of virtual " "memory from OS/Archi perspective; the page size in Main memo " "secction is the actuall physical line in a DRAM bank" -->
-	<stat name="total_cycles"                        value="14968035"/>        <!--  -->
+	<stat name="total_cycles"                        value="14735542"/>        <!--  -->
 	<stat name="idle_cycles"                         value="0"/>               <!-- "Scarab: McPAT ignores this" -->
-	<stat name="busy_cycles"                         value="14968035"/>        <!-- "Scarab: McPAT ignores this" -->
+	<stat name="busy_cycles"                         value="14735542"/>        <!-- "Scarab: McPAT ignores this" -->
 	<component id="system.core0" name="core0">	<!--  -->
 		<param name="clock_rate"                         value="3200.000000"/>     <!--  -->
 		<param name="opt_local"                          value="0"/>               <!-- "for cores with unknow timing, set to 0 to force off the opt flag" -->
@@ -68,42 +68,42 @@
 		<param name="load_buffer_size"                   value="170"/>             <!-- "By default, in-order cores do not have load buffers" -->
 		<param name="memory_ports"                       value="1"/>               <!-- "number of ports refer to sustainable concurrent memory " "accesses. max_allowed_in_flight_memo_instructions determins " "the # of ports of load and store buffer as well as the ports " "of Dcache which is connected to LSU. dual-pumped Dcache can " "be used to save the extra read/write ports" -->
 		<param name="RAS_size"                           value="128"/>             <!-- "Size of return address stack" -->
-		<stat name="total_instructions"                  value="33394630"/>        <!--  -->
-		<stat name="int_instructions"                    value="32864095"/>        <!--  -->
-		<stat name="fp_instructions"                     value="444763"/>          <!--  -->
-		<stat name="branch_instructions"                 value="6112141"/>         <!--  -->
-		<stat name="branch_mispredictions"               value="1680348"/>         <!--  -->
-		<stat name="load_instructions"                   value="5990000"/>         <!--  -->
-		<stat name="store_instructions"                  value="4807533"/>         <!--  -->
-		<stat name="committed_instructions"              value="31509571"/>        <!--  -->
-		<stat name="committed_int_instructions"          value="31072205"/>        <!--  -->
-		<stat name="committed_fp_instructions"           value="437366"/>          <!--  -->
-		<stat name="pipeline_duty_cycle"                 value="0.371844"/>        <!-- "<=1, runtime_ipc/peak_ipc; averaged for all cores if homogenous" -->
-		<stat name="total_cycles"                        value="14968035"/>        <!--  -->
+		<stat name="total_instructions"                  value="33404299"/>        <!--  -->
+		<stat name="int_instructions"                    value="32878500"/>        <!--  -->
+		<stat name="fp_instructions"                     value="430869"/>          <!--  -->
+		<stat name="branch_instructions"                 value="6092895"/>         <!--  -->
+		<stat name="branch_mispredictions"               value="1682649"/>         <!--  -->
+		<stat name="load_instructions"                   value="6045009"/>         <!--  -->
+		<stat name="store_instructions"                  value="4796280"/>         <!--  -->
+		<stat name="committed_instructions"              value="31580791"/>        <!--  -->
+		<stat name="committed_int_instructions"          value="31157176"/>        <!--  -->
+		<stat name="committed_fp_instructions"           value="423615"/>          <!--  -->
+		<stat name="pipeline_duty_cycle"                 value="0.377820"/>        <!-- "<=1, runtime_ipc/peak_ipc; averaged for all cores if homogenous" -->
+		<stat name="total_cycles"                        value="14735542"/>        <!--  -->
 		<stat name="idle_cycles"                         value="0"/>               <!--  -->
-		<stat name="busy_cycles"                         value="14968035"/>        <!--  -->
-		<stat name="ROB_reads"                           value="33394630"/>        <!--  -->
-		<stat name="ROB_writes"                          value="33394630"/>        <!--  -->
-		<stat name="rename_reads"                        value="66789260"/>        <!-- "lookup in renaming logic" -->
-		<stat name="rename_writes"                       value="33394630"/>        <!-- "update dest regs. renaming logic" -->
+		<stat name="busy_cycles"                         value="14735542"/>        <!--  -->
+		<stat name="ROB_reads"                           value="33404299"/>        <!--  -->
+		<stat name="ROB_writes"                          value="33404299"/>        <!--  -->
+		<stat name="rename_reads"                        value="66808598"/>        <!-- "lookup in renaming logic" -->
+		<stat name="rename_writes"                       value="33404299"/>        <!-- "update dest regs. renaming logic" -->
 		<stat name="fp_rename_reads"                     value="0"/>               <!--  -->
 		<stat name="fp_rename_writes"                    value="0"/>               <!--  -->
-		<stat name="inst_window_reads"                   value="33394630"/>        <!--  -->
-		<stat name="inst_window_writes"                  value="33394630"/>        <!--  -->
-		<stat name="inst_window_wakeup_accesses"         value="33394630"/>        <!--  -->
+		<stat name="inst_window_reads"                   value="33404299"/>        <!--  -->
+		<stat name="inst_window_writes"                  value="33404299"/>        <!--  -->
+		<stat name="inst_window_wakeup_accesses"         value="33404299"/>        <!--  -->
 		<stat name="fp_inst_window_reads"                value="0"/>               <!--  -->
 		<stat name="fp_inst_window_writes"               value="0"/>               <!--  -->
 		<stat name="fp_inst_window_wakeup_accesses"      value="0"/>               <!--  -->
-		<stat name="int_regfile_reads"                   value="34231279"/>        <!--  -->
+		<stat name="int_regfile_reads"                   value="34204363"/>        <!--  -->
 		<stat name="float_regfile_reads"                 value="0"/>               <!--  -->
-		<stat name="int_regfile_writes"                  value="20142463"/>        <!--  -->
+		<stat name="int_regfile_writes"                  value="20185984"/>        <!--  -->
 		<stat name="float_regfile_writes"                value="0"/>               <!--  -->
-		<stat name="function_calls"                      value="804249"/>          <!--  -->
+		<stat name="function_calls"                      value="799537"/>          <!--  -->
 		<stat name="context_switches"                    value="0"/>               <!--  -->
-		<stat name="ialu_accesses"                       value="33394630"/>        <!--  -->
+		<stat name="ialu_accesses"                       value="33404299"/>        <!--  -->
 		<stat name="fpu_accesses"                        value="0"/>               <!--  -->
 		<stat name="mul_accesses"                        value="0"/>               <!--  -->
-		<stat name="cdb_alu_accesses"                    value="33394630"/>        <!--  -->
+		<stat name="cdb_alu_accesses"                    value="33404299"/>        <!--  -->
 		<stat name="cdb_mul_accesses"                    value="0"/>               <!--  -->
 		<stat name="cdb_fpu_accesses"                    value="0"/>               <!--  -->
 		<stat name="IFU_duty_cycle"                      value="1"/>               <!--  -->
@@ -127,37 +127,37 @@
 		</component>
 		<component id="system.core0.itlb" name="itlb">	<!--  -->
 			<param name="number_entries"                     value="128"/>             <!-- "Scarab: models perfect tlb, this number is hard coded in the power file" -->
-			<stat name="total_accesses"                      value="1761982"/>         <!--  -->
+			<stat name="total_accesses"                      value="1756362"/>         <!--  -->
 			<stat name="total_misses"                        value="0"/>               <!-- "Scarab: perfect TLB" -->
 			<stat name="conflicts"                           value="0"/>               <!--  -->
 		</component>
 		<component id="system.core0.icache" name="icache">	<!--  -->
 			<param name="icache_config"                      value="32768,64,8,8,1,3,32,1"/> <!-- "the parameters are capacity,block_width, associativity, bank, throughput " "w.r.t. core clock, latency w.r.t. core clock,output_width, cache policy " "(0 no write or write-though with non-write allocate;1 write-back with " "write-allocate)" -->
 			<param name="buffer_sizes"                       value="16,16,16,0"/>      <!-- "cache controller buffer sizes: " "miss_buffer_size(MSHR),fill_buffer_size,prefetch_buffer_" "size,wb_buffer_size" -->
-			<stat name="read_accesses"                       value="1761982"/>         <!--  -->
-			<stat name="read_misses"                         value="48962"/>           <!--  -->
+			<stat name="read_accesses"                       value="1756362"/>         <!--  -->
+			<stat name="read_misses"                         value="50388"/>           <!--  -->
 			<stat name="conflicts"                           value="0"/>               <!--  -->
 		</component>
 		<component id="system.core0.dtlb" name="dtlb">	<!--  -->
 			<param name="number_entries"                     value="128"/>             <!-- "dual threads" -->
-			<stat name="total_accesses"                      value="4807533"/>         <!--  -->
+			<stat name="total_accesses"                      value="4796280"/>         <!--  -->
 			<stat name="total_misses"                        value="0"/>               <!-- "Scarab: perfect DTLB" -->
 			<stat name="conflicts"                           value="0"/>               <!--  -->
 		</component>
 		<component id="system.core0.dcache" name="dcache">	<!--  -->
 			<param name="dcache_config"                      value="49152,64,12,8,1,5,64,1"/> <!-- "the parameters are capacity,block_width, associativity, bank, throughput " "w.r.t. core clock, latency w.r.t. core clock,output_width, cache policy " "(0 no write or write-though with non-write allocate;1 write-back with " "write-allocate)" -->
 			<param name="buffer_sizes"                       value="16, 16, 16, 16"/>  <!-- "cache controller buffer sizes: " "miss_buffer_size(MSHR),fill_buffer_size,prefetch_buffer_" "size,wb_buffer_size" -->
-			<stat name="read_accesses"                       value="5929066"/>         <!--  -->
-			<stat name="write_accesses"                      value="4794685"/>         <!--  -->
-			<stat name="read_misses"                         value="313247"/>          <!--  -->
-			<stat name="write_misses"                        value="12390"/>           <!--  -->
+			<stat name="read_accesses"                       value="5987658"/>         <!--  -->
+			<stat name="write_accesses"                      value="4784829"/>         <!--  -->
+			<stat name="read_misses"                         value="309606"/>          <!--  -->
+			<stat name="write_misses"                        value="12162"/>           <!--  -->
 			<stat name="conflicts"                           value="0"/>               <!--  -->
 		</component>
 			<param name="number_of_BTB"                      value="1"/>               <!--  -->
 		<component id="system.core0.BTB" name="BTB">	<!--  -->
 			<param name="BTB_config"                         value="12288,8,4,1,1,1"/> <!-- "the parameters are capacity,block_width,associativity,bank, throughput " "w.r.t. core clock, latency w.r.t. core clock" -->
-			<stat name="read_accesses"                       value="15010705"/>        <!-- "See IFU code for guideline" -->
-			<stat name="write_accesses"                      value="1680348"/>         <!--  -->
+			<stat name="read_accesses"                       value="14884965"/>        <!-- "See IFU code for guideline" -->
+			<stat name="write_accesses"                      value="1682649"/>         <!--  -->
 		</component>
 	</component>
 	<component id="system.L1Directory0" name="system.L1Directory0">	<!--  -->
@@ -192,10 +192,10 @@
 		<param name="ports"                              value="1,1,1"/>           <!-- "number of r, w, and rw ports" -->
 		<param name="device_type"                        value="0"/>               <!--  -->
 		<param name="buffer_sizes"                       value="16, 16, 16, 16"/>  <!-- "cache controller buffer sizes: " "miss_buffer_size(MSHR),fill_buffer_size,prefetch_buffer_" "size,wb_buffer_size" -->
-		<stat name="read_accesses"                       value="114497"/>          <!--  -->
-		<stat name="write_accesses"                      value="142"/>             <!--  -->
-		<stat name="read_misses"                         value="98173"/>           <!--  -->
-		<stat name="write_misses"                        value="78"/>              <!--  -->
+		<stat name="read_accesses"                       value="115076"/>          <!--  -->
+		<stat name="write_accesses"                      value="143"/>             <!--  -->
+		<stat name="read_misses"                         value="98255"/>           <!--  -->
+		<stat name="write_misses"                        value="75"/>              <!--  -->
 		<stat name="conflicts"                           value="0"/>               <!--  -->
 		<stat name="duty_cycle"                          value="1"/>               <!--  -->
 	</component>
@@ -230,9 +230,9 @@
 		<param name="IO_buffer_size_per_channel"         value="64"/>              <!--  -->
 		<param name="databus_width"                      value="64"/>              <!-- "bits" -->
 		<param name="addressbus_width"                   value="49.000000"/>       <!-- "McPAT will add the control bus width to the addressbus width " "automatically" -->
-		<stat name="memory_accesses"                     value="98225"/>           <!--  -->
-		<stat name="memory_reads"                        value="98173"/>           <!--  -->
-		<stat name="memory_writes"                       value="52"/>              <!--  -->
+		<stat name="memory_accesses"                     value="98311"/>           <!--  -->
+		<stat name="memory_reads"                        value="98255"/>           <!--  -->
+		<stat name="memory_writes"                       value="56"/>              <!--  -->
 	</component>
 	<component id="system.niu" name="niu">	<!--  -->
 		<param name="type"                               value="0"/>               <!-- "1: low power; 0 high performance" -->
