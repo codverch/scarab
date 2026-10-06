@@ -290,6 +290,16 @@ static void ifuse_exec_pair_signal_ld2(
         if (op_sources_test_not_rdy(dep_op, wake->rdy_bit)) {
             op_sources_clear_not_rdy(dep_op, wake->rdy_bit);
             wake_action(ld2_op, dep_op, wake->rdy_bit);
+            Flag is_load = dep_op->inst_info->table_info.mem_type == MEM_LD;
+            STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING);
+            if (is_load)
+                STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING_LOAD);
+            if (op_sources_not_rdy_is_clear(dep_op) &&
+                dep_op->rdy_cycle == ld2_op->wake_cycle) {
+                STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING_CRITICAL);
+                if (is_load)
+                    STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING_CRITICAL_LOAD);
+            }
         }
     }
 
