@@ -1,0 +1,57 @@
+Scarab gitrev: ae15bf368
+Scarab started at Tue Oct  6 16:27:01 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000004 } -- 0.00 KIPS (76.92 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 76.92 KIPS (76.92 KIPS)
+** Heartbeat:  10% -- { 3000008 } -- 83.33 KIPS (78.95 KIPS)
+** Heartbeat:  13% -- { 4000015 } -- 100.00 KIPS (83.33 KIPS)
+** Heartbeat:  16% -- { 5000016 } -- 83.33 KIPS (83.33 KIPS)
+** Heartbeat:  20% -- { 6000018 } -- 83.33 KIPS (83.33 KIPS)
+** Heartbeat:  23% -- { 7000018 } -- 76.92 KIPS (82.35 KIPS)
+** Heartbeat:  26% -- { 8000021 } -- 76.92 KIPS (81.63 KIPS)
+** Heartbeat:  30% -- { 9000022 } -- 76.92 KIPS (81.08 KIPS)
+** Heartbeat:  33% -- { 10000024 } -- 71.43 KIPS (80.00 KIPS)
+** Heartbeat:  36% -- { 11000030 } -- 71.43 KIPS (79.14 KIPS)
+** Heartbeat:  40% -- { 12000036 } -- 71.43 KIPS (78.43 KIPS)
+** Heartbeat:  43% -- { 13000040 } -- 71.43 KIPS (77.84 KIPS)
+** Heartbeat:  46% -- { 14000040 } -- 83.33 KIPS (78.21 KIPS)
+** Heartbeat:  50% -- { 15000045 } -- 71.43 KIPS (77.72 KIPS)
+** Heartbeat:  53% -- { 16000046 } -- 83.33 KIPS (78.05 KIPS)
+** Heartbeat:  56% -- { 17000047 } -- 76.92 KIPS (77.98 KIPS)
+** Heartbeat:  60% -- { 18000050 } -- 76.92 KIPS (77.92 KIPS)
+** Heartbeat:  63% -- { 19000052 } -- 83.33 KIPS (78.19 KIPS)
+** Heartbeat:  66% -- { 20000055 } -- 83.33 KIPS (78.43 KIPS)
+** Heartbeat:  70% -- { 21000061 } -- 125.00 KIPS (79.85 KIPS)
+** Heartbeat:  73% -- { 22000068 } -- 90.91 KIPS (80.29 KIPS)
+** Heartbeat:  76% -- { 23000070 } -- 83.33 KIPS (80.42 KIPS)
+** Heartbeat:  80% -- { 24000074 } -- 71.43 KIPS (80.00 KIPS)
+** Heartbeat:  83% -- { 25000081 } -- 76.92 KIPS (79.87 KIPS)
+** Heartbeat:  86% -- { 26000081 } -- 76.92 KIPS (79.75 KIPS)
+** Heartbeat:  90% -- { 27000083 } -- 100.00 KIPS (80.36 KIPS)
+** Heartbeat:  93% -- { 28000085 } -- 125.00 KIPS (81.40 KIPS)
+** Heartbeat:  96% -- { 29000088 } -- 90.91 KIPS (81.69 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7f2644df342d
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/all2x/scarab/bin/mcpat', '/home/deepmish/scarab_stage/all2x/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:16362840    time:5113387500000       -- 1.83 IPC (1.83 IPC) --  N/A  KIPS (81.97 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33566253  I=30000000  C=16362840):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33566253  I=30000000  C=16362840):  Command "python3 /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x2758a6) [0x5555557c98a6]
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x3191be) [0x55555586d1be]
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x1e6f03) [0x55555573af03]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x1eb6fe) [0x55555573f6fe]

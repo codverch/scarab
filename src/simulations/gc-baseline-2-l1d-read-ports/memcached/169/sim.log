@@ -1,0 +1,58 @@
+Scarab gitrev: ae15bf368
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Tue Oct  6 16:38:39 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000004 } -- 0.00 KIPS (55.56 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  10% -- { 3000010 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  13% -- { 4000011 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  16% -- { 5000014 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  20% -- { 6000014 } -- 58.82 KIPS (56.07 KIPS)
+** Heartbeat:  23% -- { 7000019 } -- 52.63 KIPS (55.56 KIPS)
+** Heartbeat:  26% -- { 8000019 } -- 52.63 KIPS (55.17 KIPS)
+** Heartbeat:  30% -- { 9000026 } -- 55.56 KIPS (55.21 KIPS)
+** Heartbeat:  33% -- { 10000028 } -- 55.56 KIPS (55.25 KIPS)
+** Heartbeat:  36% -- { 11000033 } -- 58.82 KIPS (55.56 KIPS)
+** Heartbeat:  40% -- { 12000033 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  43% -- { 13000033 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  46% -- { 14000036 } -- 50.00 KIPS (55.12 KIPS)
+** Heartbeat:  50% -- { 15000037 } -- 55.56 KIPS (55.15 KIPS)
+** Heartbeat:  53% -- { 16000037 } -- 58.82 KIPS (55.36 KIPS)
+** Heartbeat:  56% -- { 17000040 } -- 66.67 KIPS (55.92 KIPS)
+** Heartbeat:  60% -- { 18000042 } -- 90.91 KIPS (57.14 KIPS)
+** Heartbeat:  63% -- { 19000045 } -- 58.82 KIPS (57.23 KIPS)
+** Heartbeat:  66% -- { 20000046 } -- 55.56 KIPS (57.14 KIPS)
+** Heartbeat:  70% -- { 21000047 } -- 58.82 KIPS (57.22 KIPS)
+** Heartbeat:  73% -- { 22000050 } -- 50.00 KIPS (56.85 KIPS)
+** Heartbeat:  76% -- { 23000050 } -- 55.56 KIPS (56.79 KIPS)
+** Heartbeat:  80% -- { 24000050 } -- 58.82 KIPS (56.87 KIPS)
+** Heartbeat:  83% -- { 25000051 } -- 58.82 KIPS (56.95 KIPS)
+** Heartbeat:  86% -- { 26000055 } -- 55.56 KIPS (56.89 KIPS)
+** Heartbeat:  90% -- { 27000060 } -- 62.50 KIPS (57.08 KIPS)
+** Heartbeat:  93% -- { 28000067 } -- 71.43 KIPS (57.50 KIPS)
+** Heartbeat:  96% -- { 29000069 } -- 71.43 KIPS (57.88 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff71fcf3b
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/all2x/scarab/bin/mcpat', '/home/deepmish/scarab_stage/all2x/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:18070088    time:5646902500000       -- 1.66 IPC (1.66 IPC) --  N/A  KIPS (57.58 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=43827495  I=31558625  C=18070088):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=43827495  I=31558625  C=18070088):  Command "python3 /home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x2758a6) [0x5555557c98a6]
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x3191be) [0x55555586d1be]
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x1e6f03) [0x55555573af03]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/l1d-read-ports-delayed/scarab/src/scarab_current(+0x1eb6fe) [0x55555573f6fe]
