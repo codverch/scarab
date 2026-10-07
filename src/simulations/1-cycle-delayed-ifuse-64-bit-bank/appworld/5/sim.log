@@ -1,0 +1,47 @@
+Scarab gitrev: e5900704e
+Scarab started at Wed Oct  7 01:56:58 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000003 } -- 0.00 KIPS (38.46 KIPS)
+** Heartbeat:   6% -- { 2000005 } -- 41.67 KIPS (40.00 KIPS)
+** Heartbeat:  10% -- { 3000006 } -- 47.62 KIPS (42.25 KIPS)
+** Heartbeat:  13% -- { 4000006 } -- 45.45 KIPS (43.01 KIPS)
+** Heartbeat:  16% -- { 5000006 } -- 41.67 KIPS (42.74 KIPS)
+** Heartbeat:  20% -- { 6000009 } -- 47.62 KIPS (43.48 KIPS)
+** Heartbeat:  23% -- { 7000012 } -- 50.00 KIPS (44.30 KIPS)
+** Heartbeat:  26% -- { 8000015 } -- 71.43 KIPS (46.51 KIPS)
+** Heartbeat:  30% -- { 9000016 } -- 62.50 KIPS (47.87 KIPS)
+** Heartbeat:  33% -- { 10000020 } -- 40.00 KIPS (46.95 KIPS)
+** Heartbeat:  36% -- { 11000026 } -- 62.50 KIPS (48.04 KIPS)
+** Heartbeat:  40% -- { 12000026 } -- 62.50 KIPS (48.98 KIPS)
+** Heartbeat:  43% -- { 13000026 } -- 43.48 KIPS (48.51 KIPS)
+** Heartbeat:  46% -- { 14000027 } -- 43.48 KIPS (48.11 KIPS)
+** Heartbeat:  50% -- { 15000034 } -- 40.00 KIPS (47.47 KIPS)
+** Heartbeat:  53% -- { 16000034 } -- 50.00 KIPS (47.62 KIPS)
+** Heartbeat:  56% -- { 17000034 } -- 50.00 KIPS (47.75 KIPS)
+** Heartbeat:  60% -- { 18000035 } -- 55.56 KIPS (48.13 KIPS)
+** Heartbeat:  63% -- { 19000038 } -- 40.00 KIPS (47.62 KIPS)
+** Heartbeat:  66% -- { 20000044 } -- 47.62 KIPS (47.62 KIPS)
+** Heartbeat:  70% -- { 21000050 } -- 50.00 KIPS (47.73 KIPS)
+** Heartbeat:  73% -- { 22000057 } -- 66.67 KIPS (48.35 KIPS)
+** Heartbeat:  76% -- { 23000058 } -- 45.45 KIPS (48.22 KIPS)
+** Heartbeat:  80% -- { 24000061 } -- 45.45 KIPS (48.10 KIPS)
+** Heartbeat:  83% -- { 25000066 } -- 43.48 KIPS (47.89 KIPS)
+** Heartbeat:  86% -- { 26000066 } -- 50.00 KIPS (47.97 KIPS)
+** Heartbeat:  90% -- { 27000066 } -- 71.43 KIPS (48.56 KIPS)
+** Heartbeat:  93% -- { 28000067 } -- 71.43 KIPS (49.12 KIPS)
+** Heartbeat:  96% -- { 29000072 } -- 76.92 KIPS (49.74 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7fa78ce8de55
+python3: can't open file '/home/deepmish/scarab_stage/1-cycle-delayed-ifuse-64-bit-bank/scarab/bin/power/power_intf.py': [Errno 2] No such file or directory
+** Core 0 Finished:    insts:30000000    cycles:17977391    time:5617934687500       -- 1.67 IPC (1.67 IPC) --  N/A  KIPS (50.25 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33704734  I=30219131  C=17977391):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=33704734  I=30219131  C=17977391):  Command "python3 /home/deepmish/scarab_stage/1-cycle-delayed-ifuse-64-bit-bank/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-64-bit-bank-run/scarab/src/scarab_current(+0x275736) [0x5555557c9736]
+/home/deepmish/scarab_stage/ifuse-64-bit-bank-run/scarab/src/scarab_current(+0x3190ee) [0x55555586d0ee]
+/home/deepmish/scarab_stage/ifuse-64-bit-bank-run/scarab/src/scarab_current(+0x1e6ec3) [0x55555573aec3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-64-bit-bank-run/scarab/src/scarab_current(+0x1eb6be) [0x55555573f6be]
+[219131 'Patching gap in trace by injecting a Jmp' lines removed before commit]
