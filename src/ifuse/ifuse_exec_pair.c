@@ -27,6 +27,15 @@ typedef struct IFuse_Exec_Pair {
     Op*     ld2_op;
     Counter ld1_wake_cycle;
     Flag    ld1_completed;
+    /*
+     * The fused access reads LD2's word from its own L1-D bank, so that word
+     * needs a read port on its bank, just as a separate LD2 would. If the
+     * port is busy, only LD2's word retries (dcache_stage.c).
+     */
+    Flag    ld2_word_requested;
+    Flag    ld2_word_done;
+    Flag    ld2_word_hit;
+    Counter ld2_word_ready_cycle;
     struct IFuse_Exec_Pair* next;
 } IFuse_Exec_Pair;
 
@@ -270,8 +279,19 @@ static void ifuse_exec_pair_signal_ld2(
     // simple_wake() (map.c). Pushing LOAD2's wake_cycle back therefore
     // delays all of LOAD2's dependents: the ones woken below, and any that
     // reach map later and are woken from add_to_wake_up_lists().
-    ld2_op->wake_cycle = pair->ld1_wake_cycle + IFUSE_LD2_WAKE_DELAY;
-    ld2_op->exec_cycle = pair->ld1_wake_cycle;
+    //
+    // LOAD2's word has its own bank read. On a hit, its data is ready when
+    // that read finishes. On a miss, it arrives with LOAD1's fill. Without a
+    // bank conflict both cases give LOAD1's wake cycle, as before.
+    Counter ld2_data_cycle = pair->ld1_wake_cycle;
+    if (pair->ld2_word_requested) {
+        ld2_data_cycle = pair->ld2_word_hit ?
+                             pair->ld2_word_ready_cycle :
+                             MAX2(pair->ld1_wake_cycle,
+                                  pair->ld2_word_ready_cycle);
+    }
+    ld2_op->wake_cycle = ld2_data_cycle + IFUSE_LD2_WAKE_DELAY;
+    ld2_op->exec_cycle = ld2_data_cycle;
 
     // LOAD2's fused result is produced into the physical register reserved by
     // LOAD1 and rebound as LOAD2's destination at rename.
@@ -315,6 +335,27 @@ static void ifuse_exec_pair_signal_ld2(
     ifuse_exec_pair_finalize_ld2(ld2_op);
 }
 
+/*
+ * Signals LOAD2 once its data exists, then drops the pair once LOAD1 is done
+ * too. LOAD2's data exists when LOAD1 completed (no separate word read), or
+ * when LOAD2's word read hit, or when it missed and LOAD1's fill returned.
+ */
+static void ifuse_exec_pair_try_finish(
+    IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns)) {
+    if (!pair->ld2_op) {
+        return;
+    }
+
+    Flag word_done = !pair->ld2_word_requested || pair->ld2_word_done;
+    Flag word_hit  = pair->ld2_word_requested && pair->ld2_word_hit;
+    if (word_done && (pair->ld1_completed || word_hit)) {
+        ifuse_exec_pair_signal_ld2(pair, wake_action);
+    }
+    if (word_done && pair->ld1_completed) {
+        ifuse_exec_pair_remove(pair->ld1_op_num);
+    }
+}
+
 void ifuse_exec_pair_track_mapped_load(Op* op,
                                        void (*wake_action)(Op*, Op*, uns)) {
     if (!op || op->off_path) {
@@ -353,10 +394,7 @@ void ifuse_exec_pair_track_mapped_load(Op* op,
 
     // LOAD1 may have completed before LOAD2 reached map. Its wake-up links are
     // installed now, so the fused result can be signaled immediately.
-    if (pair->ld1_completed) {
-        ifuse_exec_pair_signal_ld2(pair, wake_action);
-        ifuse_exec_pair_remove(pair->ld1_op_num);
-    }
+    ifuse_exec_pair_try_finish(pair, wake_action);
 }
 
 void ifuse_exec_pair_handle_producer_wakeup(
@@ -377,10 +415,50 @@ void ifuse_exec_pair_handle_producer_wakeup(
     pair->ld1_wake_cycle = op->wake_cycle;
 
     // LOAD2 may already be waiting in the map-stage-created pair entry.
-    if (pair->ld2_op) {
-        ifuse_exec_pair_signal_ld2(pair, wake_action);
-        ifuse_exec_pair_remove(pair->ld1_op_num);
+    ifuse_exec_pair_try_finish(pair, wake_action);
+}
+
+Flag ifuse_exec_pair_request_ld2_word(const Op* ld1_op) {
+    if (!ifuse_exec_pair_initialized || !ld1_op || ld1_op->off_path ||
+        ld1_op->ifuse_load_role != LOAD1 || ld1_op->ifuse_pred_ld2_va == 0) {
+        return FALSE;
     }
+
+    IFuse_Exec_Pair* pair = ifuse_exec_pair_find(ld1_op->op_num);
+    if (!pair || pair->ld2_word_requested) {
+        return FALSE;
+    }
+
+    pair->ld2_word_requested = TRUE;
+    return TRUE;
+}
+
+Flag ifuse_exec_pair_ld2_word_pending(Counter ld1_op_num) {
+    if (!ifuse_exec_pair_initialized) {
+        return FALSE;
+    }
+
+    IFuse_Exec_Pair* pair = ifuse_exec_pair_find(ld1_op_num);
+    return pair && pair->ld2_word_requested && !pair->ld2_word_done;
+}
+
+void ifuse_exec_pair_ld2_word_read(Counter ld1_op_num, Flag hit,
+                                   Counter ready_cycle,
+                                   void (*wake_action)(Op*, Op*, uns)) {
+    if (!ifuse_exec_pair_initialized) {
+        return;
+    }
+
+    // LOAD1's prediction may have been dropped while the word waited.
+    IFuse_Exec_Pair* pair = ifuse_exec_pair_find(ld1_op_num);
+    if (!pair || !pair->ld2_word_requested || pair->ld2_word_done) {
+        return;
+    }
+
+    pair->ld2_word_done        = TRUE;
+    pair->ld2_word_hit         = hit;
+    pair->ld2_word_ready_cycle = ready_cycle;
+    ifuse_exec_pair_try_finish(pair, wake_action);
 }
 
 Flag ifuse_exec_pair_skip_duplicate_wakeup(const Op* op, Dep_Type type) {

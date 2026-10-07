@@ -21,6 +21,27 @@ void ifuse_exec_pair_handle_producer_wakeup(
     Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns));
 
 /**
+ * Called when a fused LOAD1 first tries for its L1-D bank port. Returns TRUE
+ * if LOAD1's live pair still needs LOAD2's word read from its own bank, and
+ * marks the word as requested so it is read only once.
+ */
+Flag ifuse_exec_pair_request_ld2_word(const Op* ld1_op);
+
+/**
+ * Returns TRUE while LOAD1's pair still waits for LOAD2's word. A FALSE result
+ * means the pair was flushed or finished, so a queued word can be dropped.
+ */
+Flag ifuse_exec_pair_ld2_word_pending(Counter ld1_op_num);
+
+/**
+ * Records that LOAD2's word got its bank port. ready_cycle is when the word's
+ * data is available on a hit. On a miss, LOAD2 waits for LOAD1's fill.
+ */
+void ifuse_exec_pair_ld2_word_read(Counter ld1_op_num, Flag hit,
+                                   Counter ready_cycle,
+                                   void (*wake_action)(Op*, Op*, uns));
+
+/**
  * Returns TRUE when LOAD2 already emitted its fused early wake-up signal.
  */
 Flag ifuse_exec_pair_skip_duplicate_wakeup(const Op* op, Dep_Type type);

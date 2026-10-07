@@ -259,6 +259,8 @@ struct Op_struct {
   Flag                  ifuse_recovery_squashed;
   /* Dynamic on-path load distance LD2 - LD1 at fetch (0 if not LOAD2). */
   uint64_t              ifuse_pair_distance;
+  /* LOAD1 only: predicted LD2 address whose word the fused access reads. */
+  Addr                  ifuse_pred_ld2_va;
   // }}}
 
   FT* parent_FT;
