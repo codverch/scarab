@@ -1,0 +1,287 @@
+/* -*- Mode: c -*- */
+####################################################################################################
+Core 0
+####################################################################################################
+Cumulative:        Cycles: 18019474              Instructions: 30000000              IPC: 1.66487
+
+Periodic:          Cycles: 6133663               Instructions: 9999994               IPC: 1.63035
+
+MISS_WAIT_TIME                            526368721608                   811161945388              
+
+ICACHE_STAGE_MISS                                37118                          88603              
+
+ICACHE_CYCLE                                   6133663                       18019474              
+
+TCACHE_CYCLE                                         0                              0              
+
+ICACHE_SERVING_CYCLE_ON_PATH                    881607                        2435635              
+
+ICACHE_SERVING_CYCLE_OFF_PATH                   828626                        2250753              
+
+UCACHE_SERVING_CYCLE_ON_PATH                   1482894                        5013965              
+
+UCACHE_SERVING_CYCLE_OFF_PATH                  2280327                        6674128              
+
+ICACHE_CYCLE_ONPATH                            2841666       46.329%          8612475       47.795%
+ICACHE_CYCLE_OFFPATH                           3291997       53.671%          9406999       52.205%
+                                               6133663      100.000%         18019474      100.000%
+                                                  0.54         0.52              0.52         0.51
+
+FETCH_ON_PATH                                  2969592       48.415%          8953507       49.688%
+FETCH_OFF_PATH                                 3164071       51.585%          9065967       50.312%
+                                               6133663      100.000%         18019474      100.000%
+                                                  0.52         0.51              0.50         0.50
+
+FETCHED_OPS_ON_PATH                                  0         -nan%                0         -nan%
+FETCHED_OPS_OFF_PATH                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+INST_LOST_FETCH                               11250043       29.366%         33704728       30.046%
+INST_LOST_OFF_PATH                            14422806       37.648%         39070975       34.830%
+INST_LOST_FULL_WINDOW                           240960        0.629%          1108468        0.988%
+INST_LOST_ROB_STALL_OTHER                      2009704        5.246%          9220006        8.219%
+INST_LOST_ROB_STALL_WAIT_FOR_RECOVERY                0        0.000%                0        0.000%
+INST_LOST_ROB_STALL_WAIT_FOR_REDIRECT                0        0.000%                0        0.000%
+INST_LOST_ROB_STALL_WAIT_FOR_GAP_FILL                0        0.000%                0        0.000%
+INST_LOST_ROB_STALL_WAIT_FOR_L1_MISS                 0        0.000%                0        0.000%
+INST_LOST_ROB_STALL_WAIT_FOR_MEMORY                142        0.000%              486        0.000%
+INST_LOST_ROB_STALL_WAIT_FOR_DC_MISS            959148        2.504%          2855884        2.546%
+INST_LOST_ROB_BLOCK_ISSUE_FULL                       0        0.000%                0        0.000%
+INST_LOST_ROB_BLOCK_ISSUE_GAP_TOO_LARGE              0        0.000%                0        0.000%
+INST_LOST_BREAK_DONT                                 0        0.000%                0        0.000%
+INST_LOST_BREAK_FT_UNAVAILABLE                 1088941        2.842%          2964949        2.643%
+INST_LOST_BREAK_ICACHE_STAGE_RESTEER             51398        0.134%           143215        0.128%
+INST_LOST_BREAK_ICACHE_MISS_REQ_SUCCESS         178399        0.466%           424974        0.379%
+INST_LOST_BREAK_ICACHE_MISS_REQ_FAILURE              0        0.000%             4775        0.004%
+INST_LOST_BREAK_ICACHE_WAIT_FOR_MISS           2738205        7.148%          6572375        5.859%
+INST_LOST_BREAK_ICACHE_STALLED                  179726        0.469%           538213        0.480%
+INST_LOST_BREAK_ICACHE_TO_UOP_CACHE_SWITCH        458144        1.196%          1307529        1.166%
+INST_LOST_BREAK_ICACHE_READ_LIMIT               477493        1.246%          1256837        1.120%
+INST_LOST_BREAK_ICACHE_ISSUE_WIDTH                   0        0.000%                0        0.000%
+INST_LOST_BREAK_UOP_CACHE_STALLED               761308        1.987%          2850154        2.541%
+INST_LOST_BREAK_UOP_CACHE_TO_ICACHE_SWITCH        525453        1.372%          1512654        1.348%
+INST_LOST_BREAK_UOP_CACHE_READ_LIMIT           2967776        7.747%          8641332        7.703%
+INST_LOST_BREAK_UOP_CACHE_ISSUE_WIDTH                0        0.000%                0        0.000%
+                                              38309646      100.000%        112177554      100.000%
+                                                  5.62         7.82              5.51         7.76
+
+INST_LOST_TOTAL                               44372292                      131731434              
+
+INST_LOST_WAIT_FOR_ICACHE_MISS_NOT_PREFETCHED         29490        1.218%           187494        3.253%
+INST_LOST_WAIT_FOR_ICACHE_MISS_PREFETCHED_AND_EVICTED_BY_IFETCH             0        0.000%                0        0.000%
+INST_LOST_WAIT_FOR_ICACHE_MISS_PREFETCHED_AND_EVICTED_BY_FDIP             0        0.000%                0        0.000%
+INST_LOST_WAIT_FOR_ICACHE_MISS_MSHR_HIT_PREF_OFFPATH         43152        1.782%            65520        1.137%
+INST_LOST_WAIT_FOR_ICACHE_MISS_MSHR_HIT_PREF_ONPATH       2349108       97.000%          5510298       95.610%
+                                               2421750      100.000%          5763312      100.000%
+                                                  3.93         3.88              3.86         3.78
+
+FETCH_0_OPS                                     658964       10.743%          1639662        9.099%
+FETCH_1_OPS                                     199498        3.253%           612101        3.397%
+FETCH_2_OPS                                     205969        3.358%           599471        3.327%
+FETCH_3_OPS                                     230853        3.764%           668028        3.707%
+FETCH_4_OPS                                     259479        4.230%           721409        4.003%
+FETCH_5_OPS                                     271939        4.434%           816649        4.532%
+FETCH_6_OPS                                    1509028       24.602%          4175481       23.172%
+FETCH_7_OPS                                     193789        3.159%           615851        3.418%
+FETCH_8_OPS                                    2604144       42.457%          8170822       45.344%
+FETCH_9_OPS                                          0        0.000%                0        0.000%
+FETCH_10_OPS                                         0        0.000%                0        0.000%
+FETCH_11_OPS                                         0        0.000%                0        0.000%
+FETCH_12_OPS                                         0        0.000%                0        0.000%
+FETCH_13_OPS                                         0        0.000%                0        0.000%
+FETCH_14_OPS                                         0        0.000%                0        0.000%
+FETCH_15_OPS                                         0        0.000%                0        0.000%
+FETCH_16_OPS                                         0        0.000%                0        0.000%
+                                               6133663      100.000%         18019474      100.000%
+                                                  5.70         1.98              5.86         1.98
+
+ST_BREAK_DONT                                        0        0.000%                0        0.000%
+ST_BREAK_FT_UNAVAILABLE                         182219        2.971%           497532        2.761%
+ST_BREAK_ICACHE_STAGE_RESTEER                    13232        0.216%            36675        0.204%
+ST_BREAK_ICACHE_MISS_REQ_SUCCESS                 37118        0.605%            88603        0.492%
+ST_BREAK_ICACHE_MISS_REQ_FAILURE                     0        0.000%              797        0.004%
+ST_BREAK_ICACHE_WAIT_FOR_MISS                   456420        7.441%          1095523        6.080%
+ST_BREAK_ICACHE_STALLED                         304935        4.971%           885279        4.913%
+ST_BREAK_ICACHE_TO_UOP_CACHE_SWITCH             148255        2.417%           422716        2.346%
+ST_BREAK_ICACHE_READ_LIMIT                      179817        2.932%           472063        2.620%
+ST_BREAK_ICACHE_ISSUE_WIDTH                    1034505       16.866%          2738115       15.195%
+ST_BREAK_UOP_CACHE_STALLED                     1047241       17.074%          3848381       21.357%
+ST_BREAK_UOP_CACHE_TO_ICACHE_SWITCH             125302        2.043%           355926        1.975%
+ST_BREAK_UOP_CACHE_READ_LIMIT                   806909       13.155%          2352641       13.056%
+ST_BREAK_UOP_CACHE_ISSUE_WIDTH                 1797710       29.309%          5225223       28.998%
+                                               6133663      100.000%         18019474      100.000%
+                                                  9.97         6.19             10.08         6.16
+
+ORACLE_ON_PATH_INST                           11250043       43.821%         33704728       46.313%
+ORACLE_OFF_PATH_INST                          14422806       56.179%         39070975       53.687%
+                                              25672849      100.000%         72775703      100.000%
+                                                  0.56         0.53              0.54         0.52
+
+ORACLE_ON_PATH_INST_MEM                        4478224       17.443%         13354208       18.350%
+ORACLE_ON_PATH_INST_NOTMEM                     6771819       26.377%         20350520       27.963%
+ORACLE_OFF_PATH_INST_MEM                       5695802       22.186%         15234213       20.933%
+ORACLE_OFF_PATH_INST_NOTMEM                    8727004       33.993%         23836762       32.754%
+                                              25672849      100.000%         72775703      100.000%
+                                                  1.73         1.31              1.68         1.28
+
+ICACHE_CYCLE_NONRA_ONPATH                            0         -nan%                0         -nan%
+ICACHE_CYCLE_NONRA_OFFPATH                           0         -nan%                0         -nan%
+ICACHE_CYCLE_RA_ONPATH                               0         -nan%                0         -nan%
+ICACHE_CYCLE_RA_OFFPATH                              0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ICACHE_CYCLE_ONPATH_NONRA                            0         -nan%                0         -nan%
+ICACHE_CYCLE_OFFPATH_NONRA                           0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ICACHE_CYCLE_ONPATH_RA                               0         -nan%                0         -nan%
+ICACHE_CYCLE_OFFPATH_RA                              0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+INACCURATE_OFFPATH_CYCLES                            0        0.0000                0        0.0000
+
+FETCH_ALL_INST                                25672849                       72775703              
+
+EXEC_ALL_INST                                 13817243                       39984684              
+
+RET_ALL_INST                                  11250353                       33704728              
+
+EXEC_ON_PATH_INST                             10933539       79.130%         32891063       82.259%
+EXEC_OFF_PATH_INST                             2883704       20.870%          7093621       17.741%
+                                              13817243      100.000%         39984684      100.000%
+                                                  0.21         0.37              0.18         0.35
+
+EXEC_ON_PATH_INST_MEM                          4161657       30.119%         12540543       31.363%
+EXEC_ON_PATH_INST_NOTMEM                       6771882       49.010%         20350520       50.896%
+EXEC_OFF_PATH_INST_MEM                         1065202        7.709%          2553269        6.386%
+EXEC_OFF_PATH_INST_NOTMEM                      1818502       13.161%          4540352       11.355%
+                                              13817243      100.000%         39984684      100.000%
+                                                  1.04         0.85              0.98         0.80
+
+EXEC_RA_INST                                         0         -nan%                0         -nan%
+EXEC_NONRA_INST                                      0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+EXEC_ON_PATH_INST_RA                                 0         -nan%                0         -nan%
+EXEC_OFF_PATH_INST_RA                                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+EXEC_ON_PATH_INST_NONRA                              0         -nan%                0         -nan%
+EXEC_OFF_PATH_INST_NONRA                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+EXEC_RA_ON_PATH_INST                                 0         -nan%                0         -nan%
+EXEC_RA_OFF_PATH_INST                                0         -nan%                0         -nan%
+EXEC_NONRA_ON_PATH_INST                              0         -nan%                0         -nan%
+EXEC_NONRA_OFF_PATH_INST                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ICACHE_THROTTLE_CYCLE                                0                              0              
+
+FETCH_ENABLE_THROTTLE_OFF_PATH                       0         -nan%                0         -nan%
+FETCH_ENABLE_THROTTLE_ON_PATH                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FETCH_DISABLE_THROTTLE_OFF_PATH                      0         -nan%                0         -nan%
+FETCH_DISABLE_THROTTLE_ON_PATH                       0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FETCH_TH_ADJUST__0                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__1                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__2                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__3                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__4                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__5                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__6                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__7                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__8                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__9                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST__MAX                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FETCH_TH_ADJUST_UP                                   0         -nan%                0         -nan%
+FETCH_TH_ADJUST_DOWN                                 0         -nan%                0         -nan%
+FETCH_TH_ADJUST_SAME                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+THROTTLE_ADJUST_CACHE_MISS_INFO                      0                              0              
+
+LOW_CONF_COUNT_BP_MIS_0                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_1                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_2                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_3                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_4                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_5                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_6                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_7                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_8                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_9                              0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_10                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_11                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_12                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_13                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_14                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_15                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_16                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_17                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_18                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_19                             0         -nan%                0         -nan%
+LOW_CONF_COUNT_BP_MIS_20                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+LOW_CONF_COUNT_RET_0                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_1                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_2                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_3                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_4                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_5                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_6                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_7                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_8                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_9                                 0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_10                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_11                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_12                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_13                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_14                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_15                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_16                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_17                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_18                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_19                                0         -nan%                0         -nan%
+LOW_CONF_COUNT_RET_20                                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+CYCLES_RESTEER_RECOVER_AT_EXEC                       0         -nan%                0         -nan%
+CYCLES_RESTEER_RECOVER_AT_DECODE                     0         -nan%                0         -nan%
+CYCLES_RESTEER_BTB_MISS                              0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+CYCLES_RESTEER_RECOVER_AT_EXEC_SAVED_UC_FETCH             0         -nan%                0         -nan%
+CYCLES_RESTEER_RECOVER_AT_EXEC_COULD_BE_SAVED_UC_FETCH             0         -nan%                0         -nan%
+CYCLES_RESTEER_RECOVER_AT_DECODE_SAVED_UC_FETCH             0         -nan%                0         -nan%
+CYCLES_RESTEER_RECOVER_AT_DECODE_COULD_BE_SAVED_UC_FETCH             0         -nan%                0         -nan%
+CYCLES_RESTEER_BTB_MISS_SAVED_UC_FETCH               0         -nan%                0         -nan%
+CYCLES_RESTEER_BTB_MISS_COULD_BE_SAVED_UC_FETCH             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+CYCLES_UOC_IC_SWITCH                                 0                              0              
+
+
+
