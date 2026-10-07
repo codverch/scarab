@@ -709,6 +709,18 @@ void add_to_wake_up_lists(Op* op, void (*wake_action)(Op*, Op*, uns)) {
       if (src_op->wake_up_signaled[src_info->type]) {
         op_sources_clear_not_rdy(op, ii);
         wake_action(src_op, op, ii);
+        /* A consumer of a fused LOAD2 that renames after LOAD2 fired: is it
+         * still inside LOAD2's wake delay, and does LOAD2 set its ready cycle? */
+        if (src_info->type == REG_DATA_DEP && src_op->ifuse_load_role == LOAD2 &&
+            src_op->ifuse_ld2_early_wake_signaled && !op->off_path) {
+          if (cycle_count < src_op->wake_cycle) {
+            STAT_EVENT(op->proc_id, IFUSE_LD2_CONSUMERS_RENAMED_IN_DELAY);
+            if (op->rdy_cycle == src_op->wake_cycle)
+              STAT_EVENT(op->proc_id, IFUSE_LD2_CONSUMERS_RENAMED_IN_DELAY_CRITICAL);
+          } else {
+            STAT_EVENT(op->proc_id, IFUSE_LD2_CONSUMERS_RENAMED_AFTER_READY);
+          }
+        }
       }
 
       DEBUG(op->proc_id, "Added to wake up list  op_num:%s  src_op_num:%s type:%s\n", unsstr64(op->op_num),

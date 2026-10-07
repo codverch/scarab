@@ -68,6 +68,7 @@
 #include "sim.h"
 #include "statistics.h"
 #include "topdown.h"
+#include "backend_occupancy.h"
 #include "uop_queue_stage.h"
 
 /**************************************************************************************/
@@ -274,6 +275,7 @@ void cmp_cores(void) {
 
       // Per-cycle occupancy samples, taken after every stage has run.
       reg_file_observe_cycle(proc_id);
+      backend_occupancy_observe_cycle(proc_id);
       apt_observe_cycle(proc_id);
     }
   }

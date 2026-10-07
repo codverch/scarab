@@ -48,3 +48,7 @@ void ifuse_observe_gp_reg_pressure(uns proc_id) {
         ifuse_gp_reg_occupied_peak = occupied_regs;
     }
 }
+
+uns64 ifuse_extra_reg_in_use_now(void) {
+    return ifuse_extra_reg_in_use;
+}

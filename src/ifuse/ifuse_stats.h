@@ -19,4 +19,7 @@ void ifuse_observe_extra_reg_pressure(uns proc_id);
 void ifuse_extra_reg_note_alloc(void);
 void ifuse_extra_reg_note_free(void);
 
+/* Physical registers currently reserved for a LOAD2 that has not renamed. */
+uns64 ifuse_extra_reg_in_use_now(void);
+
 #endif /* IFUSE_STATS_H */

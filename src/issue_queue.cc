@@ -50,6 +50,7 @@ extern "C" {
 #include "ifuse/ifuse_exec_pair.h"
 #include "map_rename.h"
 #include "node_stage.h"
+#include "backend_occupancy.h"
 }
 
 #include <deque>
@@ -668,6 +669,8 @@ void IssueQueues::dispatch() {
   Op* op = NULL;
   uns32 num_fill_rs = 0;
 
+  rs_dispatch_blocked = FALSE;
+
   for (op = node->next_op_into_rs; op; op = op->next_node) {
     // A truly-fused LOAD2 never needs a reservation-station entry: its
     // result is forwarded from LOAD1, so it has nothing left to schedule or
@@ -679,6 +682,7 @@ void IssueQueues::dispatch() {
     ASSERT(proc_id, op->queue_id == MAX_UNS16 && op->queue_entry_id == MAX_UNS16);
     uns16 queue_id = find_emptiest_queue(op);
     if (queue_id == MAX_UNS16) {
+      rs_dispatch_blocked = TRUE;
       break;
     }
 

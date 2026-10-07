@@ -352,9 +352,13 @@ void update_node_stage(Stage_Data* src_sd) {
 /* node_fill_rob: This function takes ops from the map stage and allocates them into the node table.
  *    Note, this function does not place the Op in the RS, that is done later.*/
 
+Node_Dispatch_Block node_dispatch_block = NODE_DISPATCH_BLOCK_NONE;
+
 void node_fill_rob(Stage_Data* src_sd) {
   Flag on_path = FALSE;
   uns ii;
+
+  node_dispatch_block = NODE_DISPATCH_BLOCK_NONE;
 
   /* if nothing to process, return */
   if (src_sd->op_count == 0) {
@@ -369,6 +373,7 @@ void node_fill_rob(Stage_Data* src_sd) {
     if (is_node_table_full()) {
       collect_node_table_full_stats(node->node_head);
       rob_block_issue_reason = ROB_BLOCK_ISSUE_FULL;
+      node_dispatch_block = NODE_DISPATCH_BLOCK_ROB;
       return;
     }
     rob_block_issue_reason = ROB_BLOCK_ISSUE_NONE;
@@ -386,6 +391,8 @@ void node_fill_rob(Stage_Data* src_sd) {
               node->node_count);
         STAT_EVENT(op->proc_id, LSQ_FULL_TOTAL);
         STAT_EVENT(op->proc_id, LSQ_FULL_TOTAL + op->inst_info->table_info.mem_type);
+        node_dispatch_block = op->inst_info->table_info.mem_type == MEM_LD ? NODE_DISPATCH_BLOCK_LQ
+                                                                           : NODE_DISPATCH_BLOCK_SQ;
         return;
       }
 

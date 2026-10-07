@@ -294,6 +294,11 @@ static void ifuse_exec_pair_wake_ld2(Op* ld2_op, Counter wake_cycle,
         if (op_sources_test_not_rdy(dep_op, wake->rdy_bit)) {
             op_sources_clear_not_rdy(dep_op, wake->rdy_bit);
             wake_action(ld2_op, dep_op, wake->rdy_bit);
+            STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING);
+            if (op_sources_not_rdy_is_clear(dep_op) &&
+                dep_op->rdy_cycle == ld2_op->wake_cycle) {
+                STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING_CRITICAL);
+            }
         }
     }
 

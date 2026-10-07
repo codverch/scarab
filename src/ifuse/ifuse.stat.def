@@ -151,3 +151,17 @@ DEF_STAT(IFUSE_LD_EXEC_TO_DONE_FUSED, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_EXEC_MINUS_FETCH_DEMAND, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_RETIRE_MINUS_FETCH_DEMAND, COUNT, NO_RATIO)
 DEF_STAT(IFUSE_LD_EXEC_TO_DONE_DEMAND, COUNT, NO_RATIO)
+
+/* Register consumers of a fused LOAD2, by when they renamed relative to
+ * LOAD2's data (see ifuse_exec_pair_signal_ld2() and add_to_wake_up_lists()).
+ *   WAITING:         renamed before LOAD2's data; woken by it.
+ *   RENAMED_IN_DELAY: renamed after LOAD2 fired but before its delayed wake
+ *                    cycle, so the wake delay applies to them.
+ *   RENAMED_AFTER_READY: renamed once LOAD2's data was visible; unaffected.
+ * _CRITICAL: LOAD2 was the consumer's last source, so its wake cycle set the
+ * consumer's ready cycle. Consumers renamed after LOAD2 retired are not seen. */
+DEF_STAT(IFUSE_LD2_CONSUMERS_WAITING, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_LD2_CONSUMERS_WAITING_CRITICAL, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_LD2_CONSUMERS_RENAMED_IN_DELAY, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_LD2_CONSUMERS_RENAMED_IN_DELAY_CRITICAL, COUNT, NO_RATIO)
+DEF_STAT(IFUSE_LD2_CONSUMERS_RENAMED_AFTER_READY, COUNT, NO_RATIO)
