@@ -28,7 +28,17 @@ flags above. The default interleave is 4 B.
 configs on bfs/94 and clickhouse/17 match the committed IPCs exactly, which
 shows the rebuilt binaries and traces are the same.
 
+`baseline-8B` also matches the 8-byte-bank baseline committed earlier on
+hpca2027-revision-baseline (`src/simulations/baseline-64-bit-bank`) on all
+32 simpoints.
+
+Results: `SUMMARY.md`.
+
 ## Notes
+
+- revision-main has no RFP run for CacheBench. `rfp-8B/cachebench` uses
+  CacheBench's baseline params plus the RFP flags shared by every RFP app
+  except bfs (taken from rfp/clickhouse/17).
 
 - `--power_intf_on 0`: no McPAT output. Power does not affect timing.
 - The baseline, Helios, and RFP binaries print `Scarab gitrev: cb2ec6957`

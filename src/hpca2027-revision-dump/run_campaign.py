@@ -65,13 +65,25 @@ SETS = {
 }
 
 
-def params_in(branch, run_dir, overrides):
-    """The '--' section of a committed PARAMS.out, with overrides applied."""
+def committed_params(branch, run_dir):
     text = subprocess.run(
         ["git", "-C", str(SCARAB), "show", f"{branch}:{run_dir}/PARAMS.out"],
         capture_output=True, text=True, check=True).stdout
-    text = text.split("--- Cut out everything below")[0]
-    lines = text.splitlines()
+    return text.split("--- Cut out everything below")[0].splitlines()
+
+
+def params_in(branch, run_dir, overrides):
+    """The '--' section of a committed PARAMS.out, with overrides applied.
+
+    revision-main has no RFP run for CacheBench. It uses CacheBench's baseline
+    params plus the RFP flags that every RFP app except bfs shares (taken
+    from clickhouse/17)."""
+    if run_dir == f"{MAIN_DIR}/rfp/cachebench/0":
+        lines = committed_params(branch, f"{MAIN_DIR}/baseline/cachebench/0")
+        lines += [l for l in committed_params(branch, f"{MAIN_DIR}/rfp/clickhouse/17")
+                  if l.startswith("--rfp")]
+    else:
+        lines = committed_params(branch, run_dir)
     for flag, value in overrides.items():
         lines = [l for l in lines if not re.match(rf"--{flag}\s", l)]
         lines.append(f"--{flag} {value}")
@@ -116,7 +128,12 @@ def main():
     # Longest apps first so the tail is short.
     jobs.sort(key=lambda j: j[1] not in ("clickhouse", "memcached", "cachebench"))
     with ThreadPoolExecutor(args.j) as ex:
-        for cfg, app, sp, code in ex.map(lambda j: run_one(j, args.out), jobs):
+        def safe(j):
+            try:
+                return run_one(j, args.out)
+            except Exception as e:  # keep the campaign going
+                return j[0], j[1], j[2], f"error:{e}"
+        for cfg, app, sp, code in ex.map(safe, jobs):
             print(f"{cfg} {app}/{sp} exit={code}", flush=True)
 
 
