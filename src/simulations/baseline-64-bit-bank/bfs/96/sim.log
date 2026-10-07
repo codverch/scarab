@@ -1,0 +1,48 @@
+Scarab gitrev: df0b477ab
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Wed Oct  7 02:23:18 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000002 } -- 0.00 KIPS (100.00 KIPS)
+** Heartbeat:   6% -- { 2000006 } -- 111.11 KIPS (105.26 KIPS)
+** Heartbeat:  10% -- { 3000007 } -- 125.00 KIPS (111.11 KIPS)
+** Heartbeat:  13% -- { 4000008 } -- 111.11 KIPS (111.11 KIPS)
+** Heartbeat:  16% -- { 5000013 } -- 111.11 KIPS (111.11 KIPS)
+** Heartbeat:  20% -- { 6000016 } -- 111.11 KIPS (111.11 KIPS)
+** Heartbeat:  23% -- { 7000017 } -- 111.11 KIPS (111.11 KIPS)
+** Heartbeat:  26% -- { 8000021 } -- 100.00 KIPS (109.59 KIPS)
+** Heartbeat:  30% -- { 9000025 } -- 111.11 KIPS (109.76 KIPS)
+** Heartbeat:  33% -- { 10000027 } -- 111.11 KIPS (109.89 KIPS)
+** Heartbeat:  36% -- { 11000030 } -- 111.11 KIPS (110.00 KIPS)
+** Heartbeat:  40% -- { 12000035 } -- 100.00 KIPS (109.09 KIPS)
+** Heartbeat:  43% -- { 13000040 } -- 111.11 KIPS (109.24 KIPS)
+** Heartbeat:  46% -- { 14000044 } -- 111.11 KIPS (109.38 KIPS)
+** Heartbeat:  50% -- { 15000044 } -- 100.00 KIPS (108.70 KIPS)
+** Heartbeat:  53% -- { 16000045 } -- 111.11 KIPS (108.84 KIPS)
+** Heartbeat:  56% -- { 17000050 } -- 100.00 KIPS (108.28 KIPS)
+** Heartbeat:  60% -- { 18000055 } -- 125.00 KIPS (109.09 KIPS)
+** Heartbeat:  63% -- { 19000058 } -- 142.86 KIPS (110.47 KIPS)
+** Heartbeat:  66% -- { 20000058 } -- 142.86 KIPS (111.73 KIPS)
+** Heartbeat:  70% -- { 21000058 } -- 111.11 KIPS (111.70 KIPS)
+** Heartbeat:  73% -- { 22000058 } -- 111.11 KIPS (111.68 KIPS)
+** Heartbeat:  76% -- { 23000063 } -- 111.11 KIPS (111.65 KIPS)
+** Heartbeat:  80% -- { 24000064 } -- 111.11 KIPS (111.63 KIPS)
+** Heartbeat:  83% -- { 25000067 } -- 111.11 KIPS (111.61 KIPS)
+** Heartbeat:  86% -- { 26000073 } -- 125.00 KIPS (112.07 KIPS)
+** Heartbeat:  90% -- { 27000073 } -- 166.67 KIPS (113.45 KIPS)
+** Heartbeat:  93% -- { 28000077 } -- 166.67 KIPS (114.75 KIPS)
+** Heartbeat:  96% -- { 29000079 } -- 111.11 KIPS (114.62 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x40e77b
+python3: can't open file '/home/deepmish/scarab_stage/baseline-64-bit-bank/scarab/bin/power/power_intf.py': [Errno 2] No such file or directory
+** Core 0 Finished:    insts:30000000    cycles:9355801     time:2923687812500       -- 3.21 IPC (3.21 IPC) --  N/A  KIPS (115.38 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=35088042  I=30000078  C=9355801):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=35088042  I=30000078  C=9355801):  Command "python3 /home/deepmish/scarab_stage/baseline-64-bit-bank/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/baseline-64-bit-bank-run/scarab/src/scarab_current(+0x26bab6) [0x5555557bfab6]
+/home/deepmish/scarab_stage/baseline-64-bit-bank-run/scarab/src/scarab_current(+0x300e0e) [0x555555854e0e]
+/home/deepmish/scarab_stage/baseline-64-bit-bank-run/scarab/src/scarab_current(+0x1e41b3) [0x5555557381b3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/baseline-64-bit-bank-run/scarab/src/scarab_current(+0x1e863e) [0x55555573c63e]
+[1 'Patching gap in trace by injecting a Jmp' lines removed before commit]
