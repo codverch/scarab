@@ -1,0 +1,1266 @@
+/* -*- Mode: c -*- */
+####################################################################################################
+Core 0
+####################################################################################################
+Cumulative:        Cycles: 51424844              Instructions: 30000000              IPC: 0.58338
+
+Periodic:          Cycles: 18140940              Instructions: 9999993               IPC: 0.55124
+
+L0_ALL_PREDICTIONS                             2475151       50.000%         11875385       50.000%
+MAIN_ALL_PREDICTIONS                           2475151       50.000%         11875385       50.000%
+                                               4950302      100.000%         23750770      100.000%
+                                                  0.50         0.50              0.50         0.50
+
+L0_ALL_RECOVER_AT_EXEC                          124432       61.507%           426203       60.926%
+MAIN_ALL_RECOVER_AT_EXEC                         77872       38.493%           273336       39.074%
+                                                202304      100.000%           699539      100.000%
+                                                  0.38         0.45              0.39         0.45
+
+L0_ALL_RECOVER_AT_DECODE                             0         -nan%                0        0.000%
+MAIN_ALL_RECOVER_AT_DECODE                           0         -nan%              103      100.000%
+                                                     0         -nan%              103      100.000%
+                                                  -nan         -nan              1.00         1.00
+
+L0_ALL_PREDICTIONS_OFFPATH                     6917994       50.000%         22186753       50.000%
+MAIN_ALL_PREDICTIONS_OFFPATH                   6917994       50.000%         22186753       50.000%
+                                              13835988      100.000%         44373506      100.000%
+                                                  0.50         0.50              0.50         0.50
+
+L0_ALL_RECOVER_AT_EXEC_OFFPATH                 2077020       61.032%          6583764       64.980%
+MAIN_ALL_RECOVER_AT_EXEC_OFFPATH               1326173       38.968%          3548279       35.020%
+                                               3403193      100.000%         10132043      100.000%
+                                                  0.39         0.45              0.35         0.44
+
+L0_ALL_RECOVER_AT_DECODE_OFFPATH                     0         -nan%                0        0.000%
+MAIN_ALL_RECOVER_AT_DECODE_OFFPATH                   0         -nan%              133      100.000%
+                                                     0         -nan%              133      100.000%
+                                                  -nan         -nan              1.00         1.00
+
+MAIN_CBR_CORRECT                               2293409       95.700%         11322846       96.954%
+MAIN_CBR_CORRECT_BTB_MISS_NT_NT                  25171        1.050%            82425        0.706%
+MAIN_CBR_RECOVER_AT_EXEC                         77872        3.249%           273134        2.339%
+MAIN_CBR_RECOVER_AT_DECODE                           0        0.000%                0        0.000%
+MAIN_CBR_RECOVER_BTB_MISS_T_T                        0        0.000%                0        0.000%
+MAIN_CBR_RECOVER_BTB_MISS_T_NT                       0        0.000%               21        0.000%
+MAIN_CBR_RECOVER_BTB_MISS_NT_T                       0        0.000%              150        0.001%
+                                               2396452      100.000%         11678576      100.000%
+                                                  0.08         0.36              0.05         0.31
+
+MAIN_BR_CORRECT                                  78687      100.000%           196396       99.974%
+MAIN_BR_RECOVER                                      0        0.000%               51        0.026%
+                                                 78687      100.000%           196447      100.000%
+                                                  0.00         0.00              0.00         0.02
+
+MAIN_ICALL_CORRECT_IBTB                              0         -nan%                0        0.000%
+MAIN_ICALL_CORRECT_BTB                               0         -nan%                6       54.545%
+MAIN_ICALL_RECOVER_AT_EXEC_IBTB                      0         -nan%                0        0.000%
+MAIN_ICALL_RECOVER_AT_EXEC_BTB                       0         -nan%                0        0.000%
+MAIN_ICALL_RECOVER_AT_EXEC_XBTB_MISS                 0         -nan%                5       45.455%
+                                                     0         -nan%               11      100.000%
+                                                  -nan         -nan              2.36         2.29
+
+MAIN_IBR_CORRECT_IBTB                                2       50.000%                9        9.091%
+MAIN_IBR_CORRECT_BTB                                 2       50.000%               65       65.657%
+MAIN_IBR_RECOVER_AT_EXEC_IBTB                        0        0.000%                0        0.000%
+MAIN_IBR_RECOVER_AT_EXEC_BTB                         0        0.000%                2        2.020%
+MAIN_IBR_RECOVER_AT_EXEC_XBTB_MISS                   0        0.000%               23       23.232%
+                                                     4      100.000%               99      100.000%
+                                                  0.50         0.41              1.65         1.50
+
+MAIN_ICO_CORRECT                                     0         -nan%                0         -nan%
+MAIN_ICO_RECOVER                                     0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+MAIN_RET_CORRECT                                     4      100.000%              130       99.237%
+MAIN_RET_RECOVER                                     0        0.000%                0        0.000%
+MAIN_RET_RECOVER_UFLOW                               0        0.000%                1        0.763%
+                                                     4      100.000%              131      100.000%
+                                                  0.00         0.00              0.02         0.17
+
+MAIN_CALL_CORRECT                                    4      100.000%               69       57.025%
+MAIN_CALL_RECOVER                                    0        0.000%               52       42.975%
+                                                     4      100.000%              121      100.000%
+                                                  0.00         0.00              0.43         0.47
+
+L0_CBR_CORRECT                                 2246851       93.757%         11170382       95.648%
+L0_CBR_CORRECT_BTB_MISS_NT_NT                    25171        1.050%            82167        0.704%
+L0_CBR_RECOVER_AT_EXEC                          124430        5.192%           425579        3.644%
+L0_CBR_RECOVER_AT_DECODE                             0        0.000%                0        0.000%
+L0_CBR_RECOVER_BTB_MISS_T_T                          0        0.000%              141        0.001%
+L0_CBR_RECOVER_BTB_MISS_T_NT                         0        0.000%              285        0.002%
+L0_CBR_RECOVER_BTB_MISS_NT_T                         0        0.000%               22        0.000%
+                                               2396452      100.000%         11678576      100.000%
+                                                  0.11         0.44              0.08         0.38
+
+L0_BR_CORRECT                                    78687      100.000%           196388       99.970%
+L0_BR_RECOVER                                        0        0.000%               59        0.030%
+                                                 78687      100.000%           196447      100.000%
+                                                  0.00         0.00              0.00         0.02
+
+L0_ICALL_CORRECT_IBTB                                0         -nan%                0        0.000%
+L0_ICALL_CORRECT_BTB                                 0         -nan%                4       36.364%
+L0_ICALL_RECOVER_AT_EXEC_IBTB                        0         -nan%                0        0.000%
+L0_ICALL_RECOVER_AT_EXEC_BTB                         0         -nan%                0        0.000%
+L0_ICALL_RECOVER_AT_EXEC_XBTB_MISS                   0         -nan%                7       63.636%
+                                                     0         -nan%               11      100.000%
+                                                  -nan         -nan              2.91         2.87
+
+L0_IBR_CORRECT_IBTB                                  0        0.000%                0        0.000%
+L0_IBR_CORRECT_BTB                                   2       50.000%               46       46.465%
+L0_IBR_RECOVER_AT_EXEC_IBTB                          2       50.000%                9        9.091%
+L0_IBR_RECOVER_AT_EXEC_BTB                           0        0.000%                2        2.020%
+L0_IBR_RECOVER_AT_EXEC_XBTB_MISS                     0        0.000%               42       42.424%
+                                                     4      100.000%               99      100.000%
+                                                  1.50         0.58              2.40         2.13
+
+L0_ICO_CORRECT                                       0         -nan%                0         -nan%
+L0_ICO_RECOVER                                       0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+L0_RET_CORRECT                                       4      100.000%              130       99.237%
+L0_RET_RECOVER                                       0        0.000%                0        0.000%
+L0_RET_RECOVER_UFLOW                                 0        0.000%                1        0.763%
+                                                     4      100.000%              131      100.000%
+                                                  0.00         0.00              0.02         0.17
+
+L0_CALL_CORRECT                                      4      100.000%               65       53.719%
+L0_CALL_RECOVER                                      0        0.000%               56       46.281%
+                                                     4      100.000%              121      100.000%
+                                                  0.00         0.00              0.46         0.48
+
+MAIN_CBR_CORRECT_OFFPATH                       5309276       79.640%         17943046       83.038%
+MAIN_CBR_CORRECT_BTB_MISS_NT_NT_OFFPATH          31155        0.467%           117063        0.542%
+MAIN_CBR_RECOVER_AT_EXEC_OFFPATH               1326172       19.893%          3547882       16.419%
+MAIN_CBR_RECOVER_AT_DECODE_OFFPATH                   0        0.000%                0        0.000%
+MAIN_CBR_RECOVER_BTB_MISS_T_T_OFFPATH                0        0.000%               39        0.000%
+MAIN_CBR_RECOVER_BTB_MISS_T_NT_OFFPATH               0        0.000%               44        0.000%
+MAIN_CBR_RECOVER_BTB_MISS_NT_T_OFFPATH               0        0.000%              143        0.001%
+                                               6666603      100.000%         21608217      100.000%
+                                                  0.40         0.71              0.33         0.68
+
+MAIN_BR_CORRECT_OFFPATH                         251318      100.000%           576933       99.992%
+MAIN_BR_RECOVER_OFFPATH                              0        0.000%               48        0.008%
+                                                251318      100.000%           576981      100.000%
+                                                  0.00         0.00              0.00         0.01
+
+MAIN_ICALL_CORRECT_IBTB_OFFPATH                      0         -nan%                4       11.111%
+MAIN_ICALL_CORRECT_BTB_OFFPATH                       0         -nan%               22       61.111%
+MAIN_ICALL_RECOVER_AT_EXEC_IBTB_OFFPATH              0         -nan%                0        0.000%
+MAIN_ICALL_RECOVER_AT_EXEC_BTB_OFFPATH               0         -nan%                0        0.000%
+MAIN_ICALL_RECOVER_AT_EXEC_XBTB_MISS_OFFPATH             0         -nan%               10       27.778%
+                                                     0         -nan%               36      100.000%
+                                                  -nan         -nan              1.72         1.63
+
+MAIN_IBR_CORRECT_IBTB_OFFPATH                       14       66.667%               82       18.062%
+MAIN_IBR_CORRECT_BTB_OFFPATH                         7       33.333%              355       78.194%
+MAIN_IBR_RECOVER_AT_EXEC_IBTB_OFFPATH                0        0.000%                0        0.000%
+MAIN_IBR_RECOVER_AT_EXEC_BTB_OFFPATH                 0        0.000%                1        0.220%
+MAIN_IBR_RECOVER_AT_EXEC_XBTB_MISS_OFFPATH             0        0.000%               16        3.524%
+                                                    21      100.000%              454      100.000%
+                                                  0.33         0.39              0.93         0.61
+
+MAIN_ICO_CORRECT_OFFPATH                             0         -nan%                0         -nan%
+MAIN_ICO_RECOVER_OFFPATH                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+MAIN_RET_CORRECT_OFFPATH                            18       94.737%              324       63.905%
+MAIN_RET_RECOVER_OFFPATH                             1        5.263%              182       35.897%
+MAIN_RET_RECOVER_UFLOW_OFFPATH                       0        0.000%                1        0.197%
+                                                    19      100.000%              507      100.000%
+                                                  0.05         0.22              0.36         0.39
+
+MAIN_CALL_CORRECT_OFFPATH                           33      100.000%              512       91.756%
+MAIN_CALL_RECOVER_OFFPATH                            0        0.000%               46        8.244%
+                                                    33      100.000%              558      100.000%
+                                                  0.00         0.00              0.08         0.26
+
+L0_CBR_CORRECT_OFFPATH                         4558443       68.377%         14907972       68.992%
+L0_CBR_CORRECT_BTB_MISS_NT_NT_OFFPATH            31155        0.467%           116977        0.541%
+L0_CBR_RECOVER_AT_EXEC_OFFPATH                 2077005       31.155%          6582463       30.463%
+L0_CBR_RECOVER_AT_DECODE_OFFPATH                     0        0.000%                0        0.000%
+L0_CBR_RECOVER_BTB_MISS_T_T_OFFPATH                  0        0.000%              165        0.001%
+L0_CBR_RECOVER_BTB_MISS_T_NT_OFFPATH                 0        0.000%              589        0.003%
+L0_CBR_RECOVER_BTB_MISS_NT_T_OFFPATH                 0        0.000%               51        0.000%
+                                               6666603      100.000%         21608217      100.000%
+                                                  0.63         0.77              0.61         0.77
+
+L0_BR_CORRECT_OFFPATH                           251318      100.000%           576911       99.988%
+L0_BR_RECOVER_OFFPATH                                0        0.000%               70        0.012%
+                                                251318      100.000%           576981      100.000%
+                                                  0.00         0.00              0.00         0.01
+
+L0_ICALL_CORRECT_IBTB_OFFPATH                        0         -nan%                0        0.000%
+L0_ICALL_CORRECT_BTB_OFFPATH                         0         -nan%               18       50.000%
+L0_ICALL_RECOVER_AT_EXEC_IBTB_OFFPATH                0         -nan%                4       11.111%
+L0_ICALL_RECOVER_AT_EXEC_BTB_OFFPATH                 0         -nan%                0        0.000%
+L0_ICALL_RECOVER_AT_EXEC_XBTB_MISS_OFFPATH             0         -nan%               14       38.889%
+                                                     0         -nan%               36      100.000%
+                                                  -nan         -nan              2.28         2.03
+
+L0_IBR_CORRECT_IBTB_OFFPATH                          0        0.000%                0        0.000%
+L0_IBR_CORRECT_BTB_OFFPATH                           7       33.333%              295       64.978%
+L0_IBR_RECOVER_AT_EXEC_IBTB_OFFPATH                 14       66.667%               82       18.062%
+L0_IBR_RECOVER_AT_EXEC_BTB_OFFPATH                   0        0.000%                1        0.220%
+L0_IBR_RECOVER_AT_EXEC_XBTB_MISS_OFFPATH             0        0.000%               76       16.740%
+                                                    21      100.000%              454      100.000%
+                                                  1.67         0.48              1.69         1.31
+
+L0_ICO_CORRECT_OFFPATH                               0         -nan%                0         -nan%
+L0_ICO_RECOVER_OFFPATH                               0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+L0_RET_CORRECT_OFFPATH                              18       94.737%              324       63.905%
+L0_RET_RECOVER_OFFPATH                               1        5.263%              182       35.897%
+L0_RET_RECOVER_UFLOW_OFFPATH                         0        0.000%                1        0.197%
+                                                    19      100.000%              507      100.000%
+                                                  0.05         0.22              0.36         0.39
+
+L0_CALL_CORRECT_OFFPATH                             33      100.000%              492       88.172%
+L0_CALL_RECOVER_OFFPATH                              0        0.000%               66       11.828%
+                                                    33      100.000%              558      100.000%
+                                                  0.00         0.00              0.12         0.31
+
+ALL_BTB_CORRECT                                2449976       98.983%         11792525       99.303%
+ALL_BTB_INCORRECT_BUT_TARGET_CORRECT                 0        0.000%                0        0.000%
+ALL_BTB_INCORRECT                                25171        1.017%            82729        0.697%
+                                               2475147      100.000%         11875254      100.000%
+                                                  0.02         0.20              0.01         0.17
+
+ALL_IBTB_CORRECT                                     2       50.000%                9        8.182%
+ALL_IBTB_INCORRECT                                   2       50.000%              101       91.818%
+                                                     4      100.000%              110      100.000%
+                                                  0.50         0.58              0.92         0.89
+
+ALL_BTB_CORRECT_OFFPATH                        6886820       99.550%         22068836       99.471%
+ALL_BTB_INCORRECT_BUT_TARGET_CORRECT_OFFPATH             0        0.000%                0        0.000%
+ALL_BTB_INCORRECT_OFFPATH                        31155        0.450%           117410        0.529%
+                                               6917975      100.000%         22186246      100.000%
+                                                  0.01         0.13              0.01         0.14
+
+ALL_IBTB_CORRECT_OFFPATH                            14       66.667%               86       17.551%
+ALL_IBTB_INCORRECT_OFFPATH                           7       33.333%              404       82.449%
+                                                    21      100.000%              490      100.000%
+                                                  0.33         0.44              0.82         0.77
+
+CRS_MISS                                             0        0.000%                2        0.763%
+CRS_HIT                                              8      100.000%              260       99.237%
+                                                     8      100.000%              262      100.000%
+                                                  1.00         1.07              0.99         0.99
+
+CRS_MISS_OFFPATH                                     2        5.263%              366       36.095%
+CRS_HIT_OFFPATH                                     36       94.737%              648       63.905%
+                                                    38      100.000%             1014      100.000%
+                                                  0.95         0.94              0.64         0.59
+
+CRS_CLOBBER                                          0                              0              
+
+IBTB_TARG_CACHE_MISS                                 2       50.000%              101       91.818%
+IBTB_TARG_CACHE_HIT                                  2       50.000%                9        8.182%
+                                                     4      100.000%              110      100.000%
+                                                  0.50         0.58              0.08         0.26
+
+IBTB_TARG_CACHE_MISS_OFFPATH                         7       33.333%              404       82.449%
+IBTB_TARG_CACHE_HIT_OFFPATH                         14       66.667%               86       17.551%
+                                                    21      100.000%              490      100.000%
+                                                  0.67         0.62              0.18         0.35
+
+IBTB_TARG_CACHE_WRITE                                4       80.000%              110       64.706%
+IBTB_TARG_CACHE_WRITE_OFFPATH                        1       20.000%               60       35.294%
+                                                     5      100.000%              170      100.000%
+                                                  0.20         0.41              0.35         0.44
+
+BTB_WRITE                                            2      100.000%              358       78.509%
+BTB_WRITE_OFFPATH                                    0        0.000%               98       21.491%
+                                                     2      100.000%              456      100.000%
+                                                  0.00         0.00              0.21         0.38
+
+BTB_L0_CORRECT                                 2449976       98.983%         11792471       99.303%
+BTB_L0_INCORRECT_BUT_TARGET_CORRECT                  0        0.000%                0        0.000%
+BTB_L0_INCORRECT                                 25171        1.017%            82783        0.697%
+                                               2475147      100.000%         11875254      100.000%
+                                                  0.02         0.20              0.01         0.17
+
+BTB_L1_CORRECT                                 2449976       98.983%         11792525       99.303%
+BTB_L1_INCORRECT_BUT_TARGET_CORRECT                  0        0.000%                0        0.000%
+BTB_L1_INCORRECT                                 25171        1.017%            82729        0.697%
+                                               2475147      100.000%         11875254      100.000%
+                                                  0.02         0.20              0.01         0.17
+
+BTB_MAIN_CORRECT                               2449976       98.983%         11792525       99.303%
+BTB_MAIN_INCORRECT_BUT_TARGET_CORRECT                0        0.000%                0        0.000%
+BTB_MAIN_INCORRECT                               25171        1.017%            82729        0.697%
+                                               2475147      100.000%         11875254      100.000%
+                                                  0.02         0.20              0.01         0.17
+
+BTB_L0_CORRECT_OFFPATH                         6886820       99.550%         22068234       99.468%
+BTB_L0_INCORRECT_BUT_TARGET_CORRECT_OFFPATH             0        0.000%                0        0.000%
+BTB_L0_INCORRECT_OFFPATH                         31155        0.450%           118012        0.532%
+                                               6917975      100.000%         22186246      100.000%
+                                                  0.01         0.13              0.01         0.15
+
+BTB_L1_CORRECT_OFFPATH                         6886820       99.550%         22068836       99.471%
+BTB_L1_INCORRECT_BUT_TARGET_CORRECT_OFFPATH             0        0.000%                0        0.000%
+BTB_L1_INCORRECT_OFFPATH                         31155        0.450%           117410        0.529%
+                                               6917975      100.000%         22186246      100.000%
+                                                  0.01         0.13              0.01         0.14
+
+BTB_MAIN_CORRECT_OFFPATH                       6886820       99.550%         22068836       99.471%
+BTB_MAIN_INCORRECT_BUT_TARGET_CORRECT_OFFPATH             0        0.000%                0        0.000%
+BTB_MAIN_INCORRECT_OFFPATH                       31155        0.450%           117410        0.529%
+                                               6917975      100.000%         22186246      100.000%
+                                                  0.01         0.13              0.01         0.14
+
+TARG_HYBRID_CORRECT_TAGLESS                          0         -nan%                0         -nan%
+TARG_HYBRID_CORRECT_TAGGED                           0         -nan%                0         -nan%
+TARG_HYBRID_RECOVER_AT_EXEC_TAGLESS                  0         -nan%                0         -nan%
+TARG_HYBRID_RECOVER_AT_EXEC_TAGGED                   0         -nan%                0         -nan%
+TARG_HYBRID_NO_PRED                                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_L0_EARLY_RECOVERIES                          124432       61.507%           426203       60.917%
+BP_MAIN_EXEC_RECOVERIES                          77872       38.493%           273336       39.068%
+BP_MAIN_DECODE_RECOVERIES                            0        0.000%              103        0.015%
+                                                202304      100.000%           699642      100.000%
+                                                  0.38         0.38              0.39         0.38
+
+SCHEDULED_L0_EARLY_RECOVERIES                    62218       44.414%           212992       43.787%
+SCHEDULED_MAIN_EXEC_RECOVERIES                   77870       55.586%           273332       56.192%
+SCHEDULED_MAIN_DECODE_RECOVERIES                     0        0.000%              103        0.021%
+                                                140088      100.000%           486427      100.000%
+                                                  0.56         0.33              0.56         0.33
+
+PERFORMED_RECOVERIES                            140088                         486427              
+
+PERFORMED_RECOVERY_LAT                        13906227                       34626997              
+
+SCHEDULED_MAIN_DECODE_LAT                            0                           6303              
+
+SCHEDULED_MAIN_EXEC_LAT                       13563833                       33434995              
+
+SCHEDULED_L0_EARLY_LAT                               0                              0              
+
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_1                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_2                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_3                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_4                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_5                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_6                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_7                  0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_8                  0         -nan%               55       53.398%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_9                  0         -nan%               13       12.621%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_10                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_11                 0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_12                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_13                 0         -nan%                2        1.942%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_14                 0         -nan%                2        1.942%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_15                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_16                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_17                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_18                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_19                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_20                 0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_21                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_22                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_23                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_24                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_25                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_26                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_27                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_28                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_29                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_30                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_31                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_32                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_33                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_34                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_35                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_36                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_37                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_38                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_39                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_40                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_41                 0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_42                 0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_43                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_44                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_45                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_46                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_47                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_48                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_49                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_50                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_51                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_52                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_53                 0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_54                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_55                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_56                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_57                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_58                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_59                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_60                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_61                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_62                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_63                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_64                 0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_65                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_66                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_67                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_68                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_69                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_70                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_71                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_72                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_73                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_74                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_75                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_76                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_77                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_78                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_79                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_80                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_81                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_82                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_83                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_84                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_85                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_86                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_87                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_88                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_89                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_90                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_91                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_92                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_93                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_94                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_95                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_96                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_97                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_98                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_99                 0         -nan%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_100                0         -nan%                1        0.971%
+MAIN_BRANCH_RESOLVE_AT_DECODE_LAT_GT100              0         -nan%               24       23.301%
+                                                     0         -nan%              103      100.000%
+                                                  -nan         -nan             31.68        42.60
+
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_1                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_2                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_3                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_4                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_5                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_6                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_7                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_8                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_9                    0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_10                   0        0.000%                0        0.000%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_11                 753        0.967%             2830        1.035%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_12                1135        1.458%             5697        2.084%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_13                 307        0.394%              846        0.310%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_14                 172        0.221%              402        0.147%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_15                 107        0.137%              822        0.301%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_16                  14        0.018%               96        0.035%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_17                  76        0.098%              480        0.176%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_18                 135        0.173%              548        0.200%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_19                 313        0.402%             1040        0.380%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_20                  77        0.099%              283        0.104%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_21                4454        5.720%            15522        5.679%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_22                 627        0.805%             2023        0.740%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_23                 416        0.534%              986        0.361%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_24                2661        3.417%            12151        4.446%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_25                 442        0.568%             1252        0.458%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_26                 309        0.397%              759        0.278%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_27                 392        0.503%             1208        0.442%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_28                 131        0.168%              990        0.362%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_29                 563        0.723%             2036        0.745%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_30                 147        0.189%              430        0.157%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_31                 643        0.826%             2191        0.802%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_32                 191        0.245%              533        0.195%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_33                8058       10.348%            38419       14.056%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_34                1343        1.725%             5452        1.995%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_35                 231        0.297%             1279        0.468%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_36                 197        0.253%              969        0.355%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_37                  88        0.113%              453        0.166%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_38                 138        0.177%              489        0.179%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_39                  90        0.116%              520        0.190%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_40                 451        0.579%             2201        0.805%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_41                 677        0.869%             2242        0.820%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_42                 536        0.688%             1431        0.524%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_43                 332        0.426%             1097        0.401%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_44                 194        0.249%              628        0.230%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_45                 374        0.480%             1170        0.428%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_46                 149        0.191%              573        0.210%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_47                 423        0.543%             1951        0.714%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_48                 360        0.462%             1298        0.475%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_49                3690        4.739%            17771        6.502%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_50                2016        2.589%             7359        2.692%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_51                 643        0.826%             2354        0.861%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_52                 418        0.537%             1544        0.565%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_53                  97        0.125%              500        0.183%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_54                 213        0.274%              764        0.280%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_55                  92        0.118%              461        0.169%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_56                  44        0.057%              312        0.114%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_57                 208        0.267%              849        0.311%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_58                 122        0.157%              582        0.213%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_59                  79        0.101%              365        0.134%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_60                  46        0.059%              274        0.100%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_61                  35        0.045%              248        0.091%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_62                  52        0.067%              249        0.091%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_63                  53        0.068%              287        0.105%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_64                  37        0.048%              232        0.085%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_65                  32        0.041%              181        0.066%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_66                  31        0.040%              188        0.069%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_67                  30        0.039%              220        0.080%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_68                  43        0.055%              239        0.087%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_69                  31        0.040%              212        0.078%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_70                  25        0.032%              235        0.086%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_71                  45        0.058%              275        0.101%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_72                  42        0.054%              302        0.110%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_73                  54        0.069%              401        0.147%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_74                  53        0.068%              399        0.146%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_75                  45        0.058%              457        0.167%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_76                  48        0.062%              436        0.160%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_77                  61        0.078%              510        0.187%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_78                  69        0.089%              643        0.235%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_79                 214        0.275%             1475        0.540%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_80                 350        0.449%             1153        0.422%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_81                 224        0.288%             1260        0.461%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_82                 207        0.266%              991        0.363%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_83                 190        0.244%             2209        0.808%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_84                 220        0.283%             1902        0.696%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_85                 149        0.191%             1046        0.383%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_86                 304        0.390%             2472        0.904%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_87                 300        0.385%             1524        0.558%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_88                1164        1.495%             6341        2.320%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_89                1108        1.423%             3311        1.211%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_90                 335        0.430%             1257        0.460%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_91                 213        0.274%              884        0.323%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_92                  90        0.116%              749        0.274%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_93                 122        0.157%              664        0.243%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_94                  95        0.122%              746        0.273%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_95                  87        0.112%              676        0.247%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_96                 185        0.238%             1689        0.618%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_97                 102        0.131%              568        0.208%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_98                  65        0.083%              460        0.168%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_99                  70        0.090%              569        0.208%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_100                 99        0.127%              665        0.243%
+MAIN_BRANCH_RESOLVE_AT_EXEC_LAT_GT100            35817       45.996%            88575       32.406%
+                                                 77870      100.000%           273332      100.000%
+                                                 67.96        57.15             61.75        48.15
+
+PRED_TO_UPDATE_CYCLES_0                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_1                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_2                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_3                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_4                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_5                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_6                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_7                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_8                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_9                              0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_10                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_11                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_12                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_13                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_14                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_15                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_16                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_17                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_18                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_19                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_20                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_21                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_22                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_23                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_24                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_25                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_26                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_27                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_28                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_29                             0         -nan%                0         -nan%
+PRED_TO_UPDATE_CYCLES_30                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_ON_PATH_CONF_RECOVER_AT_EXEC                      0         -nan%                0         -nan%
+BP_ON_PATH_CONF_CORRECT                              0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_OFF_PATH_CONF_RECOVER_AT_EXEC                     0         -nan%                0         -nan%
+BP_OFF_PATH_CONF_CORRECT                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_ON_PATH_PRED_MIS_CONF_RECOVER_AT_EXEC             0         -nan%                0         -nan%
+BP_ON_PATH_PRED_MIS_CONF_CORRECT                     0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_ON_PATH_PRED_COR_CONF_RECOVER_AT_EXEC             0         -nan%                0         -nan%
+BP_ON_PATH_PRED_COR_CONF_CORRECT                     0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_OFF_PATH_PRED_MIS_CONF_RECOVER_AT_EXEC             0         -nan%                0         -nan%
+BP_OFF_PATH_PRED_MIS_CONF_CORRECT                    0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BP_OFF_PATH_PRED_COR_CONF_RECOVER_AT_EXEC             0         -nan%                0         -nan%
+BP_OFF_PATH_PRED_COR_CONF_CORRECT                    0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ONPATH_CONF_RECOVER_AT_EXEC                          0         -nan%                0         -nan%
+ONPATH_CONF_CORRECT                                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ONPATH_ON_PATH_CONF_RECOVER_AT_EXEC                  0         -nan%                0         -nan%
+ONPATH_ON_PATH_CONF_CORRECT                          0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ONPATH_OFF_PATH_CONF_RECOVER_AT_EXEC                 0         -nan%                0         -nan%
+ONPATH_OFF_PATH_CONF_CORRECT                         0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+PRED_ONPATH_CONF_RECOVER_AT_EXEC                     0         -nan%                0         -nan%
+PRED_ONPATH_CONF_CORRECT                             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+PRED_OFFPATH_CONF_RECOVER_AT_EXEC                    0         -nan%                0         -nan%
+PRED_OFFPATH_CONF_CORRECT                            0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+LONG_OVWT_MIS                                        0         -nan%                0         -nan%
+LONG_OVWT_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_0_7_MIS                                   0         -nan%                0         -nan%
+OPC_LENGTH_0_7_COR                                   0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_8_15_MIS                                  0         -nan%                0         -nan%
+OPC_LENGTH_8_15_COR                                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_16_23_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_16_23_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_24_31_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_24_31_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_32_39_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_32_39_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_40_47_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_40_47_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_48_55_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_48_55_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_56_63_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_56_63_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_64_71_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_64_71_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_72_79_MIS                                 0         -nan%                0         -nan%
+OPC_LENGTH_72_79_COR                                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+OPC_LENGTH_80_MIS                                    0         -nan%                0         -nan%
+OPC_LENGTH_80_COR                                    0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ALL_ONES_MIS                                         0         -nan%                0         -nan%
+ALL_ONES_COR                                         0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FIRST_ONE_MIS                                        0         -nan%                0         -nan%
+FIRST_ONE_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_0_1_MIS                                        0         -nan%                0         -nan%
+ZEROS_0_1_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_2_3_MIS                                        0         -nan%                0         -nan%
+ZEROS_2_3_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_4_5_MIS                                        0         -nan%                0         -nan%
+ZEROS_4_5_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_6_7_MIS                                        0         -nan%                0         -nan%
+ZEROS_6_7_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_8_9_MIS                                        0         -nan%                0         -nan%
+ZEROS_8_9_COR                                        0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_10_11_MIS                                      0         -nan%                0         -nan%
+ZEROS_10_11_COR                                      0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_12_13_MIS                                      0         -nan%                0         -nan%
+ZEROS_12_13_COR                                      0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_14_15_MIS                                      0         -nan%                0         -nan%
+ZEROS_14_15_COR                                      0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+ZEROS_16_MIS                                         0         -nan%                0         -nan%
+ZEROS_16_COR                                         0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+GS2BC_GSHARE                                         0         -nan%                0         -nan%
+GS2BC_2BC                                            0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+GSKEW2BC_VOTE                                        0         -nan%                0         -nan%
+GSKEW2BC_2BC                                         0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_INIT_ON_PATH_CORRECT                       0         -nan%                0         -nan%
+FUTGSHARE_INIT_ON_PATH_RECOVER_AT_EXEC               0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_INIT_OFF_PATH_CORRECT                      0         -nan%                0         -nan%
+FUTGSHARE_INIT_OFF_PATH_RECOVER_AT_EXEC              0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH                  0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH                    0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH                 0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH                   0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ORIG_CORRECT_FUT_CORRECT_ON_PATH             0         -nan%                0         -nan%
+FUTGSHARE_ORIG_RECOVER_AT_EXEC_FUT_CORRECT_ON_PATH             0         -nan%                0         -nan%
+FUTGSHARE_ORIG_CORRECT_FUT_RECOVER_AT_EXEC_ON_PATH             0         -nan%                0         -nan%
+FUTGSHARE_ORIG_RECOVER_AT_EXEC_FUT_RECOVER_AT_EXEC_ON_PATH             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ORIG_CORRECT_FUT_CORRECT_OFF_PATH             0         -nan%                0         -nan%
+FUTGSHARE_ORIG_RECOVER_AT_EXEC_FUT_CORRECT_OFF_PATH             0         -nan%                0         -nan%
+FUTGSHARE_ORIG_CORRECT_FUT_RECOVER_AT_EXEC_OFF_PATH             0         -nan%                0         -nan%
+FUTGSHARE_ORIG_RECOVER_AT_EXEC_FUT_RECOVER_AT_EXEC_OFF_PATH             0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_0                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_0                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_0                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_0                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_1                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_1                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_1                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_1                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_2                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_2                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_2                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_2                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_3                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_3                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_3                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_3                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_4                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_4                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_4                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_4                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_5                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_5                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_5                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_5                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_6                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_6                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_6                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_6                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_7                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_7                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_7                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_7                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_8                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_8                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_8                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_8                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_9                          0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_9                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_9                         0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_9                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_10                         0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_10                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_10                        0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_10                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_11                         0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_11                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_11                        0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_11                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_12                         0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_12                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_12                        0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_12                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_13                         0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_13                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_13                        0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_13                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_14                         0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_14                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_14                        0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_14                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_ON_PATH_CORRECT_15                         0         -nan%                0         -nan%
+FUTGSHARE_ON_PATH_RECOVER_AT_EXEC_15                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_OFF_PATH_CORRECT_15                        0         -nan%                0         -nan%
+FUTGSHARE_OFF_PATH_RECOVER_AT_EXEC_15                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_0                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_0                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_0               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_0                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_1                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_1                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_1               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_1                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_2                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_2                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_2               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_2                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_3                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_3                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_3               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_3                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_4                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_4                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_4               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_4                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_5                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_5                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_5               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_5                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_6                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_6                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_6               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_6                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_7                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_7                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_7               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_7                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_8                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_8                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_8               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_8                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_9                0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_9                  0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_9               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_9                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_10               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_10                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_10              0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_10                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_11               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_11                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_11              0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_11                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_12               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_12                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_12              0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_12                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_13               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_13                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_13              0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_13                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_14               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_14                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_14              0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_14                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_ON_PATH_15               0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_ON_PATH_15                 0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FUTGSHARE_CHANGED_CORRECTED_OFF_PATH_15              0         -nan%                0         -nan%
+FUTGSHARE_CHANGED_SCREWED_OFF_PATH_15                0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+FRAGHIST_BIN_0                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_1                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_2                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_3                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_4                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_5                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_6                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_7                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_8                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_9                                       0         -nan%                0         -nan%
+FRAGHIST_BIN_10                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_11                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_12                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_13                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_14                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_15                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_16                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_17                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_18                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_19                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_20                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_21                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_22                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_23                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_24                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_25                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_26                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_27                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_28                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_29                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_30                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_31                                      0         -nan%                0         -nan%
+FRAGHIST_BIN_32                                      0         -nan%                0         -nan%
+                                                     0         -nan%                0         -nan%
+                                                  -nan         -nan              -nan         -nan
+
+BTB_UPDATE_BTB_HIT_JITTED_NOT_CF                     0         -nan%                0        0.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_BR                      0         -nan%                0        0.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_CBR                     0         -nan%                0        0.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_CALL                    0         -nan%                0        0.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_IBR                     0         -nan%                0        0.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_ICALL                   0         -nan%                2      100.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_ICO                     0         -nan%                0        0.000%
+BTB_UPDATE_BTB_HIT_JITTED_CF_RET                     0         -nan%                0        0.000%
+                                                     0         -nan%                2      100.000%
+                                                  -nan         -nan              5.00         0.00
+
+RESTEER_BTB_MISS_NOT_CF                              2        0.003%               40        0.015%
+RESTEER_BTB_MISS_CF_BR                               0        0.000%                0        0.000%
+RESTEER_BTB_MISS_CF_CBR                              0        0.000%               51        0.019%
+RESTEER_BTB_MISS_CF_REP                              0        0.000%                0        0.000%
+RESTEER_BTB_MISS_CF_CALL                             0        0.000%                0        0.000%
+RESTEER_BTB_MISS_CF_IBR                              0        0.000%               52        0.019%
+RESTEER_BTB_MISS_CF_ICALL                            0        0.000%                0        0.000%
+RESTEER_BTB_MISS_CF_ICO                              0        0.000%                0        0.000%
+RESTEER_BTB_MISS_CF_RET                              0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_EXEC_NOT_CF                       0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_EXEC_CF_BR                        0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_EXEC_CF_CBR                   77866       99.992%           273286       99.931%
+RESTEER_RECOVER_AT_EXEC_CF_REP                       4        0.005%               15        0.005%
+RESTEER_RECOVER_AT_EXEC_CF_CALL                      0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_EXEC_CF_IBR                       0        0.000%               25        0.009%
+RESTEER_RECOVER_AT_EXEC_CF_ICALL                     0        0.000%                5        0.002%
+RESTEER_RECOVER_AT_EXEC_CF_ICO                       0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_EXEC_CF_RET                       0        0.000%                1        0.000%
+RESTEER_RECOVER_AT_DECODE_NOT_CF                     0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_BR                      0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_CBR                     0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_REP                     0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_CALL                    0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_IBR                     0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_ICALL                   0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_ICO                     0        0.000%                0        0.000%
+RESTEER_RECOVER_AT_DECODE_CF_RET                     0        0.000%                0        0.000%
+RESTEER_NO_TARGET_CF_IBR                             0        0.000%                0        0.000%
+RESTEER_NO_TARGET_CF_ICALL                           0        0.000%                0        0.000%
+RESTEER_NO_TARGET_CF_ICO                             0        0.000%                0        0.000%
+RESTEER_NO_TARGET_CF_RET                             0        0.000%                0        0.000%
+                                                 77872      100.000%           273475      100.000%
+                                                 11.00         0.01             11.00         0.15
+
+TAGESCL_COMP_TAGE_BASE_CORRECT                   80586        3.363%          1817483       15.563%
+TAGESCL_COMP_TAGE_BASE_RECOVER_AT_EXEC               1        0.000%              246        0.002%
+TAGESCL_COMP_TAGE_SHORT_CORRECT                 464670       19.390%          3716430       31.823%
+TAGESCL_COMP_TAGE_SHORT_RECOVER_AT_EXEC          24531        1.024%            78568        0.673%
+TAGESCL_COMP_TAGE_LONG_CORRECT                 1759690       73.429%          5840724       50.012%
+TAGESCL_COMP_TAGE_LONG_RECOVER_AT_EXEC           46531        1.942%           177435        1.519%
+TAGESCL_COMP_LOOP_CORRECT                            0        0.000%                0        0.000%
+TAGESCL_COMP_LOOP_RECOVER_AT_EXEC                    0        0.000%                0        0.000%
+TAGESCL_COMP_SC_CORRECT                          13634        0.569%            30634        0.262%
+TAGESCL_COMP_SC_RECOVER_AT_EXEC                   6809        0.284%            17056        0.146%
+                                               2396452      100.000%         11678576      100.000%
+                                                  3.52         0.95              2.77         1.08
+
+TAGESCL_COMP_BTB_MISS_TAGE_BASE_CORRECT          20219       80.327%            75778       91.745%
+TAGESCL_COMP_BTB_MISS_TAGE_BASE_RECOVER_AT_EXEC             0        0.000%              150        0.182%
+TAGESCL_COMP_BTB_MISS_TAGE_SHORT_CORRECT            33        0.131%              139        0.168%
+TAGESCL_COMP_BTB_MISS_TAGE_SHORT_RECOVER_AT_EXEC             0        0.000%               12        0.015%
+TAGESCL_COMP_BTB_MISS_TAGE_LONG_CORRECT           4894       19.443%             6432        7.787%
+TAGESCL_COMP_BTB_MISS_TAGE_LONG_RECOVER_AT_EXEC             0        0.000%                8        0.010%
+TAGESCL_COMP_BTB_MISS_LOOP_CORRECT                   0        0.000%                0        0.000%
+TAGESCL_COMP_BTB_MISS_LOOP_RECOVER_AT_EXEC             0        0.000%                0        0.000%
+TAGESCL_COMP_BTB_MISS_SC_CORRECT                    25        0.099%               76        0.092%
+TAGESCL_COMP_BTB_MISS_SC_RECOVER_AT_EXEC             0        0.000%                1        0.001%
+                                                 25171      100.000%            82596      100.000%
+                                                  0.79         1.44              0.33         1.06
+
+TAGESCL_CONF_0_PER_BASE_RECOVER_AT_EXEC              0        0.000%                0        0.000%
+TAGESCL_CONF_1_PER_BASE_RECOVER_AT_EXEC              0        0.000%              181        0.066%
+TAGESCL_CONF_2_PER_BASE_RECOVER_AT_EXEC              0        0.000%                0        0.000%
+TAGESCL_CONF_3_PER_BASE_RECOVER_AT_EXEC              1        0.001%               65        0.024%
+TAGESCL_CONF_0_PER_SHORT_RECOVER_AT_EXEC          1730        2.222%             5706        2.088%
+TAGESCL_CONF_1_PER_SHORT_RECOVER_AT_EXEC          4529        5.816%            15574        5.698%
+TAGESCL_CONF_2_PER_SHORT_RECOVER_AT_EXEC          3901        5.010%            12072        4.417%
+TAGESCL_CONF_3_PER_SHORT_RECOVER_AT_EXEC         14371       18.455%            45216       16.544%
+TAGESCL_CONF_0_PER_LONG_RECOVER_AT_EXEC           4137        5.313%            20258        7.412%
+TAGESCL_CONF_1_PER_LONG_RECOVER_AT_EXEC           3847        4.940%            18969        6.941%
+TAGESCL_CONF_2_PER_LONG_RECOVER_AT_EXEC           7702        9.891%            31918       11.679%
+TAGESCL_CONF_3_PER_LONG_RECOVER_AT_EXEC          30845       39.610%           106290       38.891%
+TAGESCL_CONF_0_PER_LOOP_RECOVER_AT_EXEC              0        0.000%                0        0.000%
+TAGESCL_CONF_1_PER_LOOP_RECOVER_AT_EXEC              0        0.000%                0        0.000%
+TAGESCL_CONF_2_PER_LOOP_RECOVER_AT_EXEC              0        0.000%                0        0.000%
+TAGESCL_CONF_3_PER_LOOP_RECOVER_AT_EXEC              0        0.000%                0        0.000%
+TAGESCL_CONF_0_PER_SC_RECOVER_AT_EXEC             2490        3.198%             6425        2.351%
+TAGESCL_CONF_1_PER_SC_RECOVER_AT_EXEC             1972        2.532%             5027        1.839%
+TAGESCL_CONF_2_PER_SC_RECOVER_AT_EXEC             1453        1.866%             3756        1.374%
+TAGESCL_CONF_3_PER_SC_RECOVER_AT_EXEC              894        1.148%             1848        0.676%
+                                                 77872      100.000%           273305      100.000%
+                                                  9.68         3.30              9.52         2.96
+
+TAGESCL_SC_SMALLLSUM                             13381        0.561%            32474        0.279%
+TAGESCL_SC_SMALLLFIRST                               0        0.000%              323        0.003%
+TAGESCL_SC_SMALLLSECOND                              0        0.000%              180        0.002%
+TAGESCL_SC_IDENTICAL                           2372742       99.439%         11622925       99.717%
+                                               2386123      100.000%         11655902      100.000%
+                                                  2.98         2.97              2.99         2.99
+
+CRS_UNDERFLOW_ON_PATH                                0         -nan%                2       50.000%
+CRS_UNDERFLOW_OFF_PATH                               0         -nan%                2       50.000%
+                                                     0         -nan%                4      100.000%
+                                                  -nan         -nan              0.50         0.58
+
+
+
