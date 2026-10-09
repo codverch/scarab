@@ -941,6 +941,12 @@ static void dcache_stage_ifuse_issue_ld2_word(Op* ld1_op, Flag ld1_got_port) {
     return;
   Ifuse_Ld2_Word w = {ld1_op->op_num, ld1_op->ifuse_pred_ld2_va, ld1_op->inst_info->extra_ld_latency,
                       dc->proc_id, 0};
+  Flag same_bank = BANK(w.va, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR) ==
+                   BANK(ld1_op->oracle_info.va, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR);
+  if (same_bank)
+    STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_SAME_BANK);
+  if (w.va / DCACHE_INTERLEAVE_FACTOR == ld1_op->oracle_info.va / DCACHE_INTERLEAVE_FACTOR)
+    STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_SAME_WORD);
   if (dcache_stage_ifuse_read_ld2_word(&w)) {
     // LOAD1 lost its own bank port this cycle, so only LOAD1's word waits.
     if (!ld1_got_port)
@@ -948,6 +954,8 @@ static void dcache_stage_ifuse_issue_ld2_word(Op* ld1_op, Flag ld1_got_port) {
     return;
   }
   STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_DELAYED);
+  if (same_bank)
+    STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_DELAYED_SAME_BANK);
   if (ifuse_ld2_word_count == ifuse_ld2_word_cap) {
     ifuse_ld2_word_cap = ifuse_ld2_word_cap ? 2 * ifuse_ld2_word_cap : 16;
     ifuse_ld2_words = (Ifuse_Ld2_Word*)realloc(ifuse_ld2_words, sizeof(Ifuse_Ld2_Word) * ifuse_ld2_word_cap);
