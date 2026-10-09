@@ -50,6 +50,9 @@ DEF_PARAM(ifuse_ablate_no_early_data, IFUSE_ABLATE_NO_EARLY_DATA, Flag, Flag, FA
  * dependents wake on LD1's fused access, but LD2 also issues its own L1-D
  * access and completes through the ordinary load path. */
 DEF_PARAM(ifuse_ablate_no_fusion, IFUSE_ABLATE_NO_FUSION, Flag, Flag, FALSE, )
+/* LD2's word takes its own L1-D bank read port, like a separate LD2 would; if
+ * that port is busy, only LD2's word retries (dcache_stage.c). */
+DEF_PARAM(ifuse_ld2_bank_port, IFUSE_LD2_BANK_PORT, Flag, Flag, FALSE, )
 /* 32 sets x 8 ways (was 64x4, same 256-entry total): APT eviction rate was
  * uncorrelated with occupancy (peak never exceeded 61 of 256 across 55
  * benchmark runs; correlation with eviction rate was 0.006) -- thrashing

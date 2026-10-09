@@ -29,6 +29,12 @@ typedef struct IFuse_Exec_Pair {
     Op*     ld2_op;
     Counter ld1_wake_cycle;
     Flag    ld1_completed;
+    /* ifuse_ld2_bank_port: LD2's word is read from its own L1-D bank, which
+     * needs a read port there, just as a separate LD2 would. */
+    Flag    ld2_word_requested;
+    Flag    ld2_word_done;
+    Flag    ld2_word_hit;
+    Counter ld2_word_ready_cycle;
     struct IFuse_Exec_Pair* next;
 } IFuse_Exec_Pair;
 
@@ -298,6 +304,19 @@ static void ifuse_exec_pair_wake_ld2(Op* ld2_op, Counter wake_cycle,
             if (op_sources_not_rdy_is_clear(dep_op) &&
                 dep_op->rdy_cycle == ld2_op->wake_cycle) {
                 STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CONSUMERS_WAITING_CRITICAL);
+                // Which dependent waited for LD2: the next instance of the
+                // pair's LD1 (a loop-carried pointer chase), another load, a
+                // branch, or anything else.
+                if (dep_op->inst_info->table_info.mem_type == MEM_LD &&
+                    dep_op->inst_info->addr == ld2_op->ifuse_partner_ld1_pc) {
+                    STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CRIT_NEXT_LD1);
+                } else if (dep_op->inst_info->table_info.mem_type == MEM_LD) {
+                    STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CRIT_OTHER_LOAD);
+                } else if (dep_op->inst_info->table_info.cf_type != NOT_CF) {
+                    STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CRIT_BRANCH);
+                } else {
+                    STAT_EVENT(ld2_op->proc_id, IFUSE_LD2_CRIT_OTHER);
+                }
             }
         }
     }
@@ -331,7 +350,15 @@ static void ifuse_exec_pair_signal_ld2(
         return;
     }
 
-    ld2_op->ifuse_ld2_data_cycle = pair->ld1_wake_cycle;
+    // With ifuse_ld2_bank_port, LD2's data is ready when its own bank read
+    // finishes on a hit, or with LD1's fill on a miss. Without a bank conflict
+    // both give LD1's wake cycle.
+    Counter ld2_data_cycle = pair->ld1_wake_cycle;
+    if (pair->ld2_word_requested) {
+        ld2_data_cycle = pair->ld2_word_hit ? pair->ld2_word_ready_cycle :
+                                              MAX2(pair->ld1_wake_cycle, pair->ld2_word_ready_cycle);
+    }
+    ld2_op->ifuse_ld2_data_cycle = ld2_data_cycle;
 
     if (IFUSE_ABLATE_NO_EARLY_DATA) {
         ld2_op->ifuse_ld2_data_ready = TRUE;
@@ -353,7 +380,7 @@ static void ifuse_exec_pair_signal_ld2(
     // reach map later and are woken from add_to_wake_up_lists().
     // LOAD2's fused result is produced into the physical register reserved by
     // LOAD1 and rebound as LOAD2's destination at rename.
-    ifuse_exec_pair_wake_ld2(ld2_op, pair->ld1_wake_cycle + IFUSE_LD2_WAKE_DELAY, wake_action);
+    ifuse_exec_pair_wake_ld2(ld2_op, ld2_data_cycle + IFUSE_LD2_WAKE_DELAY, wake_action);
 
     // A realistic LD2 completes after its own address generation (and, in the
     // no-fusion ablation, after its own L1-D access), not here.
@@ -369,6 +396,26 @@ static void ifuse_exec_pair_signal_ld2(
     ld2_op->ifuse_ld2_agu_completed = TRUE;
 
     ifuse_exec_pair_finalize_ld2(ld2_op);
+}
+
+/*
+ * Signals LD2 once its data exists, then drops the pair once LD1 is done too.
+ * LD2's data exists when LD1 completed (no separate word read), when LD2's
+ * word read hit, or when it missed and LD1's fill returned.
+ */
+static void ifuse_exec_pair_try_finish(
+    IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns)) {
+    if (!pair->ld2_op) {
+        return;
+    }
+    Flag word_done = !pair->ld2_word_requested || pair->ld2_word_done;
+    Flag word_hit  = pair->ld2_word_requested && pair->ld2_word_hit;
+    if (word_done && (pair->ld1_completed || word_hit)) {
+        ifuse_exec_pair_signal_ld2(pair, wake_action);
+    }
+    if (word_done && pair->ld1_completed) {
+        ifuse_exec_pair_remove(pair->ld1_op_num);
+    }
 }
 
 void ifuse_exec_pair_track_mapped_load(Op* op,
@@ -409,10 +456,7 @@ void ifuse_exec_pair_track_mapped_load(Op* op,
 
     // LOAD1 may have completed before LOAD2 reached map. Its wake-up links are
     // installed now, so the fused result can be signaled immediately.
-    if (pair->ld1_completed) {
-        ifuse_exec_pair_signal_ld2(pair, wake_action);
-        ifuse_exec_pair_remove(pair->ld1_op_num);
-    }
+    ifuse_exec_pair_try_finish(pair, wake_action);
 }
 
 void ifuse_exec_pair_handle_producer_wakeup(
@@ -433,10 +477,44 @@ void ifuse_exec_pair_handle_producer_wakeup(
     pair->ld1_wake_cycle = op->wake_cycle;
 
     // LOAD2 may already be waiting in the map-stage-created pair entry.
-    if (pair->ld2_op) {
-        ifuse_exec_pair_signal_ld2(pair, wake_action);
-        ifuse_exec_pair_remove(pair->ld1_op_num);
+    ifuse_exec_pair_try_finish(pair, wake_action);
+}
+
+Flag ifuse_exec_pair_request_ld2_word(const Op* ld1_op) {
+    if (!IFUSE_LD2_BANK_PORT || !ifuse_exec_pair_initialized || !ld1_op || ld1_op->off_path ||
+        ld1_op->ifuse_load_role != LOAD1 || ld1_op->ifuse_pred_ld2_va == 0) {
+        return FALSE;
     }
+    IFuse_Exec_Pair* pair = ifuse_exec_pair_find(ld1_op->op_num);
+    if (!pair || pair->ld2_word_requested) {
+        return FALSE;
+    }
+    pair->ld2_word_requested = TRUE;
+    return TRUE;
+}
+
+Flag ifuse_exec_pair_ld2_word_pending(Counter ld1_op_num) {
+    if (!ifuse_exec_pair_initialized) {
+        return FALSE;
+    }
+    IFuse_Exec_Pair* pair = ifuse_exec_pair_find(ld1_op_num);
+    return pair && pair->ld2_word_requested && !pair->ld2_word_done;
+}
+
+void ifuse_exec_pair_ld2_word_read(Counter ld1_op_num, Flag hit, Counter ready_cycle,
+                                   void (*wake_action)(Op*, Op*, uns)) {
+    if (!ifuse_exec_pair_initialized) {
+        return;
+    }
+    // LD1's prediction may have been dropped while the word waited.
+    IFuse_Exec_Pair* pair = ifuse_exec_pair_find(ld1_op_num);
+    if (!pair || !pair->ld2_word_requested || pair->ld2_word_done) {
+        return;
+    }
+    pair->ld2_word_done = TRUE;
+    pair->ld2_word_hit = hit;
+    pair->ld2_word_ready_cycle = ready_cycle;
+    ifuse_exec_pair_try_finish(pair, wake_action);
 }
 
 Flag ifuse_exec_pair_skip_duplicate_wakeup(const Op* op, Dep_Type type) {

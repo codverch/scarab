@@ -74,6 +74,8 @@ Dcache_Stage* dc = NULL;
 /* Prototypes for Inline Methods */
 
 static inline Flag dcache_stage_addr_unready(Op* op);
+static void dcache_stage_ifuse_issue_ld2_word(Op* ld1_op, Flag ld1_got_port);
+static void dcache_stage_ifuse_retry_ld2_words(Counter older_than);
 static inline Flag dcache_stage_check_mem_type(Op* op);
 static inline void dcache_stage_remove_src_op(Stage_Data* src_sd, int ii);
 
@@ -239,6 +241,9 @@ void update_dcache_stage(Stage_Data* src_sd) {
     ASSERT(dc->proc_id, oldest_op_num < MAX_CTR);
     Op* op = dc->sd.ops[oldest_index];
 
+    // Delayed fused LOAD2 words compete for bank ports in program order.
+    dcache_stage_ifuse_retry_ld2_words(op->op_num);
+
     // if the op is replaying, squish it
     if (op->replay && op->exec_cycle == MAX_CTR) {
       dc->sd.ops[oldest_index] = NULL;
@@ -252,8 +257,13 @@ void update_dcache_stage(Stage_Data* src_sd) {
     uns bank = BANK(op->oracle_info.va, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR);
     DEBUG(dc->proc_id, "check_read and write port availiabilty mem_type:%s bank:%d \n",
           (op->inst_info->table_info.mem_type == MEM_ST) ? "ST" : "LD", bank);
-    if (!PERFECT_DCACHE && ((op->inst_info->table_info.mem_type == MEM_ST && !get_write_port(&dc->ports[bank])) ||
-                            (op->inst_info->table_info.mem_type != MEM_ST && !get_read_port(&dc->ports[bank])))) {
+    Flag is_store = op->inst_info->table_info.mem_type == MEM_ST;
+    Flag got_port = PERFECT_DCACHE || (is_store ? get_write_port(&dc->ports[bank]) : get_read_port(&dc->ports[bank]));
+    // A fused LOAD1 also reads LOAD2's word, which needs its own bank port
+    // (ifuse_ld2_bank_port). It is requested once, whether or not LOAD1 got
+    // its port this cycle.
+    dcache_stage_ifuse_issue_ld2_word(op, got_port);
+    if (!got_port) {
       op->state = OS_WAIT_DCACHE;
       STAT_EVENT(dc->proc_id, DCACHE_READ_PORT_UNAVAILABLE_ONPATH + op->off_path);
       continue;
@@ -310,6 +320,8 @@ void update_dcache_stage(Stage_Data* src_sd) {
     }
     dcache_cacheline_miss(op, line_addr);
   }
+
+  dcache_stage_ifuse_retry_ld2_words(MAX_CTR);
 
   /* prefetcher update */
   if (STREAM_PREFETCH_ON)
@@ -885,4 +897,80 @@ static inline void dcache_fill_process_cacheline(Mem_Req* req, Dcache_Data* data
 
   ASSERT(dc->proc_id, data->read_count[0] || data->read_count[1] || data->write_count[0] || data->write_count[1] ||
                           req->off_path || data->prefetch || data->HW_prefetch);
+}
+
+/**************************************************************************************/
+/* I-Fuse: bank port for LOAD2's word (ifuse_ld2_bank_port)
+ *
+ * A fused access returns LOAD1's and LOAD2's words. The L1-D is banked, so
+ * LOAD2's word needs a read port on its own bank, exactly like a separate
+ * LOAD2 would. When that port is busy, only LOAD2's word waits: it retries
+ * every cycle until it gets a port. LOAD1 is unaffected. */
+
+typedef struct Ifuse_Ld2_Word {
+  Counter ld1_op_num;
+  Addr va;
+  uns extra_ld_latency;
+  uns8 proc_id;
+  Counter last_try_cycle;
+} Ifuse_Ld2_Word;
+
+static Ifuse_Ld2_Word* ifuse_ld2_words = NULL;
+static uns ifuse_ld2_word_count = 0;
+static uns ifuse_ld2_word_cap = 0;
+
+/* Tries LOAD2's word this cycle. Returns FALSE if its bank port is busy. */
+static Flag dcache_stage_ifuse_read_ld2_word(Ifuse_Ld2_Word* w) {
+  w->last_try_cycle = cycle_count;
+  uns bank = BANK(w->va, DCACHE_BANKS, DCACHE_INTERLEAVE_FACTOR);
+  if (!PERFECT_DCACHE && !get_read_port(&dc->ports[bank])) {
+    STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_BANK_CONFLICT_CYCLES);
+    return FALSE;
+  }
+  // Probe without touching replacement state; LOAD1's access already did.
+  Addr line_addr;
+  Flag hit = PERFECT_DCACHE || cache_access(&dc->dcache, w->va, &line_addr, FALSE) != NULL;
+  STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_READS);
+  ifuse_exec_pair_ld2_word_read(w->ld1_op_num, hit, cycle_count + DCACHE_CYCLES + w->extra_ld_latency,
+                                model->wake_hook);
+  return TRUE;
+}
+
+static void dcache_stage_ifuse_issue_ld2_word(Op* ld1_op, Flag ld1_got_port) {
+  if (!ifuse_exec_pair_request_ld2_word(ld1_op))
+    return;
+  Ifuse_Ld2_Word w = {ld1_op->op_num, ld1_op->ifuse_pred_ld2_va, ld1_op->inst_info->extra_ld_latency,
+                      dc->proc_id, 0};
+  if (dcache_stage_ifuse_read_ld2_word(&w)) {
+    // LOAD1 lost its own bank port this cycle, so only LOAD1's word waits.
+    if (!ld1_got_port)
+      STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_AHEAD_OF_LD1);
+    return;
+  }
+  STAT_EVENT(dc->proc_id, IFUSE_LD2_WORD_DELAYED);
+  if (ifuse_ld2_word_count == ifuse_ld2_word_cap) {
+    ifuse_ld2_word_cap = ifuse_ld2_word_cap ? 2 * ifuse_ld2_word_cap : 16;
+    ifuse_ld2_words = (Ifuse_Ld2_Word*)realloc(ifuse_ld2_words, sizeof(Ifuse_Ld2_Word) * ifuse_ld2_word_cap);
+    ASSERT(dc->proc_id, ifuse_ld2_words);
+  }
+  ifuse_ld2_words[ifuse_ld2_word_count++] = w;
+}
+
+/* Retries delayed words whose LOAD1 is older than older_than, at most once
+ * per cycle each. Drops words whose pair was flushed or already finished. */
+static void dcache_stage_ifuse_retry_ld2_words(Counter older_than) {
+  uns kept = 0;
+  for (uns ii = 0; ii < ifuse_ld2_word_count; ii++) {
+    Ifuse_Ld2_Word* w = &ifuse_ld2_words[ii];
+    Flag keep;
+    if (w->proc_id != dc->proc_id || w->ld1_op_num >= older_than || w->last_try_cycle == cycle_count)
+      keep = TRUE;
+    else if (!ifuse_exec_pair_ld2_word_pending(w->ld1_op_num))
+      keep = FALSE;
+    else
+      keep = !dcache_stage_ifuse_read_ld2_word(w);
+    if (keep)
+      ifuse_ld2_words[kept++] = *w;
+  }
+  ifuse_ld2_word_count = kept;
 }

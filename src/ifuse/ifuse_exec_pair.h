@@ -63,6 +63,12 @@ Flag ifuse_exec_pair_ld2_skips_backend(const Op* op);
  */
 void ifuse_exec_pair_restore_early_wake(Op* op);
 
+/* ifuse_ld2_bank_port: LD2's word on its own L1-D bank read port. */
+Flag ifuse_exec_pair_request_ld2_word(const Op* ld1_op);
+Flag ifuse_exec_pair_ld2_word_pending(Counter ld1_op_num);
+void ifuse_exec_pair_ld2_word_read(Counter ld1_op_num, Flag hit, Counter ready_cycle,
+                                   void (*wake_action)(Op*, Op*, uns));
+
 /**
  * Removes the execution-side record owned by one LOAD1 prediction.
  *

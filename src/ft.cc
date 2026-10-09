@@ -183,6 +183,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->ifuse_ld2_data_ready = FALSE;
     op->ifuse_ld2_data_cycle = MAX_CTR;
     op->ifuse_ld2_early_wake_cycle = MAX_CTR;
+    op->ifuse_pred_ld2_va = 0;
     op->ifuse_ld2_prediction_failed = FALSE;
     op->ifuse_flush_op = FALSE;
     op->ifuse_pair_distance = 0;
@@ -322,6 +323,7 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
 
             // ACI records the predicted LD2 cache block.
             if (inserted_pair) {
+              op->ifuse_pred_ld2_va = predicted_ld2_effective_addr;
               aci_insert_prediction(predicted_ld2_effective_addr,
                                     (unsigned int)op->op_num,
                                     current_load_num);
