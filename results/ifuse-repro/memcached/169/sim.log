@@ -1,0 +1,59 @@
+Scarab gitrev: ae923d935
+Warning: Scarab expects the trace file type to include OFFLINE_FILE_TYPE_ARCH_REGDEPS (0x20000), but got type: 0xe40
+Scarab started at Fri Oct  9 06:00:30 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000004 } -- 0.00 KIPS (55.56 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  10% -- { 3000010 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  13% -- { 4000011 } -- 55.56 KIPS (55.56 KIPS)
+** Heartbeat:  16% -- { 5000016 } -- 52.63 KIPS (54.95 KIPS)
+** Heartbeat:  20% -- { 6000018 } -- 55.56 KIPS (55.05 KIPS)
+** Heartbeat:  23% -- { 7000020 } -- 50.00 KIPS (54.26 KIPS)
+** Heartbeat:  26% -- { 8000026 } -- 55.56 KIPS (54.42 KIPS)
+** Heartbeat:  30% -- { 9000026 } -- 55.56 KIPS (54.55 KIPS)
+** Heartbeat:  33% -- { 10000028 } -- 55.56 KIPS (54.64 KIPS)
+** Heartbeat:  36% -- { 11000033 } -- 52.63 KIPS (54.46 KIPS)
+** Heartbeat:  40% -- { 12000033 } -- 55.56 KIPS (54.55 KIPS)
+** Heartbeat:  43% -- { 13000038 } -- 76.92 KIPS (55.79 KIPS)
+** Heartbeat:  46% -- { 14000041 } -- 58.82 KIPS (56.00 KIPS)
+** Heartbeat:  50% -- { 15000044 } -- 55.56 KIPS (55.97 KIPS)
+** Heartbeat:  53% -- { 16000047 } -- 58.82 KIPS (56.14 KIPS)
+** Heartbeat:  56% -- { 17000047 } -- 55.56 KIPS (56.11 KIPS)
+** Heartbeat:  60% -- { 18000048 } -- 52.63 KIPS (55.90 KIPS)
+** Heartbeat:  63% -- { 19000053 } -- 55.56 KIPS (55.88 KIPS)
+** Heartbeat:  66% -- { 20000056 } -- 55.56 KIPS (55.87 KIPS)
+** Heartbeat:  70% -- { 21000056 } -- 52.63 KIPS (55.70 KIPS)
+** Heartbeat:  73% -- { 22000059 } -- 50.00 KIPS (55.42 KIPS)
+** Heartbeat:  76% -- { 23000063 } -- 52.63 KIPS (55.29 KIPS)
+** Heartbeat:  80% -- { 24000063 } -- 58.82 KIPS (55.43 KIPS)
+** Heartbeat:  83% -- { 25000067 } -- 58.82 KIPS (55.56 KIPS)
+** Heartbeat:  86% -- { 26000067 } -- 62.50 KIPS (55.79 KIPS)
+** Heartbeat:  90% -- { 27000068 } -- 58.82 KIPS (55.90 KIPS)
+** Heartbeat:  93% -- { 28000071 } -- 62.50 KIPS (56.11 KIPS)
+** Heartbeat:  96% -- { 29000076 } -- 58.82 KIPS (56.20 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7ffff71fcf3b
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/1-cycle-delayed-ifuse-run/scarab/bin/mcpat', '/home/deepmish/scarab_stage/1-cycle-delayed-ifuse-run/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:17804961    time:5564050312500       -- 1.68 IPC (1.68 IPC) --  N/A  KIPS (56.07 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=43827495  I=31558625  C=17804961):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=43827495  I=31558625  C=17804961):  Command "python3 /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x275ab6) [0x5555557c9ab6]
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x3198ae) [0x55555586d8ae]
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x1e6ea3) [0x55555573aea3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x1eb69e) [0x55555573f69e]
+[0 'Patching gap in trace' lines removed for the commit]

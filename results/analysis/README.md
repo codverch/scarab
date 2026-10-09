@@ -34,3 +34,28 @@ eleven applications.
   `backend-stall-counters` (`74ae2974a`), which are no longer on disk. Recompute
   it from the `ifuse-ablation` runs, which carry the same counters.
 - The BFS simpoints (17, 94, 96, 103) produce identical stats.
+
+## Realistic LD2 and the fusion/early-data ablation (`ifuse-ablation`)
+
+Build `ae923d935` (branch `ifuse-realistic-ld2`): the paper commit `36c4b3029`, plus
+the knobs below and the backend-stall counters of `74ae2974a`. Descriptor:
+`scarab-infra/json/hpca2027/ifuse-ablation.json`. 32 simpoints per config.
+
+| Directory | Knob | Meaning |
+|---|---|---|
+| `results/ifuse-repro` | none | Same model as the paper; reproduces `1-cycle-delayed-ifuse` exactly on all 11 apps |
+| `results/ifuse-realistic` | `--ifuse_ld2_realistic 1` | LD2 takes a ROB, LQ, and RS entry and an AGU slot; no L1-D access |
+| `results/ifuse-fusion-only` | `--ifuse_ablate_no_early_data 1` | LD2 makes no L1-D access, but its data is ready no earlier than its own AGU plus the L1-D hit latency |
+| `results/ifuse-early-only` | `--ifuse_ablate_no_fusion 1` | LD2's dependents wake on LD1's data, but LD2 also makes its own L1-D access |
+| `results/nofuse`, `results/nofuse-prf2x` | training off | No fusion with the I-Fuse binary, at 280 and 560 integer registers |
+| `results/ifuse-realistic-prf2x` | realistic + 560 registers | |
+
+`speedup_ablation.csv` (vs `results/baseline`): repro 13.66, realistic 13.72, fusion-only 5.15,
+early-only 7.51 (average %). Fusion alone gives nearly all of the gain in BFS, DFS, PR, and
+ClickHouse; early data alone gives nearly all of it in the other seven apps.
+`speedup_prf2x.csv`: realistic I-Fuse over no fusion, both at 560 registers: 11.16%.
+`stalls_ablation.csv` (`stalls.py`): backend-stalled cycles as % of no-fusion cycles. The
+cycles with an L1-D hit at the ROB head go from 8.43% to 4.21% (repro) and 3.94% (realistic),
+which verifies the 8.4% to 4.2% in Section VI-B.
+
+Each `sim.log` here omits its repeated "Patching gap in trace" lines and records their count.

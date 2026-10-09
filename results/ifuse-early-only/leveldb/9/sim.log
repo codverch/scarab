@@ -1,0 +1,58 @@
+Scarab gitrev: ae923d935
+Scarab started at Fri Oct  9 05:58:53 2026
+
+Initialized Ramulator. 
+** Heartbeat:   3% -- { 1000000 } -- 0.00 KIPS (58.82 KIPS)
+** Heartbeat:   6% -- { 2000007 } -- 58.82 KIPS (58.82 KIPS)
+** Heartbeat:  10% -- { 3000011 } -- 58.82 KIPS (58.82 KIPS)
+** Heartbeat:  13% -- { 4000011 } -- 62.50 KIPS (59.70 KIPS)
+** Heartbeat:  16% -- { 5000012 } -- 66.67 KIPS (60.98 KIPS)
+** Heartbeat:  20% -- { 6000015 } -- 62.50 KIPS (61.22 KIPS)
+** Heartbeat:  23% -- { 7000018 } -- 62.50 KIPS (61.40 KIPS)
+** Heartbeat:  26% -- { 8000020 } -- 62.50 KIPS (61.54 KIPS)
+** Heartbeat:  30% -- { 9000023 } -- 62.50 KIPS (61.64 KIPS)
+** Heartbeat:  33% -- { 10000029 } -- 58.82 KIPS (61.35 KIPS)
+** Heartbeat:  36% -- { 11000034 } -- 71.43 KIPS (62.15 KIPS)
+** Heartbeat:  40% -- { 12000041 } -- 58.82 KIPS (61.86 KIPS)
+** Heartbeat:  43% -- { 13000042 } -- 62.50 KIPS (61.90 KIPS)
+** Heartbeat:  46% -- { 14000042 } -- 62.50 KIPS (61.95 KIPS)
+** Heartbeat:  50% -- { 15000045 } -- 58.82 KIPS (61.73 KIPS)
+** Heartbeat:  53% -- { 16000052 } -- 62.50 KIPS (61.78 KIPS)
+** Heartbeat:  56% -- { 17000054 } -- 62.50 KIPS (61.82 KIPS)
+** Heartbeat:  60% -- { 18000055 } -- 58.82 KIPS (61.64 KIPS)
+** Heartbeat:  63% -- { 19000059 } -- 62.50 KIPS (61.69 KIPS)
+** Heartbeat:  66% -- { 20000062 } -- 83.33 KIPS (62.50 KIPS)
+** Heartbeat:  70% -- { 21000065 } -- 62.50 KIPS (62.50 KIPS)
+** Heartbeat:  73% -- { 22000065 } -- 71.43 KIPS (62.86 KIPS)
+** Heartbeat:  76% -- { 23000068 } -- 66.67 KIPS (63.01 KIPS)
+** Heartbeat:  80% -- { 24000068 } -- 62.50 KIPS (62.99 KIPS)
+** Heartbeat:  83% -- { 25000071 } -- 62.50 KIPS (62.97 KIPS)
+** Heartbeat:  86% -- { 26000073 } -- 58.82 KIPS (62.80 KIPS)
+** Heartbeat:  90% -- { 27000073 } -- 62.50 KIPS (62.79 KIPS)
+** Heartbeat:  93% -- { 28000075 } -- 58.82 KIPS (62.64 KIPS)
+** Heartbeat:  96% -- { 29000075 } -- 58.82 KIPS (62.50 KIPS)
+advanceReader: ROI end reached (ordinal 30000002 > roi_end 30000000)
+Reached end of trace (last_inst) pc=0x7fa542c7db34
+Running McPat...
+Running CACTI...
+Parsing scarab params...
+Parsing scarab stats...
+Use of uninitialized value $params{"NUM_CORES"} in subtraction (-) at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 249, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Use of uninitialized value in division (/) at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Illegal division by zero at /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl line 279, <$file> line 61.
+Parsing McPAT output (./mcpat.out) and CACTI output (./cacti_dram.out)...
+Scarab power interface: executing command:
+['perl', '/home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.pl', '/home/deepmish/scarab_stage/1-cycle-delayed-ifuse-run/scarab/bin/mcpat', '/home/deepmish/scarab_stage/1-cycle-delayed-ifuse-run/scarab/bin/cacti', '.', '0', '0']
+Scarab power interface: command finished with exit code: 25
+** Core 0 Finished:    insts:30000000    cycles:15039374    time:4699804375000       -- 1.99 IPC (1.99 IPC) --  N/A  KIPS (62.50 KIPS)
+
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34267324  I=30000000  C=15039374):  rc == 0
+/scarab/src/power/power_intf.c:139: ASSERT FAILED (P=0  O=34267324  I=30000000  C=15039374):  Command "python3 /home/deepmish/scarab_stage/ifuse-ablation/scarab/bin/power/power_intf.py . 0 0 " failed
+Obtained 5 stack frames.
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x275ab6) [0x5555557c9ab6]
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x3198ae) [0x55555586d8ae]
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x1e6ea3) [0x55555573aea3]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7ffff7818083]
+/home/deepmish/scarab_stage/ifuse-ablation/scarab/src/scarab_current(+0x1eb69e) [0x55555573f69e]
+[0 'Patching gap in trace' lines removed for the commit]
