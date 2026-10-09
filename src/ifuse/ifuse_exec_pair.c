@@ -273,7 +273,11 @@ static void ifuse_exec_pair_wake_ld2(Op* ld2_op, Counter wake_cycle,
                                      void (*wake_action)(Op*, Op*, uns)) {
     ld2_op->wake_cycle = wake_cycle;
     ld2_op->ifuse_ld2_early_wake_cycle = wake_cycle;
-    ld2_op->exec_cycle = wake_cycle - IFUSE_LD2_WAKE_DELAY;
+    // A realistic LD2 may still be in the exec or d-cache pipeline, which
+    // times itself off exec_cycle; finalize_ld2() sets it once LD2 is done.
+    if (!ifuse_ld2_realistic()) {
+        ld2_op->exec_cycle = wake_cycle - IFUSE_LD2_WAKE_DELAY;
+    }
 
     reg_file_produce(ld2_op);
 
