@@ -9,6 +9,7 @@
 #include "ifuse_ideal_alloc.h"
 #include "ifuse_ideal_limits.h"
 #include "ifuse.param.h"
+#include "../globals/assert.h"
 #include "../globals/global_defs.h"
 #include "../globals/global_vars.h"
 #include "../map_rename.h"
