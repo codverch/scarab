@@ -254,6 +254,9 @@ struct Op_struct {
   uns16                 ifuse_ld2_physical_reg_id;
   Flag                  ifuse_ld2_early_wake_signaled;
   Flag                  ifuse_ld2_agu_completed;
+  Flag                  ifuse_ld2_data_ready;         // LD1's fused data arrived (no-early-data ablation)
+  Counter               ifuse_ld2_data_cycle;         // cycle LD1's fused data arrived
+  Counter               ifuse_ld2_early_wake_cycle;   // wake cycle set by the fused path
   Flag                  ifuse_ld2_prediction_failed;
   Flag                  ifuse_flush_op;
   Flag                  ifuse_recovery_squashed;

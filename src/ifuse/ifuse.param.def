@@ -38,6 +38,18 @@ DEF_PARAM(ifuse_fct_ways, IFUSE_FCT_WAYS, uns, uns, 4, )
 /* Cycles after LD1's wake cycle before a fused LD2's dependents may wake
  * (see ifuse_exec_pair_signal_ld2). 0 = same cycle as LD1. */
 DEF_PARAM(ifuse_ld2_wake_delay, IFUSE_LD2_WAKE_DELAY, uns, uns, 1, )
+/* Realistic LD2: a fused LD2 still takes a ROB, LQ, and RS entry and computes
+ * its address on a load port to validate the prediction, but issues no L1-D
+ * access. Off by default, which keeps the true-fusion model. */
+DEF_PARAM(ifuse_ld2_realistic, IFUSE_LD2_REALISTIC, Flag, Flag, FALSE, )
+/* Ablation, implies ifuse_ld2_realistic: fusion without early data. LD2 issues
+ * no L1-D access, but its dependents wake no earlier than LD2's own address
+ * generation plus the L1-D hit latency. */
+DEF_PARAM(ifuse_ablate_no_early_data, IFUSE_ABLATE_NO_EARLY_DATA, Flag, Flag, FALSE, )
+/* Ablation, implies ifuse_ld2_realistic: early data without fusion. LD2's
+ * dependents wake on LD1's fused access, but LD2 also issues its own L1-D
+ * access and completes through the ordinary load path. */
+DEF_PARAM(ifuse_ablate_no_fusion, IFUSE_ABLATE_NO_FUSION, Flag, Flag, FALSE, )
 /* 32 sets x 8 ways (was 64x4, same 256-entry total): APT eviction rate was
  * uncorrelated with occupancy (peak never exceeded 61 of 256 across 55
  * benchmark runs; correlation with eviction rate was 0.006) -- thrashing

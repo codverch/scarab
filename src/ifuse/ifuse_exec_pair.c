@@ -12,6 +12,7 @@
 #include "../globals/global_defs.h"
 #include "../globals/global_vars.h"
 #include "../map_rename.h"
+#include "../memory/memory.param.h"
 #include "../op_info.h"
 #include "../statistics.h"
 
@@ -37,6 +38,14 @@ static IfuseIdealAlloc   ifuse_exec_pair_alloc;
 static bool              ifuse_exec_pair_initialized = false;
 static uint64_t          ifuse_exec_pair_live_count = 0;
 static uint64_t          ifuse_exec_pair_live_peak = 0;
+
+/* The map stage's wake hook. complete_ld2_agu() runs from the d-cache stage,
+ * which has no hook to pass, so the no-early-data ablation wakes with this. */
+static void (*ifuse_exec_pair_wake_action)(Op*, Op*, uns) = NULL;
+
+static Flag ifuse_ld2_realistic(void) {
+    return IFUSE_LD2_REALISTIC || IFUSE_ABLATE_NO_EARLY_DATA || IFUSE_ABLATE_NO_FUSION;
+}
 
 static bool ifuse_exec_pair_validate_table_params(void) {
     if (IFUSE_EXEC_PAIR_NUM_BUCKETS == 0U ||
@@ -231,6 +240,13 @@ static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
 
     ifuse_exec_pair_record_prefetch_lead(ld2_op);
 
+    // A realistic LD2 also executed on a load port, which overwrote exec_cycle
+    // with its address-generation time. Report when its value became
+    // available, as the true-fusion model does.
+    if (ifuse_ld2_realistic()) {
+        ld2_op->exec_cycle = ld2_op->ifuse_ld2_early_wake_cycle - IFUSE_LD2_WAKE_DELAY;
+    }
+
     ld2_op->done_cycle = serve_done;
     ld2_op->state = OS_DONE;
 }
@@ -252,29 +268,12 @@ static void ifuse_exec_pair_finalize_ld2(Op* ld2_op) {
  * in cycle 100 and LOAD2's consumers in cycle 101. Setting it to 0 recovers
  * the original same-cycle model.
  */
-static void ifuse_exec_pair_signal_ld2(
-    IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns)) {
-    Op* ld2_op = pair->ld2_op;
+static void ifuse_exec_pair_wake_ld2(Op* ld2_op, Counter wake_cycle,
+                                     void (*wake_action)(Op*, Op*, uns)) {
+    ld2_op->wake_cycle = wake_cycle;
+    ld2_op->ifuse_ld2_early_wake_cycle = wake_cycle;
+    ld2_op->exec_cycle = wake_cycle - IFUSE_LD2_WAKE_DELAY;
 
-    if (!ld2_op || !ld2_op->op_pool_valid || ld2_op->off_path ||
-        ld2_op->ifuse_recovery_squashed ||
-        ld2_op->ifuse_load_role != LOAD2 ||
-        ld2_op->ifuse_ld2_early_wake_signaled) {
-        return;
-    }
-
-    // The memory access itself still happens at LOAD1's time, so exec_cycle
-    // stays at LOAD1's wake cycle. Only the moment LOAD2's value becomes
-    // visible to consumers moves later. That works because every dependent
-    // computes its ready time as rdy_cycle = MAX2(rdy_cycle, wake_cycle) in
-    // simple_wake() (map.c). Pushing LOAD2's wake_cycle back therefore
-    // delays all of LOAD2's dependents: the ones woken below, and any that
-    // reach map later and are woken from add_to_wake_up_lists().
-    ld2_op->wake_cycle = pair->ld1_wake_cycle + IFUSE_LD2_WAKE_DELAY;
-    ld2_op->exec_cycle = pair->ld1_wake_cycle;
-
-    // LOAD2's fused result is produced into the physical register reserved by
-    // LOAD1 and rebound as LOAD2's destination at rename.
     reg_file_produce(ld2_op);
 
     for (Wake_Up_Entry* wake = ld2_op->wake_up_head; wake; wake = wake->next) {
@@ -295,6 +294,63 @@ static void ifuse_exec_pair_signal_ld2(
 
     ld2_op->wake_up_signaled[REG_DATA_DEP] = TRUE;
     ld2_op->ifuse_ld2_early_wake_signaled = TRUE;
+}
+
+/* No-early-data ablation: LD2's value is visible no earlier than a
+ * conventional LD2 would see it, after its own address generation plus the
+ * L1-D hit latency, and no earlier than LD1's fused data. */
+static Counter ifuse_exec_pair_no_early_wake_cycle(const Op* ld2_op) {
+    return MAX2(ld2_op->dcache_cycle + DCACHE_CYCLES + ld2_op->inst_info->extra_ld_latency,
+                ld2_op->ifuse_ld2_data_cycle + IFUSE_LD2_WAKE_DELAY);
+}
+
+static void ifuse_exec_pair_signal_ld2(
+    IFuse_Exec_Pair* pair, void (*wake_action)(Op*, Op*, uns)) {
+    Op* ld2_op = pair->ld2_op;
+
+    if (!ld2_op || !ld2_op->op_pool_valid || ld2_op->off_path ||
+        ld2_op->ifuse_recovery_squashed ||
+        ld2_op->ifuse_load_role != LOAD2 ||
+        ld2_op->ifuse_ld2_early_wake_signaled ||
+        ld2_op->ifuse_ld2_data_ready) {
+        return;
+    }
+    // No-fusion ablation: LD2's own access already completed and woke its
+    // dependents, so the fused data arrives too late to matter.
+    if (IFUSE_ABLATE_NO_FUSION && ld2_op->wake_up_signaled[REG_DATA_DEP]) {
+        return;
+    }
+
+    ld2_op->ifuse_ld2_data_cycle = pair->ld1_wake_cycle;
+
+    if (IFUSE_ABLATE_NO_EARLY_DATA) {
+        ld2_op->ifuse_ld2_data_ready = TRUE;
+        ifuse_exec_pair_wake_action = wake_action;
+        if (ld2_op->ifuse_ld2_agu_completed) {
+            ifuse_exec_pair_wake_ld2(ld2_op, ifuse_exec_pair_no_early_wake_cycle(ld2_op),
+                                     wake_action);
+            ifuse_exec_pair_finalize_ld2(ld2_op);
+        }
+        return;
+    }
+
+    // The memory access itself still happens at LOAD1's time, so exec_cycle
+    // stays at LOAD1's wake cycle. Only the moment LOAD2's value becomes
+    // visible to consumers moves later. That works because every dependent
+    // computes its ready time as rdy_cycle = MAX2(rdy_cycle, wake_cycle) in
+    // simple_wake() (map.c). Pushing LOAD2's wake_cycle back therefore
+    // delays all of LOAD2's dependents: the ones woken below, and any that
+    // reach map later and are woken from add_to_wake_up_lists().
+    // LOAD2's fused result is produced into the physical register reserved by
+    // LOAD1 and rebound as LOAD2's destination at rename.
+    ifuse_exec_pair_wake_ld2(ld2_op, pair->ld1_wake_cycle + IFUSE_LD2_WAKE_DELAY, wake_action);
+
+    // A realistic LD2 completes after its own address generation (and, in the
+    // no-fusion ablation, after its own L1-D access), not here.
+    if (ifuse_ld2_realistic()) {
+        ifuse_exec_pair_finalize_ld2(ld2_op);
+        return;
+    }
 
     // True fusion: LOAD2 never enters the ROB/IQ/LSQ to independently
     // generate its own address, so there is no separate AGU event to wait
@@ -384,7 +440,7 @@ Flag ifuse_exec_pair_bypass_ld2_memory_pipeline(const Op* op) {
         return FALSE;
     }
 
-    if (op->ifuse_ld2_early_wake_signaled) {
+    if (op->ifuse_ld2_early_wake_signaled || op->ifuse_ld2_data_ready) {
         return TRUE;
     }
 
@@ -412,7 +468,24 @@ void ifuse_exec_pair_complete_ld2_agu(Op* op) {
     // access and memory request.
     op->dcache_cycle = cycle_count;
     op->ifuse_ld2_agu_completed = TRUE;
+    if (IFUSE_ABLATE_NO_EARLY_DATA && op->ifuse_ld2_data_ready &&
+        !op->ifuse_ld2_early_wake_signaled) {
+        ASSERT(op->proc_id, ifuse_exec_pair_wake_action);
+        ifuse_exec_pair_wake_ld2(op, ifuse_exec_pair_no_early_wake_cycle(op),
+                                 ifuse_exec_pair_wake_action);
+    }
     ifuse_exec_pair_finalize_ld2(op);
+}
+
+Flag ifuse_exec_pair_ld2_skips_backend(const Op* op) {
+    return !ifuse_ld2_realistic() && ifuse_exec_pair_bypass_ld2_memory_pipeline(op);
+}
+
+void ifuse_exec_pair_restore_early_wake(Op* op) {
+    if (op && op->ifuse_load_role == LOAD2 && op->ifuse_ld2_early_wake_signaled &&
+        op->ifuse_ld2_early_wake_cycle < op->wake_cycle) {
+        op->wake_cycle = op->ifuse_ld2_early_wake_cycle;
+    }
 }
 
 void ifuse_exec_pair_forget_ld1_prediction(Counter ld1_op_num) {

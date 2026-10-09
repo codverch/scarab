@@ -51,6 +51,7 @@
 #include "prefetcher/stream_pref.h"
 
 #include "cmp_model.h"
+#include "ifuse/ifuse.param.h"
 #include "ifuse/ifuse_exec_pair.h"
 #include "ifuse/ifuse_recovery.h"
 #include "map.h"
@@ -198,7 +199,8 @@ void update_dcache_stage(Stage_Data* src_sd) {
     // A validated fused LOAD2 still used the load AGU, but LOAD1 already
     // supplied its data. Complete AGU bookkeeping without issuing a redundant
     // d-cache access or memory request.
-    if (ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
+    // In the no-fusion ablation, LOAD2 makes its own L1-D access instead.
+    if (!IFUSE_ABLATE_NO_FUSION && ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
       ifuse_exec_pair_complete_ld2_agu(op);
       dcache_stage_remove_src_op(src_sd, ii);
       continue;

@@ -586,8 +586,10 @@ void wake_up_ops(Op* op, Dep_Type type, void (*wake_action)(Op*, Op*, uns)) {
 
   // A fused LOAD2 may have already woken its dependents when LOAD1 completed.
   // Its later ordinary cache completion must not produce or wake a second time.
-  if (ifuse_exec_pair_skip_duplicate_wakeup(op, type))
+  if (ifuse_exec_pair_skip_duplicate_wakeup(op, type)) {
+    ifuse_exec_pair_restore_early_wake(op);
     return;
+  }
 
   _DEBUG(op->proc_id, DEBUG_REPLAY, "Waking up ops from src_op:%s unique:%s type:%s\n", unsstr64(op->op_num),
          unsstr64(op->unique_num), dep_type_names[type]);

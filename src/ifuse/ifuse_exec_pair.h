@@ -50,6 +50,20 @@ Flag ifuse_exec_pair_bypass_ld2_memory_pipeline(const Op* op);
 void ifuse_exec_pair_complete_ld2_agu(Op* op);
 
 /**
+ * Returns TRUE when a fused LOAD2 takes no ROB, LSQ, or RS entry. This holds
+ * only in the true-fusion model; a realistic LOAD2 (ifuse_ld2_realistic or
+ * either ablation) occupies all three and runs on a load port to validate.
+ */
+Flag ifuse_exec_pair_ld2_skips_backend(const Op* op);
+
+/**
+ * Keeps a fused LOAD2's earlier wake cycle when its own ordinary L1-D access
+ * (no-fusion ablation) completes later, so dependents that map afterward still
+ * see the fused data's time.
+ */
+void ifuse_exec_pair_restore_early_wake(Op* op);
+
+/**
  * Removes the execution-side record owned by one LOAD1 prediction.
  *
  * APT calls this when a prediction expires or is discarded before a successful

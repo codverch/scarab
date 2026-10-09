@@ -180,6 +180,9 @@ FT_Event FT::build(std::function<bool(uns8, uns8)> can_fetch_op_fn, std::functio
     op->ifuse_ld2_physical_reg_id = OP_REG_ID_INVALID;
     op->ifuse_ld2_early_wake_signaled = FALSE;
     op->ifuse_ld2_agu_completed = FALSE;
+    op->ifuse_ld2_data_ready = FALSE;
+    op->ifuse_ld2_data_cycle = MAX_CTR;
+    op->ifuse_ld2_early_wake_cycle = MAX_CTR;
     op->ifuse_ld2_prediction_failed = FALSE;
     op->ifuse_flush_op = FALSE;
     op->ifuse_pair_distance = 0;

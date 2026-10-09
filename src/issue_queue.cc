@@ -672,7 +672,7 @@ void IssueQueues::dispatch() {
     // A truly-fused LOAD2 never needs a reservation-station entry: its
     // result is forwarded from LOAD1, so it has nothing left to schedule or
     // execute. Skip it without consuming RS capacity or fill-width bandwidth.
-    if (ifuse_exec_pair_bypass_ld2_memory_pipeline(op)) {
+    if (ifuse_exec_pair_ld2_skips_backend(op)) {
       continue;
     }
 
