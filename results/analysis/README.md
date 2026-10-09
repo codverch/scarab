@@ -59,3 +59,12 @@ cycles with an L1-D hit at the ROB head go from 8.43% to 4.21% (repro) and 3.94%
 which verifies the 8.4% to 4.2% in Section VI-B.
 
 Each `sim.log` here omits its repeated "Patching gap in trace" lines and records their count.
+
+## Helios rerun with load-latency counters (`helios-tuned`)
+
+Build: branch `hpca2027-helios`. Descriptors `scarab-infra/json/hpca2027/helios-tuned-0..7.json`,
+one per group of applications, with each application's Helios settings from the paper's `PARAMS.out`.
+`speedup_helios_rerun.csv`: the rerun reproduces the paper's Helios speedups exactly (1.84% average).
+`retire_latency_realistic.csv` (`retire_lat.py`, loads from `ifuse-realistic`): fetch-to-retire load
+latency reduction is 3.16% for Helios, 18.18% for realistic I-Fuse, and 3.05% for RFP.
+This fills Fig. 17's Helios bars and `\helioslatencyreduction` (3.2%).
