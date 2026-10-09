@@ -937,6 +937,10 @@ static Flag dcache_stage_ifuse_read_ld2_word(Ifuse_Ld2_Word* w) {
 }
 
 static void dcache_stage_ifuse_issue_ld2_word(Op* ld1_op, Flag ld1_got_port) {
+  // LD2's word inside LD1's own interleave word comes back with LD1's read.
+  if (IFUSE_LD2_BANK_PORT && ld1_op->ifuse_load_role == LOAD1 && ld1_op->ifuse_pred_ld2_va &&
+      ld1_op->ifuse_pred_ld2_va / DCACHE_INTERLEAVE_FACTOR == ld1_op->oracle_info.va / DCACHE_INTERLEAVE_FACTOR)
+    return;
   if (!ifuse_exec_pair_request_ld2_word(ld1_op))
     return;
   Ifuse_Ld2_Word w = {ld1_op->op_num, ld1_op->ifuse_pred_ld2_va, ld1_op->inst_info->extra_ld_latency,
